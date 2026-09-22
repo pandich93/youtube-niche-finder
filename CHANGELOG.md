@@ -75,6 +75,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   a warning and skips the step instead of crashing the cycle. `db_stats` and
   the dashboard overview now show `videos_without_embedding`.
 
+- **Optional LLM enrichment via OpenRouter** (`backend/infrastructure/llm/`,
+  `backend/application/llm_gateway.py`) — off by default
+  (`LLM_PROVIDER=none`), so no existing function changes behaviour until
+  someone sets `LLM_PROVIDER=openrouter` and an `OPENROUTER_API_KEY`.
+  `llm_gateway.run(task, system, user, schema)` caches identical requests in
+  Postgres (`llm_cache`) so the same input never costs twice, tracks spend
+  per day/model (`llm_usage`) and stops calling out once
+  `LLM_DAILY_BUDGET_USD` (default $1.00/day) is spent for the UTC day —
+  mirroring how the worker already backs off from YouTube's search quota.
+  `OpenRouterProvider` retries 429/5xx twice with backoff, falls back to
+  parsing JSON out of plain text on models that reject `response_format`,
+  and never lets the API key reach a log line. `db_stats` / `GET /api/stats`
+  expose `llm: {provider, model, today_cost_usd, budget_usd, blocked}`, and
+  `cli.py doctor --llm` pings the configured provider with a one-token
+  request.
+
 ### Fixed
 
 - **`scripts/mcp-docker.sh` больше не полагается на `docker run --env-file`.**

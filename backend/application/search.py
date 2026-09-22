@@ -7,12 +7,16 @@ from our own snapshots, and NexLev's own score for comparison.
 """
 import statistics as st
 
+import os
+
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from domain import metrics as M
 from application import collecting
 from application import discovery as trends
+from application import llm_gateway
 from infrastructure.categories import repository as C
+from infrastructure.llm import factory as llm_factory
 
 
 def search_outliers(query: str = None, niche: str = None, languages: list = None,
@@ -233,6 +237,13 @@ def db_stats() -> dict:
             "resets_at": "midnight Pacific Time",
         },
         "worker_quota_blocked_until": blocked_until,
+        "llm": {
+            "provider": os.environ.get("LLM_PROVIDER", "none").strip().lower(),
+            "model": llm_factory.default_model(),
+            "today_cost_usd": llm_gateway.spent_today(conn),
+            "budget_usd": llm_gateway.DAILY_BUDGET_USD,
+            "blocked": llm_gateway.budget_blocked_today(conn),
+        },
     }
     conn.close()
     return out

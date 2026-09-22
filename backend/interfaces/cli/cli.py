@@ -103,7 +103,35 @@ def cmd_doctor(args):
         print(f"   ОШИБКА: {e}")
         problems.append(f"База не открывается: {e}")
 
-    print("4. Покрытие окна 24h")
+    print("4. LLM (опционально)")
+    llm_provider = os.environ.get("LLM_PROVIDER", "none").strip().lower()
+    if llm_provider == "none":
+        print("   выключен (LLM_PROVIDER=none) -- это по умолчанию, ничего чинить не нужно")
+    else:
+        from infrastructure.llm import factory as llm_factory
+        has_key = bool(os.environ.get("OPENROUTER_API_KEY", "").strip())
+        print(f"   provider={llm_provider} model={llm_factory.default_model()} "
+              f"key={'есть' if has_key else 'ОТСУТСТВУЕТ'}")
+        if not has_key:
+            problems.append("LLM_PROVIDER=openrouter, но OPENROUTER_API_KEY не задан -- "
+                            "используется NullProvider")
+        elif args.llm:
+            from application import llm_gateway
+            ping_schema = {"type": "object", "properties": {"ok": {"type": "boolean"}},
+                           "required": ["ok"]}
+            data = llm_gateway.run("doctor_ping", "Reply with JSON only.",
+                                   "Return {\"ok\": true}.", ping_schema)
+            if data == {"ok": True}:
+                print("   ОК -- провайдер ответил")
+            else:
+                print("   ОШИБКА или бюджет исчерпан -- см. лог выше")
+                problems.append("Пинг LLM-провайдера не удался -- проверьте ключ, "
+                                "модель и LLM_DAILY_BUDGET_USD")
+        else:
+            print("   ключ есть, пинг пропущен (передайте --llm, чтобы проверить и "
+                  "потратить немного бюджета)")
+
+    print("5. Покрытие окна 24h")
     try:
         c = trends.coverage("24h")
         print(f"   видео за 24ч: {c['videosPublishedInPeriod']} из "
@@ -203,7 +231,10 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("doctor", help="проверить ключ, сеть, базу").set_defaults(fn=cmd_doctor)
+    p = sub.add_parser("doctor", help="проверить ключ, сеть, базу")
+    p.add_argument("--llm", action="store_true",
+                   help="дополнительно пингануть настроенный LLM-провайдер (тратит бюджет)")
+    p.set_defaults(fn=cmd_doctor)
     sub.add_parser("stats", help="что в базе").set_defaults(fn=cmd_stats)
     sub.add_parser("seed", help="залить синтетические данные").set_defaults(fn=cmd_seed)
 

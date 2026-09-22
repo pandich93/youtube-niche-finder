@@ -42,7 +42,8 @@ a liability the tool does not need.
 
 ## Where network traffic goes
 
-The application itself contacts exactly two external hosts:
+By default — `LLM_PROVIDER=none`, the setting nothing changes out of the
+box — the application contacts exactly two external hosts:
 
 | Host | Why | Sends your API key? |
 |---|---|---|
@@ -64,6 +65,25 @@ positive: the string appears once, in
 [`backend/infrastructure/youtube/rss.py`](backend/infrastructure/youtube/rss.py),
 as the Atom XML namespace identifier. Namespace URIs are names, not addresses;
 nothing fetches it.
+
+## Optional LLM enrichment
+
+Off by default (`LLM_PROVIDER=none`). Every call to
+[`backend/application/llm_gateway.py`](backend/application/llm_gateway.py)
+returns `None` without touching the network unless you set
+`LLM_PROVIDER=openrouter` and an `OPENROUTER_API_KEY`.
+
+| Host | Why | Sends your API key? |
+|---|---|---|
+| `openrouter.ai` | Chat completions for whatever feature calls `llm_gateway.run()` | Yes (`OPENROUTER_API_KEY`, never your YouTube key) |
+
+What actually goes out is only what the calling code builds as `system`/
+`user` text and a JSON schema — a title, a description, a short prompt about
+one video or channel — never raw video/comment dumps, and never your
+YouTube API key. Every request is cached in Postgres (`llm_cache`, keyed by
+task + model + normalized input) so the identical request is never sent
+twice, and `llm_usage` tracks daily spend against `LLM_DAILY_BUDGET_USD`
+(default $1.00/day) so a runaway loop can't run up an unbounded bill.
 
 ## Your API key
 

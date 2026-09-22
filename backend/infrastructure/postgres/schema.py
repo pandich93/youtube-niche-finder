@@ -175,6 +175,26 @@ CREATE INDEX IF NOT EXISTS idx_saved_items_kind_ref ON saved_items(kind, ref_id)
 CREATE INDEX IF NOT EXISTS idx_drafts_video ON drafts(video_id);
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
 CREATE INDEX IF NOT EXISTS idx_events_seen ON events(seen_at);
+
+-- ---------- v4: optional LLM enrichment (cache + daily budget) ----------
+
+CREATE TABLE IF NOT EXISTS llm_cache (
+    key TEXT PRIMARY KEY,    -- sha256(task + model + normalized system/user/schema)
+    task TEXT,
+    model TEXT,
+    result TEXT,              -- JSON string
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS llm_usage (
+    day TEXT,                 -- UTC date, YYYY-MM-DD
+    model TEXT,
+    calls INTEGER,
+    prompt_tokens BIGINT,
+    completion_tokens BIGINT,
+    cost_usd NUMERIC,
+    PRIMARY KEY (day, model)
+);
 """
 
 # columns added to pre-existing tables (name -> DDL type)
