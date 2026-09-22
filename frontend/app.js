@@ -756,11 +756,112 @@ function nicheOverviewBlock(d, head) {
     </div>`;
 }
 
+/* Доля хитов по тегам одной группы -- barList из tag_stats. Группа вводится
+   свободным текстом (теги произвольные: theme/trigger/format/...), поэтому
+   запоминаем последнюю выбранную в localStorage. */
+function tagStatsSection(stats, tagGroup) {
+  const body = stats.found === false
+    ? empty(stats.hint || 'тегов в этой группе пока нет')
+    : barList((stats.tags || []).map((t) => ({
+        name: t.tag, value: t.hitRate, display: `${t.hitRate}%`,
+        tip: `${t.tag}: ${t.videos} видео, hitRate ${t.hitRate}%, lift ${t.lift ?? '—'}`,
+      })));
+  return `
+    <div class="card">
+      ${sectionHead('Доля хитов по тегам', stats.found === false ? '' :
+          `группа «${esc(tagGroup)}» · база по нише ${stats.baseRate}%`,
+        `<input type="text" id="tagGroupInput" value="${esc(tagGroup)}"
+           placeholder="группа тегов" style="width:140px">`)}
+      ${body}
+    </div>`;
+}
+
+/* Ручная правка тегов у видео -- каждое изменение шлёт replace:true с полным
+   новым набором тегов этой группы для видео (см. application/tags.py:
+   replace сохраняет защищённые manual/claude-mcp теги даже когда сам вызов
+   идёт с другим source, здесь source всегда 'manual'). */
+function nicheVideoTagsSection(videos, tagsByVideo, tagGroup) {
+  if (!videos.length) return '';
+  return `
+    <div class="card">
+      ${sectionHead('Видео ниши', `теги группы «${esc(tagGroup)}» — правится вручную`)}
+      <div class="rows">${videos.map((v) => `
+        <div class="row" data-video-id="${esc(v.videoId)}" style="align-items:flex-start">
+          <div class="row-main">
+            <div class="row-title">
+              <a href="https://www.youtube.com/watch?v=${esc(v.videoId)}" target="_blank" rel="noopener">${esc(v.title)}</a>
+            </div>
+            <div class="row-sub">${compact(v.views)} просмотров · ${mult(v.outlierScore)}</div>
+            <div class="tag-editor" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+              ${(tagsByVideo[v.videoId] || []).map((t) => `
+                <span class="chip tag-chip" data-tag="${esc(t)}">${esc(t)}
+                  <a href="#" class="tag-remove" data-tag="${esc(t)}" title="убрать тег">×</a>
+                </span>`).join('')}
+              <input type="text" class="tag-add-input" placeholder="+ тег" style="width:100px">
+            </div>
+          </div>
+        </div>`).join('')}</div>
+    </div>`;
+}
+
+function wireNicheTagEditor(slug, tagGroup) {
+  const groupInput = $('#tagGroupInput');
+  if (groupInput) {
+    groupInput.addEventListener('change', () => {
+      const g = groupInput.value.trim() || 'theme';
+      localStorage.setItem('nf.tagGroup', g);
+      render();
+    });
+  }
+  const writeTags = async (videoId, tags) => {
+    await api('/api/tags', { method: 'POST', body: {
+      items: [{ video_id: videoId, tag_group: tagGroup, tags }],
+      source: 'manual', replace: true,
+    } });
+    render();
+  };
+  view.querySelectorAll('[data-video-id]').forEach((rowEl) => {
+    const videoId = rowEl.dataset.videoId;
+    const current = () => [...rowEl.querySelectorAll('.tag-chip')].map((c) => c.dataset.tag);
+
+    rowEl.querySelectorAll('.tag-remove').forEach((a) => a.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try { await writeTags(videoId, current().filter((t) => t !== a.dataset.tag)); }
+      catch (err) { toast(err.message, 'err'); }
+    }));
+
+    const input = rowEl.querySelector('.tag-add-input');
+    input.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      const tag = input.value.trim();
+      if (!tag) return;
+      try { await writeTags(videoId, [...current(), tag]); }
+      catch (err) { toast(err.message, 'err'); }
+    });
+  });
+}
+
 async function viewNiche(slug) {
-  const d = await api(`/api/niches/${encodeURIComponent(slug)}${q({ period: state.period })}`);
+  const tagGroup = localStorage.getItem('nf.tagGroup') || 'theme';
+  const [d, stats, videoTags] = await Promise.all([
+    api(`/api/niches/${encodeURIComponent(slug)}${q({ period: state.period, top_n: 30 })}`),
+    api(`/api/tags/stats${q({ niche: slug, tag_group: tagGroup })}`),
+    api(`/api/tags${q({ niche: slug })}`),
+  ]);
   if (!d.found) { view.innerHTML = notice(esc(d.hint || 'ниша не найдена')); return; }
+
+  const tagsByVideo = {};
+  for (const t of (videoTags.tags || [])) {
+    if (t.tagGroup !== tagGroup) continue;
+    (tagsByVideo[t.videoId] ||= []).push(t.tag);
+  }
+
   view.innerHTML = nicheOverviewBlock(d,
-    sectionHead(`Ниша: ${slug}`, `${esc(d.query || '')} · ${plabel(state.period)}`));
+    sectionHead(`Ниша: ${slug}`, `${esc(d.query || '')} · ${plabel(state.period)}`))
+    + tagStatsSection(stats, tagGroup)
+    + nicheVideoTagsSection(d.top_videos_by_outlier_score || [], tagsByVideo, tagGroup);
+
+  wireNicheTagEditor(slug, tagGroup);
 }
 
 /* ----------------------------------------------------------------- Канал */

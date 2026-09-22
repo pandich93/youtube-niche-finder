@@ -25,6 +25,7 @@ from application import collecting as collector
 from application import search as q
 from application import discovery as trends
 from application import channel_tracking as T
+from application import tags as tags_uc
 
 load_dotenv()
 API_KEY = os.environ.get("YOUTUBE_API_KEY")
@@ -603,6 +604,47 @@ def calibrate_maturity_curve(min_videos: int = 30) -> dict:
     a replacement for metrics.MATURITY_CURVE, so age-adjusted outlier scores stop
     relying on the shipped default. Needs ~30 videos watched from publication."""
     return T.calibrate_maturity_curve(min_videos=min_videos)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def tag_videos(items: list, source: str, replace: bool = False) -> dict:
+    """Attach curated tags to videos (theme/trigger/format/... -- your own
+    tag_group names). items: [{"video_id", "tag_group", "tags": [...]}, ...].
+    source must be 'manual', 'claude-mcp' or 'llm' -- an 'llm' write never
+    overwrites or deletes a tag set by 'manual' or 'claude-mcp'.
+    replace=True makes an item's tags the full set for that video+group
+    (still subject to the same protection). Zero quota, local only."""
+    try:
+        return tags_uc.tag_videos(items, source=source, replace=replace)
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def list_video_tags(niche: str = None, video_id: str = None) -> list:
+    """List curated tags, either every tagged video in a niche or every tag
+    on one video_id -- pass exactly one of the two."""
+    try:
+        return tags_uc.list_video_tags(niche=niche, video_id=video_id)
+    except ValueError as e:
+        return [{"error": str(e)}]
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def tag_stats(niche: str, tag_group: str, outlier_threshold: float = 3.0,
+              exclude_recent_days: int = 30) -> dict:
+    """Per-tag outlier-hit rate within one tag_group in one niche: videos,
+    hits, hitRate, lift (relative to the whole niche's hit rate, not just
+    the tagged subset), medianViews, medianOutlier. exclude_recent_days
+    drops videos too young to have a stable outlier signal yet."""
+    return tags_uc.tag_stats(niche, tag_group, outlier_threshold=outlier_threshold,
+                             exclude_recent_days=exclude_recent_days)
 
 
 @mcp.tool(annotations=ToolAnnotations(

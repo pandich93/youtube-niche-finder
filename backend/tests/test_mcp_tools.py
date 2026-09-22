@@ -502,6 +502,52 @@ def test_calibrate_maturity_curve_only_reads():
     assert snapshot() == before
 
 
+# --------------------------------------------------- video tags
+
+def test_tag_videos_tool_writes_and_reports_protection():
+    conn = db.get_conn()
+    db.upsert_channel(conn, {
+        "channel_id": "UCtagmcp0000000000000001", "title": "t", "custom_url": None,
+        "country": None, "description": "", "default_language": None,
+        "subscriber_count": 100, "video_count": 1, "view_count": 100,
+        "thumbnail": None, "published_at": None, "topic_categories": None,
+        "keywords": None, "uploads_playlist": None, "hidden_subs": 0,
+    })
+    db.upsert_video(conn, {
+        "video_id": "vtagmcp1", "channel_id": "UCtagmcp0000000000000001",
+        "title": "t", "description": "", "published_at": "2026-01-01T00:00:00Z",
+        "duration_seconds": 300, "view_count": 100, "like_count": 0, "comment_count": 0,
+        "thumbnail": None, "tags": "[]", "default_language": "en", "embedding": None,
+        "updated_at": "2026-01-01T00:00:00Z", "category_id": None, "region": None,
+        "is_short": 0, "topic_categories": None, "live_content": None,
+    })
+    conn.commit()
+    conn.close()
+
+    r = srv.tag_videos([{"video_id": "vtagmcp1", "tag_group": "theme", "tags": ["fear"]}],
+                       source="manual")
+    assert r["written"] == 1
+
+    r2 = srv.tag_videos([{"video_id": "vtagmcp1", "tag_group": "theme", "tags": ["fear"]}],
+                        source="llm")
+    assert r2["blockedByProtection"] == 1
+
+    rows = srv.list_video_tags(video_id="vtagmcp1")
+    assert [row["source"] for row in rows] == ["manual"]
+
+
+def test_tag_videos_tool_reports_a_bad_source_as_an_error_not_an_exception():
+    out = srv.tag_videos([{"video_id": "v1", "tag_group": "theme", "tags": ["x"]}],
+                         source="not-real")
+    assert "error" in out
+
+
+def test_tag_stats_tool_on_an_empty_niche_gives_a_hint():
+    out = srv.tag_stats("no-such-niche-mcp", "theme")
+    assert out["found"] is False
+    assert "hint" in out
+
+
 # --------------------------------------------------- тонкие делегаты
 
 def test_thin_read_only_tools_answer_on_an_empty_corpus():

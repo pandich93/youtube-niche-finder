@@ -85,7 +85,7 @@ def search_outliers(query: str = None, niche: str = None, languages: list = None
     return out
 
 
-def _overview_from_rows(rows: list) -> dict:
+def _overview_from_rows(rows: list, top_n: int = 5) -> dict:
     """Saturation/opportunity read shared by niche_overview (niche-slug
     anchored) and niche_overview_from_channel (channel anchored) -- same
     metrics, only how `rows` was selected differs."""
@@ -142,12 +142,12 @@ def _overview_from_rows(rows: list) -> dict:
              "channel": r["channel_title"], "subscribers": r["subs"],
              "outlierScore": r["outlierScore"],
              "viewsPerSubscriber": r["viewsPerSubscriber"]}
-            for r in sorted(rows, key=lambda r: r["outlierScore"] or 0, reverse=True)[:5]
+            for r in sorted(rows, key=lambda r: r["outlierScore"] or 0, reverse=True)[:top_n]
         ],
     }
 
 
-def niche_overview(niche: str, period: str = "all") -> dict:
+def niche_overview(niche: str, period: str = "all", top_n: int = 5) -> dict:
     conn = db.get_conn()
     row_niche = conn.execute("SELECT * FROM niches WHERE slug = ?", (niche,)).fetchone()
     conn.close()
@@ -156,7 +156,7 @@ def niche_overview(niche: str, period: str = "all") -> dict:
         return {"niche": niche, "found": False,
                 "hint": "nothing collected under this slug yet -- run collect_niche"}
 
-    overview = _overview_from_rows(rows)
+    overview = _overview_from_rows(rows, top_n=top_n)
     overview.update({
         "niche": niche,
         "found": True,

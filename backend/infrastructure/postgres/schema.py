@@ -195,6 +195,19 @@ CREATE TABLE IF NOT EXISTS llm_usage (
     cost_usd NUMERIC,
     PRIMARY KEY (day, model)
 );
+
+-- ---------- v5: curated tags (theme/trigger/format...) and their hit rate ----------
+
+CREATE TABLE IF NOT EXISTS video_tags (
+    video_id TEXT,
+    tag_group TEXT,           -- 'theme' | 'trigger' | 'format' | ... caller-defined
+    tag TEXT,
+    source TEXT,               -- 'manual' | 'claude-mcp' | 'llm'
+    created_at TEXT,
+    PRIMARY KEY (video_id, tag_group, tag)
+);
+
+CREATE INDEX IF NOT EXISTS idx_video_tags_group_tag ON video_tags(tag_group, tag);
 """
 
 # columns added to pre-existing tables (name -> DDL type)

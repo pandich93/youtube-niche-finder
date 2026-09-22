@@ -284,6 +284,14 @@ separately (or via cron), otherwise the velocity fields stay empty.
 | `list_niches`, `db_stats` | what's been collected |
 | `data_coverage` | whether there's enough data for the requested window — call this first if a section comes back empty |
 
+### Curated tags (theme / trigger / format / ...)
+
+| Tool | What it gives you |
+|---|---|
+| `tag_videos` | attach your own tags to videos, by group; `manual`/`claude-mcp` tags are never overwritten by `llm`-sourced ones |
+| `list_video_tags` | every tag on one video, or every tagged video in a niche |
+| `tag_stats` | per-tag videos/hits/hitRate/lift within one tag_group and niche — which angle actually breaks out |
+
 ### Channel tracking and analysis
 
 | Tool | What it gives you |
@@ -451,7 +459,7 @@ analytic/
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 29 tools
+    │   ├── mcp/server.py       MCP server, 46 tools
     │   ├── http/api.py         HTTP API for the dashboard (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
     │   └── worker/main.py      background collector's entry point

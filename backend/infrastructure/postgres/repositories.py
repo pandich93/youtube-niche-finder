@@ -175,3 +175,61 @@ def upsert_category(conn, category_id, region, title, assignable):
         "title=excluded.title, assignable=excluded.assignable, updated_at=excluded.updated_at",
         (str(category_id), region, title, 1 if assignable else 0, now_iso()),
     )
+
+
+# 'llm' never overwrites or deletes a tag a human (or Claude, via MCP) set.
+PROTECTED_TAG_SOURCES = ("manual", "claude-mcp")
+
+
+def upsert_video_tag(conn, video_id: str, tag_group: str, tag: str, source: str,
+                     created_at: str = None, protected_sources=PROTECTED_TAG_SOURCES) -> bool:
+    """Insert or update one (video_id, tag_group, tag) row. A brand new row
+    always writes; overwriting an existing row is blocked only when that
+    row's source is protected and `source` is not. Returns whether the row
+    was actually written."""
+    cur = conn._conn.cursor()
+    cur.execute(
+        "INSERT INTO video_tags (video_id, tag_group, tag, source, created_at) "
+        "VALUES (%(video_id)s, %(tag_group)s, %(tag)s, %(source)s, %(created_at)s) "
+        "ON CONFLICT (video_id, tag_group, tag) DO UPDATE SET "
+        "source=excluded.source, created_at=excluded.created_at "
+        "WHERE NOT (video_tags.source IN %(protected)s AND excluded.source NOT IN %(protected)s) "
+        "RETURNING 1",
+        {"video_id": video_id, "tag_group": tag_group, "tag": tag, "source": source,
+         "created_at": created_at or now_iso(), "protected": tuple(protected_sources)},
+    )
+    written = cur.fetchone() is not None
+    cur.close()
+    return written
+
+
+def replace_video_tags(conn, video_id: str, tag_group: str, tags: list, source: str,
+                       created_at: str = None,
+                       protected_sources=PROTECTED_TAG_SOURCES) -> dict:
+    """Make `tags` the full tag set for (video_id, tag_group): upsert each,
+    delete whatever else was in this group -- except rows protected against
+    `source` (same rule as upsert_video_tag), which are left untouched even
+    though they're not in the new list."""
+    is_protected_writer = source in protected_sources
+    tags = list(dict.fromkeys(t for t in tags if t))
+
+    cur = conn._conn.cursor()
+    sql = "DELETE FROM video_tags WHERE video_id=%(video_id)s AND tag_group=%(tag_group)s"
+    params = {"video_id": video_id, "tag_group": tag_group}
+    if not is_protected_writer:
+        sql += " AND source NOT IN %(protected)s"
+        params["protected"] = tuple(protected_sources)
+    if tags:
+        sql += " AND tag NOT IN %(keep)s"
+        params["keep"] = tuple(tags)
+    cur.execute(sql, params)
+    cur.close()
+
+    created_at = created_at or now_iso()
+    written = blocked = 0
+    for tag in tags:
+        if upsert_video_tag(conn, video_id, tag_group, tag, source, created_at, protected_sources):
+            written += 1
+        else:
+            blocked += 1
+    return {"written": written, "blocked": blocked}

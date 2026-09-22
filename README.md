@@ -26,7 +26,7 @@ topic" is done by the model calling these tools, not the server.
 
 The project has three parts that together make up the "product":
 
-- **`backend/`** — Python: an MCP server (29 tools for Claude), an HTTP API
+- **`backend/`** — Python: an MCP server (46 tools for Claude), an HTTP API
   for the dashboard, and a background worker that logs view/subscriber
   history on a schedule (without this, "growth rate over 24 hours" doesn't
   exist — the YouTube API only ever returns "right now").
@@ -195,7 +195,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of notable changes, in
 
 ## Read next
 
-- [backend/README.md](backend/README.md) — YouTube API quotas, all 24 tools
+- [backend/README.md](backend/README.md) — YouTube API quotas, all 46 tools
   with descriptions, how to read `period_by`, running with and without
   Docker, the DDD layer structure.
 - [frontend/README.md](frontend/README.md) — dashboard screens, where the

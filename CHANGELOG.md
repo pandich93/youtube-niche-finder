@@ -98,6 +98,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `cli.py doctor --llm` pings the configured provider with a one-token
   request.
 
+- **Curated video tags and their outlier-hit rate** (`video_tags` table,
+  `backend/domain/tag_stats.py`, `backend/application/tags.py`) — group
+  videos by your own labels (theme/trigger/format/...) and see which ones
+  actually correlate with breaking out: `videos`, `hits`, `hitRate`, `lift`
+  (against the whole niche's hit rate, not just the tagged subset),
+  `medianViews`, `medianOutlier` per tag. A tag's `source` is `manual`,
+  `claude-mcp` or `llm` — `llm` (stage 03's planned auto-tagging) never
+  overwrites or deletes a `manual`/`claude-mcp` tag, enforced at the
+  repository layer so it holds for `replace` mode too. New MCP tools
+  `tag_videos`, `list_video_tags`, `tag_stats` (43 → 46) and matching
+  `POST`/`GET /api/tags`, `GET /api/tags/stats`. The niche detail page now
+  shows a hit-rate bar chart per tag group and an inline tag editor on each
+  video.
+
 ### Fixed
 
 - **`scripts/mcp-docker.sh` больше не полагается на `docker run --env-file`.**

@@ -35,6 +35,7 @@ from application import inspection as I
 from application import library as L
 from application import metadata_review as MR
 from application import alerts as AL
+from application import tags as TG
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR")
@@ -284,8 +285,8 @@ def niches():
 
 
 @app.get("/api/niches/{slug}")
-def niche_detail(slug: str, period: str = "all"):
-    return Q.niche_overview(slug, period=period)
+def niche_detail(slug: str, period: str = "all", top_n: int = 5):
+    return Q.niche_overview(slug, period=period, top_n=top_n)
 
 
 @app.get("/api/channels/tracked")
@@ -353,6 +354,32 @@ def save_item(payload: dict = Body(...)):
 @app.delete("/api/saved/{item_id}")
 def delete_saved_item(item_id: int):
     return L.delete_item(item_id)
+
+
+# ------------------------------------------------------------ video tags (16)
+
+@app.get("/api/tags")
+def list_video_tags(niche: str = None, video_id: str = None):
+    try:
+        return {"tags": TG.list_video_tags(niche=niche, video_id=video_id)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/tags")
+def tag_videos(payload: dict = Body(...)):
+    try:
+        return TG.tag_videos(payload.get("items") or [], source=payload.get("source"),
+                             replace=bool(payload.get("replace", False)))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/tags/stats")
+def tag_stats(niche: str, tag_group: str, outlier_threshold: float = 3.0,
+             exclude_recent_days: int = 30):
+    return TG.tag_stats(niche, tag_group, outlier_threshold=outlier_threshold,
+                        exclude_recent_days=exclude_recent_days)
 
 
 # ---------------------------------------------------- metadata review (8.8)
