@@ -250,6 +250,36 @@ def search_transcripts(query: str, niche: str = None, compare_group: str = None,
 
 
 @mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def score_titles(candidates: list, niche: str = None, channel_id: str = None) -> dict:
+    """Score title candidates 0-100 against this niche/channel's actual
+    title patterns (from title_patterns) and near-duplicate check against
+    already-published videos. Works with no LLM at all (deterministic
+    score: length, digits, matched patterns, duplicates); with LLM_PROVIDER
+    configured also grounds each score with strengths/risks/an improved
+    rewrite. Zero YouTube quota; costs an LLM call only if configured."""
+    try:
+        return enrich_uc.score_titles(candidates, niche_slug=niche, channel_id=channel_id)
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=False, open_world_hint=False))
+def suggest_titles(topic: str, niche: str = None, channel_id: str = None, n: int = 10) -> dict:
+    """Generate up to n title candidates for `topic` in the style of the
+    niche/channel's best-performing titles, then score them via
+    score_titles. Requires LLM_PROVIDER configured -- generation has no
+    deterministic fallback (unlike scoring)."""
+    try:
+        return enrich_uc.suggest_titles(topic, niche_slug=niche, channel_id=channel_id, n=n)
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool(annotations=ToolAnnotations(
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
 def niche_map() -> dict:

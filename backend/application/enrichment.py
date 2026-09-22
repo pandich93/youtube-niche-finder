@@ -28,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 import infrastructure.postgres as db
 from application import llm_gateway as gw
 from domain import periods as P
+from domain import title_scoring as TSC
 from infrastructure.llm import factory
 
 LLM_RELABEL_DAYS = int(os.environ.get("LLM_RELABEL_DAYS", "30"))
@@ -561,3 +562,188 @@ def explain_outlier(video_id: str, force_refresh: bool = False) -> dict:
     conn.commit()
     conn.close()
     return {"videoId": video_id, "found": True, "cached": False, "model": model or "auto", **data}
+
+
+# ------------------------------------------------------------ title scoring (09)
+
+SCORE_TITLES_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "titles": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "score": {"type": "integer"},
+                    "strengths": {"type": "array", "items": {"type": "string"}},
+                    "risks": {"type": "array", "items": {"type": "string"}},
+                    "improved": {"type": "string"},
+                },
+                "required": ["title", "score", "strengths", "risks", "improved"],
+            },
+        },
+    },
+    "required": ["titles"],
+}
+
+_SCORE_TITLES_SYSTEM = (
+    "You score YouTube title candidates for a creator's content-strategy "
+    "dashboard, 0-100 each. Ground every score in the given title patterns "
+    "that actually correlate with outliers in this niche/channel (cite the "
+    "matching ones in strengths, missing ones in risks) and the niche's "
+    "best-performing titles for style comparison. strengths/risks are short "
+    "bullet phrases; improved is one rewritten version of the title. Score "
+    "realistically -- most titles are mediocre, reserve 80+ for titles that "
+    "genuinely match multiple proven patterns."
+)
+
+SUGGEST_TITLES_SCHEMA = {
+    "type": "object",
+    "properties": {"titles": {"type": "array", "items": {"type": "string"}}},
+    "required": ["titles"],
+}
+
+_SUGGEST_TITLES_SYSTEM = (
+    "You generate YouTube title candidates for a creator's content-strategy "
+    "dashboard, in the style of the niche's best-performing titles given "
+    "below. Each title must be about the given topic, distinct from the "
+    "others, and should lean on the same structural patterns the reference "
+    "titles use where it genuinely fits -- don't force a pattern that "
+    "doesn't suit the topic."
+)
+
+
+def _title_context(niche_slug: str = None, channel_id: str = None) -> dict:
+    from application import channel_tracking as CT
+    from application import discovery as trends
+    patterns_res = CT.title_patterns(niche=niche_slug, channel_id=channel_id)
+    rows = trends.load_window(period="all", niche=niche_slug,
+                              channel_ids=[channel_id] if channel_id else None)
+    top_rows = sorted(rows, key=lambda r: r.get("outlierScore") or 0, reverse=True)[:20]
+    return {
+        "patterns": patterns_res.get("patterns") or [],
+        "topTitles": [r["title"] for r in top_rows if r.get("title")],
+        "videoRows": rows,
+    }
+
+
+def _near_duplicate_scores(titles: list, video_rows: list) -> dict:
+    """title -> max cosine similarity against this niche/channel's already-
+    published videos, or None per title if embeddings aren't available."""
+    try:
+        import infrastructure.embeddings.fastembed_provider as emb
+    except Exception:
+        return {t: None for t in titles}
+
+    video_ids = [r["video_id"] for r in video_rows if r.get("video_id")]
+    existing_vecs = []
+    if video_ids:
+        conn = db.get_conn()
+        try:
+            for i in range(0, len(video_ids), 400):
+                chunk = video_ids[i:i + 400]
+                sql = ("SELECT embedding FROM videos WHERE video_id IN (%s) "
+                      "AND embedding IS NOT NULL" % ",".join("?" * len(chunk)))
+                existing_vecs += [emb.from_blob(r["embedding"])
+                                 for r in conn.execute(sql, chunk).fetchall()]
+        finally:
+            conn.close()
+    if not existing_vecs:
+        return {t: None for t in titles}
+
+    out = {}
+    for t in titles:
+        v = emb.embed(t)
+        out[t] = max(emb.cosine(v, ev) for ev in existing_vecs)
+    return out
+
+
+def score_titles(candidates: list, niche_slug: str = None, channel_id: str = None) -> dict:
+    """Stage 09: each candidate gets a deterministic score (length, digits,
+    matched title patterns, near-duplicate check -- works with no LLM at
+    all) plus, when an LLM is configured, a richer 0-100 score grounded in
+    the niche's actual title patterns with strengths/risks/an improved
+    rewrite. Falls back to the deterministic score alone (score ==
+    deterministicScore, empty strengths/risks) when the LLM is off."""
+    candidates = [c.strip() for c in (candidates or []) if c and c.strip()]
+    if not candidates:
+        raise ValueError("candidates is required")
+    if not niche_slug and not channel_id:
+        raise ValueError("pass niche_slug or channel_id")
+
+    ctx = _title_context(niche_slug=niche_slug, channel_id=channel_id)
+    near_dup = _near_duplicate_scores(candidates, ctx["videoRows"])
+
+    det_by_title = {}
+    for title in candidates:
+        signals = TSC.deterministic_signals(title, ctx["patterns"],
+                                            near_duplicate_score=near_dup.get(title))
+        det_by_title[title] = {"signals": signals,
+                               "deterministicScore": TSC.deterministic_score(signals)}
+
+    model = factory.default_model()
+    llm_by_title = {}
+    user_input = (
+        "Title patterns (keyword, outlier lift):\n"
+        + "\n".join(f"- {p['keyword']} ({p.get('outlierLift')})" for p in ctx["patterns"][:15])
+        + "\n\nBest-performing titles in this niche/channel:\n"
+        + "\n".join(f"- {t}" for t in ctx["topTitles"])
+        + "\n\nCandidates to score:\n" + "\n".join(f"- {t}" for t in candidates)
+    )
+    data = gw.run("score_titles", _SCORE_TITLES_SYSTEM, user_input, SCORE_TITLES_SCHEMA,
+                  model=model)
+    if data:
+        llm_by_title = {t["title"]: t for t in data.get("titles") or []}
+
+    out = []
+    for title in candidates:
+        det = det_by_title[title]
+        llm = llm_by_title.get(title)
+        out.append({
+            "title": title,
+            "score": llm["score"] if llm else det["deterministicScore"],
+            "strengths": llm["strengths"] if llm else [],
+            "risks": llm["risks"] if llm else [],
+            "improved": llm["improved"] if llm else None,
+            "deterministicScore": det["deterministicScore"], "signals": det["signals"],
+        })
+    return {
+        "niche": niche_slug, "channelId": channel_id, "titles": out,
+        "llmUsed": bool(llm_by_title),
+        "hint": None if llm_by_title else
+            "LLM_PROVIDER is none, or the daily LLM budget is exhausted -- "
+            "scores are deterministic-only (length/patterns/duplicates)",
+    }
+
+
+def suggest_titles(topic: str, niche_slug: str = None, channel_id: str = None,
+                   n: int = 10) -> dict:
+    """Stage 09: generate up to n title candidates for `topic` in the style
+    of the niche/channel's best-performing titles, then score them the same
+    way score_titles() does. Requires an LLM (generation, unlike scoring,
+    has no meaningful deterministic fallback)."""
+    if not topic or not topic.strip():
+        raise ValueError("topic is required")
+    if not niche_slug and not channel_id:
+        raise ValueError("pass niche_slug or channel_id")
+
+    ctx = _title_context(niche_slug=niche_slug, channel_id=channel_id)
+    model = factory.default_model()
+    user_input = (
+        f"Topic: {topic}\n\nTitle patterns that correlate with outliers here:\n"
+        + "\n".join(f"- {p['keyword']}" for p in ctx["patterns"][:15])
+        + "\n\nBest-performing titles in this niche/channel:\n"
+        + "\n".join(f"- {t}" for t in ctx["topTitles"])
+        + f"\n\nGenerate up to {n} distinct title candidates for this topic."
+    )
+    data = gw.run("suggest_titles", _SUGGEST_TITLES_SYSTEM, user_input, SUGGEST_TITLES_SCHEMA,
+                  model=model)
+    if not data or not data.get("titles"):
+        return {"topic": topic, "niche": niche_slug, "channelId": channel_id, "titles": [],
+               "hint": "LLM_PROVIDER is none, or the daily LLM budget is exhausted -- "
+                       "title generation has no deterministic fallback"}
+
+    candidates = data["titles"][:n]
+    scored = score_titles(candidates, niche_slug=niche_slug, channel_id=channel_id)
+    return {"topic": topic, **scored}

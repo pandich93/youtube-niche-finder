@@ -627,6 +627,26 @@ def search_transcripts(query: str, niche: str = None, compare_group: str = None,
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/api/titles/score")
+def score_titles(payload: dict = Body(...)):
+    try:
+        return EN.score_titles(payload.get("candidates") or [],
+                               niche_slug=payload.get("niche"),
+                               channel_id=payload.get("channelId"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/titles/suggest")
+def suggest_titles(payload: dict = Body(...)):
+    try:
+        return EN.suggest_titles(payload.get("topic"), niche_slug=payload.get("niche"),
+                                 channel_id=payload.get("channelId"),
+                                 n=int(payload.get("n", 10)))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.get("/api/niche-clusters")
 def niche_clusters():
     return NCL.niche_map()
