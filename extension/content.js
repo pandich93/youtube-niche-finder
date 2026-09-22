@@ -397,6 +397,9 @@
           Shorts ${decimal(a.cadence.shortsSharePercent, 0)}% ·
           последняя загрузка ${ageText(a.cadence.daysSinceLastUpload)} назад</div>` : ''}
 
+        ${a?.profile?.aiLabels ? `<div class="nf-row"><span class="nf-muted">AI-разметка:</span>
+          <span class="nf-chip">${esc(a.profile.aiLabels.isFaceless ? 'faceless' : 'on-camera')} · ${esc(a.profile.aiLabels.contentFormat)}</span></div>` : ''}
+
         ${outliers.length ? `<div class="nf-sec">
           <div class="nf-sec-h">Лучшие выбросы канала</div>
           ${outliers.map((o) => `<a class="nf-item" href="/watch?v=${esc(o.videoId)}">
