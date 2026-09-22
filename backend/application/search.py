@@ -239,7 +239,7 @@ def db_stats() -> dict:
         "worker_quota_blocked_until": blocked_until,
         "llm": {
             "provider": os.environ.get("LLM_PROVIDER", "none").strip().lower(),
-            "model": llm_factory.default_model(),
+            "model": llm_factory.display_model(),
             "today_cost_usd": llm_gateway.spent_today(conn),
             "budget_usd": llm_gateway.DAILY_BUDGET_USD,
             "blocked": llm_gateway.budget_blocked_today(conn),

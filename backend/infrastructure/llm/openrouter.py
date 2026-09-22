@@ -10,6 +10,14 @@ Checked against https://openrouter.ai/docs on 2026-09-23:
     support structured output; a model that doesn't errors on the field, so
     a rejected first attempt is retried once without it, and the JSON is
     parsed out of the plain-text response instead.
+
+FREE_MODEL_FALLBACKS was pulled from the live https://openrouter.ai/api/v1/models
+catalog on 2026-09-23 (`:free` suffix, own rate limit: 50 req/day without
+purchased credits, 1000/day with $10+) -- filtered down to models whose
+supported_parameters include response_format/structured_outputs, then
+ordered by size/capability. When no explicit `model` is passed, complete_json
+walks this list until one answers instead of pinning a single free model
+that might be renamed or temporarily rate-limited.
 """
 import json
 import logging
@@ -24,7 +32,14 @@ URL = "https://openrouter.ai/api/v1/chat/completions"
 RETRIABLE_STATUS = {429, 500, 502, 503, 524, 529}
 MAX_RETRIES = 2
 BACKOFF_SECONDS = (1, 2)
-DEFAULT_MODEL = "openai/gpt-4o-mini"
+
+FREE_MODEL_FALLBACKS = (
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "google/gemma-4-31b-it:free",
+    "qwen/qwen3.8-27b:free",
+    "nex-agi/nex-n2.5-pro:free",
+)
+DEFAULT_MODEL = FREE_MODEL_FALLBACKS[0]
 
 log = logging.getLogger(__name__)
 
@@ -46,7 +61,18 @@ class OpenRouterProvider:
 
     def complete_json(self, system: str, user: str, schema: dict, *,
                        model: str = None, max_tokens: int = 1024) -> LLMResult | None:
-        model = model or DEFAULT_MODEL
+        # An explicit model is a deliberate, single choice -- no fallback.
+        # Otherwise walk the free-model list so one rate-limited or renamed
+        # model doesn't take enrichment down entirely.
+        candidates = (model,) if model else FREE_MODEL_FALLBACKS
+        for candidate in candidates:
+            result = self._complete_for_model(candidate, system, user, schema, max_tokens)
+            if result is not None:
+                return result
+        return None
+
+    def _complete_for_model(self, model: str, system: str, user: str, schema: dict,
+                             max_tokens: int) -> LLMResult | None:
         payload = {
             "model": model,
             "messages": [

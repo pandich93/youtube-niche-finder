@@ -183,10 +183,10 @@ and by default the app contacts exactly two external hosts —
 channel RSS feeds. Comments read by `video_comments` are never stored. An
 optional LLM step via [OpenRouter](https://openrouter.ai) (`LLM_PROVIDER`,
 off by default) adds a third, `openrouter.ai`, only when you turn it on —
-`OPENROUTER_MODEL` picks the model and can be changed to anything OpenRouter
-lists, `openai/gpt-4o-mini` is just a cheap starting default. See
-[PRIVACY.md](PRIVACY.md) for the full picture, including what the first run
-downloads and how to delete everything.
+left unset, `OPENROUTER_MODEL` picks and rotates through OpenRouter's free
+models on its own; set it to pin one specific model (free or paid) instead.
+See [PRIVACY.md](PRIVACY.md) for the full picture, including what the first
+run downloads and how to delete everything.
 
 ## Changelog
 

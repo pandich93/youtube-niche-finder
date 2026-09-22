@@ -86,8 +86,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   mirroring how the worker already backs off from YouTube's search quota.
   `OpenRouterProvider` retries 429/5xx twice with backoff, falls back to
   parsing JSON out of plain text on models that reject `response_format`,
-  and never lets the API key reach a log line. `db_stats` / `GET /api/stats`
-  expose `llm: {provider, model, today_cost_usd, budget_usd, blocked}`, and
+  and never lets the API key reach a log line. Leave `OPENROUTER_MODEL`
+  unset and it rotates through `FREE_MODEL_FALLBACKS` — currently
+  `nvidia/nemotron-3-super-120b-a12b:free` and three more, pulled from
+  OpenRouter's live `/api/v1/models` catalog and filtered to models that
+  support `response_format` — until one answers, so a single renamed or
+  rate-limited free model doesn't take enrichment down; pin `OPENROUTER_MODEL`
+  to skip the rotation and always use one specific (free or paid) model.
+  `db_stats` / `GET /api/stats` expose
+  `llm: {provider, model, today_cost_usd, budget_usd, blocked}`, and
   `cli.py doctor --llm` pings the configured provider with a one-token
   request.
 

@@ -85,6 +85,14 @@ task + model + normalized input) so the identical request is never sent
 twice, and `llm_usage` tracks daily spend against `LLM_DAILY_BUDGET_USD`
 (default $1.00/day) so a runaway loop can't run up an unbounded bill.
 
+Leave `OPENROUTER_MODEL` unset and the request goes to whichever model in
+`infrastructure/llm/openrouter.py:FREE_MODEL_FALLBACKS` answers first — all
+of OpenRouter's free (`:free`) tier, $0 per token, so `llm_usage.cost_usd`
+stays 0 and the daily budget effectively never triggers. Free models carry
+their own OpenRouter-side rate limit (50 requests/day without purchased
+credits, 1000/day with $10+), independent of `LLM_DAILY_BUDGET_USD`. Set
+`OPENROUTER_MODEL` to pin one specific model — free or paid — instead.
+
 ## Your API key
 
 `YOUTUBE_API_KEY` is read from `.env` at startup and used only as a query

@@ -12,7 +12,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 import httpx  # noqa: E402
 
 import infrastructure.llm.openrouter as openrouter_mod  # noqa: E402
-from infrastructure.llm.openrouter import OpenRouterProvider  # noqa: E402
+from infrastructure.llm.openrouter import FREE_MODEL_FALLBACKS, OpenRouterProvider  # noqa: E402
 from infrastructure.llm.null import NullProvider  # noqa: E402
 
 SCHEMA = {
@@ -135,6 +135,47 @@ def test_response_missing_required_field_fails_validation(monkeypatch):
     monkeypatch.setattr(httpx.Client, "post", fake_post)
 
     assert OpenRouterProvider("sk-test-key").complete_json("sys", "usr", SCHEMA) is None
+
+
+def test_no_model_given_walks_free_fallbacks_until_one_answers(monkeypatch):
+    """First free model in the list is broken (exhausts its retries on 500);
+    the provider should move on to the next one instead of giving up."""
+    assert len(FREE_MODEL_FALLBACKS) >= 2
+    models_tried = []
+
+    def fake_post(self, url, headers=None, json=None):
+        models_tried.append(json["model"])
+        if json["model"] == FREE_MODEL_FALLBACKS[0]:
+            return _FakeResponse(500, text="upstream error")
+        return _ok({"title": "fallback-worked", "score": 7}, model=json["model"])
+
+    monkeypatch.setattr(httpx.Client, "post", fake_post)
+    monkeypatch.setattr(openrouter_mod.time, "sleep", lambda s: None)
+
+    result = OpenRouterProvider("sk-test-key").complete_json("sys", "usr", SCHEMA)
+
+    assert result is not None
+    assert result.data == {"title": "fallback-worked", "score": 7}
+    assert result.model == FREE_MODEL_FALLBACKS[1]
+    assert FREE_MODEL_FALLBACKS[0] in models_tried
+    assert FREE_MODEL_FALLBACKS[1] in models_tried
+
+
+def test_explicit_model_never_falls_back_to_the_free_list(monkeypatch):
+    models_tried = []
+
+    def fake_post(self, url, headers=None, json=None):
+        models_tried.append(json["model"])
+        return _FakeResponse(500, text="upstream error")
+
+    monkeypatch.setattr(httpx.Client, "post", fake_post)
+    monkeypatch.setattr(openrouter_mod.time, "sleep", lambda s: None)
+
+    result = OpenRouterProvider("sk-test-key").complete_json(
+        "sys", "usr", SCHEMA, model="some/pinned-model")
+
+    assert result is None
+    assert set(models_tried) == {"some/pinned-model"}
 
 
 def test_api_key_is_never_present_in_a_logged_error(monkeypatch, caplog):

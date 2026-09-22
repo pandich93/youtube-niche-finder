@@ -110,7 +110,7 @@ def cmd_doctor(args):
     else:
         from infrastructure.llm import factory as llm_factory
         has_key = bool(os.environ.get("OPENROUTER_API_KEY", "").strip())
-        print(f"   provider={llm_provider} model={llm_factory.default_model()} "
+        print(f"   provider={llm_provider} model={llm_factory.display_model()} "
               f"key={'есть' if has_key else 'ОТСУТСТВУЕТ'}")
         if not has_key:
             problems.append("LLM_PROVIDER=openrouter, но OPENROUTER_API_KEY не задан -- "

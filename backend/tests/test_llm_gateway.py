@@ -119,6 +119,34 @@ def test_db_stats_exposes_llm_block():
     assert s["llm"]["today_cost_usd"] == 0.0
 
 
+def test_default_model_is_none_unless_pinned_by_env():
+    saved = os.environ.pop("OPENROUTER_MODEL", None)
+    try:
+        assert factory.default_model() is None
+
+        os.environ["OPENROUTER_MODEL"] = "some/pinned-model"
+        assert factory.default_model() == "some/pinned-model"
+    finally:
+        if saved is None:
+            os.environ.pop("OPENROUTER_MODEL", None)
+        else:
+            os.environ["OPENROUTER_MODEL"] = saved
+
+
+def test_display_model_names_the_free_fallback_chain_when_unpinned():
+    saved = os.environ.pop("OPENROUTER_MODEL", None)
+    try:
+        assert "free" in factory.display_model()
+
+        os.environ["OPENROUTER_MODEL"] = "some/pinned-model"
+        assert factory.display_model() == "some/pinned-model"
+    finally:
+        if saved is None:
+            os.environ.pop("OPENROUTER_MODEL", None)
+        else:
+            os.environ["OPENROUTER_MODEL"] = saved
+
+
 if __name__ == "__main__":
     setup_module()
 
