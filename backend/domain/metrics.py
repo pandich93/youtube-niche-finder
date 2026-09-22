@@ -15,6 +15,7 @@ destroys a mean baseline (observed avg/median ratios up to ~27x).
 """
 import math
 import statistics as st
+from datetime import datetime, timezone
 
 # ------------------------------------------------------------------ outliers
 
@@ -51,6 +52,49 @@ def outlier_vs_median(video_views: int, prior_views, n: int = DEFAULT_BASELINE_N
     if not base or base <= 0:
         return None
     return video_views / base
+
+
+def _parse_iso_dt(ts):
+    if not ts:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def period_baseline_median(channel_videos, target_published_at, target_is_short: bool,
+                           window_days: int = 15, min_videos: int = 5) -> float | None:
+    """Median views of the channel's OTHER videos of the same format (Shorts
+    vs long-form) published within +/- window_days of the target's own
+    publish date -- "was this good against its actual season", as opposed to
+    baseline_median()'s "against its own last N uploads" (a channel whose
+    recent uploads were unusually big otherwise understates a good video).
+    Falls back to the median across every video of that format on the
+    channel when the window doesn't reach min_videos. None if the channel
+    has no video of that format at all.
+
+    channel_videos: [{"published_at": iso str, "view_count": int,
+                      "is_short": bool}, ...] -- the channel's OTHER videos;
+    whether to include the target itself is the caller's call, same
+    convention as baseline_median()'s prior_views."""
+    same_format = [v for v in channel_videos
+                   if bool(v.get("is_short")) == bool(target_is_short)
+                   and v.get("view_count") is not None]
+    if not same_format:
+        return None
+
+    target_dt = _parse_iso_dt(target_published_at)
+    if target_dt is not None:
+        window_seconds = window_days * 86400
+        in_window = [v["view_count"] for v in same_format
+                    if (dt := _parse_iso_dt(v.get("published_at"))) is not None
+                    and abs((dt - target_dt).total_seconds()) <= window_seconds]
+        if len(in_window) >= min_videos:
+            return float(st.median(in_window))
+
+    return float(st.median(v["view_count"] for v in same_format))
 
 
 OUTLIER_BANDS = [

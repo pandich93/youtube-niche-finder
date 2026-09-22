@@ -229,11 +229,21 @@ def channel_analytics(channel_id: str, period: str = "30d",
     views_list = [v["view_count"] or 0 for v in longform] or [v["view_count"] or 0 for v in videos]
 
     # ---- outliers, computed chronologically against a rolling median baseline
+    # stage 14: also against a period baseline (this channel's OTHER videos of
+    # the same format within +/-15d of this one) -- outlierScore/outlierBand
+    # stay the rolling numbers unchanged for backward compat, outlierScoreRolling
+    # is the same number under the plan's chosen name, outlierScorePeriod is new.
+    siblings_all = [{"video_id": v["video_id"], "published_at": v["published_at"],
+                    "view_count": v["view_count"] or 0,
+                    "is_short": M.is_short(v["duration_seconds"])} for v in videos]
     chron = sorted(longform, key=lambda v: v["published_at"] or "")
     hist_views, outliers = [], []
     for v in chron:
         base = M.baseline_median(hist_views, baseline_n)
         age = P.days_since(v["published_at"])
+        period_base = M.period_baseline_median(
+            [s for s in siblings_all if s["video_id"] != v["video_id"]],
+            v["published_at"], target_is_short=False)
         if base:
             score = (v["view_count"] or 0) / base
             outliers.append({
@@ -241,10 +251,14 @@ def channel_analytics(channel_id: str, period: str = "30d",
                 "publishedAt": v["published_at"], "views": v["view_count"],
                 "ageDays": round(age, 1),
                 "outlierScore": round(score, 2),
+                "outlierScoreRolling": round(score, 2),
                 "outlierScoreAgeAdjusted": round(
                     M.age_adjusted_outlier(v["view_count"] or 0, base, age) or 0, 2),
                 "band": M.outlier_band(score),
                 "baselineMedianViews": int(base),
+                "baselineMedianViewsPeriod": int(period_base) if period_base else None,
+                "outlierScorePeriod": round((v["view_count"] or 0) / period_base, 2)
+                    if period_base else None,
             })
         hist_views.append(v["view_count"] or 0)
     outliers.sort(key=lambda x: x["outlierScore"], reverse=True)

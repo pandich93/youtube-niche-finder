@@ -141,6 +141,8 @@ def _overview_from_rows(rows: list, top_n: int = 5) -> dict:
             {"videoId": r["video_id"], "title": r["title"], "views": r["view_count"],
              "channel": r["channel_title"], "subscribers": r["subs"],
              "outlierScore": r["outlierScore"],
+             "outlierScoreRolling": r["outlierScoreRolling"],
+             "outlierScorePeriod": r["outlierScorePeriod"],
              "viewsPerSubscriber": r["viewsPerSubscriber"]}
             for r in sorted(rows, key=lambda r: r["outlierScore"] or 0, reverse=True)[:top_n]
         ],

@@ -128,16 +128,19 @@ def load_window(period="7d", offset=0, ref=None, period_by="published", **filter
     return rows
 
 
-def _channel_baselines(conn, channel_ids, n=M.DEFAULT_BASELINE_N):
-    """Median views of the previous `n` long-form uploads, per (channel, video).
-
-    This is the ViewStats / 1of10 style baseline. NexLev uses a lifetime mean
-    instead, which one viral video wrecks -- we keep their number too, as
-    `outlierScoreNexlev`, so results stay comparable with their UI.
+def _channel_baselines(conn, channel_ids, n=M.DEFAULT_BASELINE_N,
+                       period_window_days=15, period_min_videos=5):
+    """Two baselines per (channel, video): `out` (rolling -- median of the
+    previous `n` long-form uploads, ViewStats/1of10 style) and `out_period`
+    (stage 14 -- median of the channel's OTHER videos of the same format
+    published within period_window_days of this one, Shorts and long-form
+    kept separate). NexLev's lifetime-mean baseline is also kept, as
+    `outlierScoreNexlev` in _enrich, so results stay comparable with their UI.
     """
     if not channel_ids:
-        return {}
+        return {}, {}
     out = {}
+    out_period = {}
     ids = list(channel_ids)
     for i in range(0, len(ids), 400):
         chunk = ids[i:i + 400]
@@ -149,11 +152,17 @@ def _channel_baselines(conn, channel_ids, n=M.DEFAULT_BASELINE_N):
             per_channel[r["channel_id"]].append(r)
         for ch, vids in per_channel.items():
             history = []
-            for v in vids:
+            siblings = [{"published_at": v["published_at"], "view_count": v["view_count"] or 0,
+                        "is_short": M.is_short(v["duration_seconds"])} for v in vids]
+            for idx, v in enumerate(vids):
                 out[v["video_id"]] = M.baseline_median(history, n)
-                if not M.is_short(v["duration_seconds"]):
+                is_short = M.is_short(v["duration_seconds"])
+                out_period[v["video_id"]] = M.period_baseline_median(
+                    siblings[:idx] + siblings[idx + 1:], v["published_at"], is_short,
+                    window_days=period_window_days, min_videos=period_min_videos)
+                if not is_short:
                     history.append(v["view_count"] or 0)
-    return out
+    return out, out_period
 
 
 def _history_map(conn, video_ids):
@@ -178,17 +187,24 @@ def _history_map(conn, video_ids):
 
 
 def _enrich(conn, rows, ref=None):
-    baselines = _channel_baselines(conn, {r["channel_id"] for r in rows})
+    baselines, period_baselines = _channel_baselines(conn, {r["channel_id"] for r in rows})
     history = _history_map(conn, [r["video_id"] for r in rows])
     for r in rows:
         views = r["view_count"] or 0
         age_h = P.hours_since(r["published_at"], ref)
         age_d = age_h / 24.0
         base = baselines.get(r["video_id"])
+        period_base = period_baselines.get(r["video_id"])
         r["ageHours"] = round(age_h, 1)
         r["ageDays"] = round(age_d, 2)
         r["baselineMedianViews"] = int(base) if base else None
         r["outlierScore"] = round(M.outlier_vs_median(views, [base] * 3), 3) if base else None
+        # stage 14: outlierScore is kept as-is for backward compat (MCP/extension
+        # already read it) -- outlierScoreRolling is the same number under the
+        # plan's chosen name, outlierScorePeriod is the new period-median base.
+        r["outlierScoreRolling"] = r["outlierScore"]
+        r["baselineMedianViewsPeriod"] = int(period_base) if period_base else None
+        r["outlierScorePeriod"] = round(views / period_base, 3) if period_base else None
         r["outlierScoreAgeAdjusted"] = (
             round(M.age_adjusted_outlier(views, base, age_d), 3) if base else None)
         r["outlierBand"] = M.outlier_band(r["outlierScore"])
@@ -367,10 +383,13 @@ def _video_out(r):
         "projected30dViews": r["projected30dViews"],
         "viralScore": r["viralScore"],
         "outlierScore": r["outlierScore"],
+        "outlierScoreRolling": r["outlierScoreRolling"],
+        "outlierScorePeriod": r["outlierScorePeriod"],
         "outlierScoreAgeAdjusted": r["outlierScoreAgeAdjusted"],
         "outlierBand": r["outlierBand"],
         "outlierScoreNexlev": r["outlierScoreNexlev"],
         "baselineMedianViews": r["baselineMedianViews"],
+        "baselineMedianViewsPeriod": r["baselineMedianViewsPeriod"],
         "engagementRate": r["engagementRate"],
         "vphLifetime": r["vphLifetime"],
         "vph24h": r["vph24h"],
