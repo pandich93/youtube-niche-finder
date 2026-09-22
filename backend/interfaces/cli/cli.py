@@ -12,6 +12,7 @@
     python cli.py keywords --period 24h
     python cli.py channels --period 24h       outlier-каналы
     python cli.py stats
+    python cli.py notify-test                 тестовое сообщение в Telegram/webhook
     python cli.py seed                        синтетические данные для примера
 
 В Docker:  docker compose run --rm mcp python cli.py doctor
@@ -216,6 +217,20 @@ def cmd_fix_tracked(args):
     out(tracking.fix_tracked(_key() or None, apply=args.apply))
 
 
+def cmd_notify_test(args):
+    from infrastructure.notify import factory as notify_factory
+    from infrastructure.notify.null import NullNotifier
+    notifier = notify_factory.get_notifier()
+    if isinstance(notifier, NullNotifier):
+        out({"sent": False,
+            "hint": "no NOTIFY_TELEGRAM_BOT_TOKEN/NOTIFY_TELEGRAM_CHAT_ID or "
+                    "NOTIFY_WEBHOOK_URL set in .env"})
+        return
+    ok = notifier.send("\U0001F9EA niche-finder: тестовое сообщение. Если вы это видите, "
+                       "алерты настроены верно.")
+    out({"sent": ok, "channel": notify_factory.display_target()})
+
+
 def cmd_seed(args):
     # cli.py now lives at backend/interfaces/cli/ (two levels deeper than the
     # old flat backend/cli.py), so climb back up to backend/ before reaching
@@ -236,6 +251,8 @@ def main():
                    help="дополнительно пингануть настроенный LLM-провайдер (тратит бюджет)")
     p.set_defaults(fn=cmd_doctor)
     sub.add_parser("stats", help="что в базе").set_defaults(fn=cmd_stats)
+    sub.add_parser("notify-test", help="тестовое сообщение в Telegram/webhook").set_defaults(
+        fn=cmd_notify_test)
     sub.add_parser("seed", help="залить синтетические данные").set_defaults(fn=cmd_seed)
 
     p = sub.add_parser("embed-videos", help="досчитать эмбеддинги для уже собранных видео (0 quota)")

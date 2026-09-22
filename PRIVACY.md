@@ -104,6 +104,26 @@ their own OpenRouter-side rate limit (50 requests/day without purchased
 credits, 1000/day with $10+), independent of `LLM_DAILY_BUDGET_USD`. Set
 `OPENROUTER_MODEL` to pin one specific model — free or paid — instead.
 
+## Alert delivery (Telegram / webhook)
+
+Off by default -- the worker only writes detected events (outlier, acceleration,
+title change, silence break) to Postgres; nothing is sent anywhere until you
+set `NOTIFY_TELEGRAM_BOT_TOKEN` + `NOTIFY_TELEGRAM_CHAT_ID`, or
+`NOTIFY_WEBHOOK_URL`, in `.env`.
+
+| Host | Why | Sends your bot token? |
+|---|---|---|
+| `api.telegram.org` | `sendMessage` for each new alert (or a batched summary) | Yes, as part of the URL path -- masked in any logged error |
+| your `NOTIFY_WEBHOOK_URL` | Same, as a POST body `{"text": ...}` | No |
+
+What goes out is only the alert's own numbers and a video/channel title --
+the same data `list_events`/the dashboard's alerts view already show you,
+never comment text or anything from `comment_insights`. The bot token
+itself is never logged (masked in every error path in
+`infrastructure/notify/telegram.py`) and never written to the database;
+`alert_deliveries` stores only which alert was sent and when, not the
+message text.
+
 ## Your API key
 
 `YOUTUBE_API_KEY` is read from `.env` at startup and used only as a query

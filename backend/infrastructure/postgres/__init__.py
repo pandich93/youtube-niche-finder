@@ -50,4 +50,6 @@ from infrastructure.postgres.repositories import (  # noqa: F401
     record_channel_llm_labels,
     sync_embedding_v,
     save_video_insights,
+    already_delivered_alert_keys,
+    mark_alert_delivered,
 )

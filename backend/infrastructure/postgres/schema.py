@@ -222,6 +222,17 @@ CREATE TABLE IF NOT EXISTS video_insights (
     created_at TEXT,
     PRIMARY KEY (video_id, task)
 );
+
+-- ---------- v8: alert delivery dedup (stage 07) ----------
+-- alert_key = events.id as text -- a delivered row here means that exact
+-- event was already sent to Telegram/webhook, independent of events.seen_at
+-- (which tracks the dashboard's "read" state, a different concern).
+
+CREATE TABLE IF NOT EXISTS alert_deliveries (
+    alert_key TEXT PRIMARY KEY,
+    channel TEXT,
+    sent_at TEXT
+);
 """
 
 # columns added to pre-existing tables (name -> DDL type)

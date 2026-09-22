@@ -6,14 +6,19 @@ NEW events to the `events` table -- "new" meaning no row with the same
 without needing a separate "already processed" cursor.
 """
 import json
+import os
 
 import infrastructure.postgres as db
 from application import discovery as trends
 from application import channel_tracking as T
 from domain import alerts as A
+from infrastructure.notify import factory as notify_factory
+from infrastructure.notify.null import NullNotifier
 
 DEFAULT_SILENCE_DAYS = A.SILENCE_DAYS_DEFAULT
 DEFAULT_PERIOD = "30d"
+NOTIFY_MAX_PER_CYCLE = int(os.environ.get("NOTIFY_MAX_PER_CYCLE", "10"))
+DASHBOARD_URL = os.environ.get("NOTIFY_DASHBOARD_URL", "http://127.0.0.1:8080").rstrip("/")
 
 
 def _already_emitted(conn, kind, ref_id) -> bool:
@@ -156,3 +161,98 @@ def mark_seen(ids: list = None, all_unseen: bool = False) -> dict:
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+# ------------------------------------------------------------ delivery (07)
+
+def _html_escape(s) -> str:
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _format_message(ev: dict) -> str:
+    p = ev["payload"]
+    kind = ev["kind"]
+    if kind == "outlier":
+        text = (f"\U0001F680 <b>Outlier</b>: {_html_escape(p.get('title'))}\n"
+               f"×{p.get('outlierScore')} · {p.get('views')} просмотров")
+    elif kind == "acceleration":
+        text = (f"⚡ <b>Ускорение</b>: {_html_escape(p.get('title'))}\n"
+               f"×{p.get('acceleration')} · {p.get('vph24h')} VPH за 24ч")
+    elif kind == "title_change":
+        text = (f"✏️ <b>Смена заголовка</b>\n"
+               f"«{_html_escape(p.get('oldTitle'))}» → «{_html_escape(p.get('newTitle'))}»")
+    elif kind == "silence_break":
+        text = (f"\U0001F514 <b>Вернулись после паузы</b>: {_html_escape(p.get('title'))}\n"
+               f"молчали {p.get('gapDays')} дней")
+    else:
+        text = f"{_html_escape(kind)}: {_html_escape(json.dumps(p, ensure_ascii=False))}"
+
+    links = []
+    if p.get("videoId"):
+        links.append(f'<a href="https://www.youtube.com/watch?v={p["videoId"]}">YouTube</a>')
+    if p.get("channelId"):
+        links.append(f'<a href="{DASHBOARD_URL}/#/channel/{p["channelId"]}">дашборд</a>')
+    if links:
+        text += "\n" + " · ".join(links)
+    return text
+
+
+def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE) -> dict:
+    """Stage 07: send every event not yet delivered to Telegram/webhook, up
+    to max_per_cycle individually plus one summary line for the rest.
+    Skips entirely (no DB read at all) when no notifier is configured --
+    NullNotifier means "feature off", not "queue forever". A send failure
+    is logged by the notifier itself and simply leaves that event
+    undelivered for the next cycle to retry; it never raises, so a bad
+    token/URL cannot take the worker down (mirrors _safe() in
+    worker_cycle.py, which also wraps this call)."""
+    notifier = notify_factory.get_notifier()
+    if isinstance(notifier, NullNotifier):
+        return {"skipped": True,
+               "hint": "no NOTIFY_TELEGRAM_BOT_TOKEN/NOTIFY_TELEGRAM_CHAT_ID or "
+                       "NOTIFY_WEBHOOK_URL configured"}
+
+    conn = db.get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, kind, ref_id, payload, created_at, seen_at FROM events "
+            "ORDER BY created_at ASC"
+        ).fetchall()
+        events = [_shape_event(r) for r in rows]
+        keys = [str(e["id"]) for e in events]
+        delivered_keys = db.already_delivered_alert_keys(conn, keys)
+        pending = [e for e in events if str(e["id"]) not in delivered_keys]
+        if not pending:
+            return {"sent": 0, "summarized": 0, "failed": 0}
+
+        channel = notify_factory.display_target()
+        to_send, rest = pending[:max_per_cycle], pending[max_per_cycle:]
+
+        sent = failed = 0
+        for ev in to_send:
+            if notifier.send(_format_message(ev)):
+                db.mark_alert_delivered(conn, str(ev["id"]), channel)
+                sent += 1
+            else:
+                failed += 1
+        conn.commit()
+
+        summarized = 0
+        if rest:
+            by_kind = {}
+            for ev in rest:
+                by_kind[ev["kind"]] = by_kind.get(ev["kind"], 0) + 1
+            lines = [f"\U0001F4EC И ещё {len(rest)} алертов:"]
+            lines += [f"• {_html_escape(k)}: {n}" for k, n in by_kind.items()]
+            lines.append(f'<a href="{DASHBOARD_URL}/#/data">открыть дашборд</a>')
+            if notifier.send("\n".join(lines)):
+                for ev in rest:
+                    db.mark_alert_delivered(conn, str(ev["id"]), channel)
+                summarized = len(rest)
+            else:
+                failed += len(rest)
+            conn.commit()
+
+        return {"sent": sent, "summarized": summarized, "failed": failed}
+    finally:
+        conn.close()

@@ -141,6 +141,7 @@ def cycle():
 
     if _due("alerts", ALERTS_INTERVAL_MIN):
         _safe("alerts scan", lambda: alerts_mod.scan())
+        _safe("alerts deliver", lambda: alerts_mod.deliver())
         _mark("alerts")
 
     if DO_EMBED and _due("embed", EMBED_INTERVAL_MIN):
