@@ -21,11 +21,13 @@ factory.default_model() (the pinned model, or "auto" when the caller lets
 the gateway pick from the free chain) rather than the exact model that
 answered a given call.
 """
+import json
 import os
 from datetime import datetime, timedelta, timezone
 
 import infrastructure.postgres as db
 from application import llm_gateway as gw
+from domain import periods as P
 from infrastructure.llm import factory
 
 LLM_RELABEL_DAYS = int(os.environ.get("LLM_RELABEL_DAYS", "30"))
@@ -274,3 +276,174 @@ def tag_new_videos(limit: int = 100) -> dict:
                           "manualTags": s["n"], "needed": MIN_MANUAL_TAGS_FOR_NICHE}
                          for s in skipped_niches],
     }
+
+
+# ------------------------------------------------------------ comment insights (04)
+
+LLM_INSIGHTS_TTL_DAYS = int(os.environ.get("LLM_INSIGHTS_TTL_DAYS", "7"))
+
+_EMPTY_INSIGHTS = {"pains": [], "requests": [], "video_ideas": [], "sentiment": None,
+                   "language": None}
+
+COMMENT_INSIGHTS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "pains": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "quotes": {"type": "array", "items": {"type": "string"}},
+                    "count_estimate": {"type": "integer"},
+                },
+                "required": ["text", "quotes", "count_estimate"],
+            },
+        },
+        "requests": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"topic": {"type": "string"}, "evidence": {"type": "string"}},
+                "required": ["topic", "evidence"],
+            },
+        },
+        "video_ideas": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"title": {"type": "string"}, "why": {"type": "string"}},
+                "required": ["title", "why"],
+            },
+        },
+        "sentiment": {
+            "type": "object",
+            "properties": {
+                "positive": {"type": "number"}, "neutral": {"type": "number"},
+                "negative": {"type": "number"},
+            },
+            "required": ["positive", "neutral", "negative"],
+        },
+        "language": {"type": "string"},
+    },
+    "required": ["pains", "requests", "video_ideas", "sentiment", "language"],
+}
+
+_COMMENT_INSIGHTS_SYSTEM = (
+    "You analyze YouTube comments for a creator's content-strategy dashboard. "
+    "Extract at most 7 pains (real frustrations/problems, each with up to 2 "
+    "short verbatim quotes and a rough count_estimate of how many comments "
+    "raise it), at most 7 requests (topics/features viewers ask for, with one "
+    "evidence quote each), and at most 5 concrete video_ideas the pains/"
+    "requests suggest. Estimate overall sentiment as positive/neutral/negative "
+    "fractions summing to 1. Detect the dominant comment language (ISO-639-1). "
+    "Output only what the comments actually support -- fewer items is fine, "
+    "don't invent volume."
+)
+
+_NICHE_INSIGHTS_SYSTEM = (
+    "You merge several per-video YouTube comment-insight reports for videos in "
+    "the same niche into one niche-level summary, same JSON shape as a single "
+    "report. Combine near-duplicate pains/requests across videos (their "
+    "count_estimate should roughly add up across the merged sources), rank "
+    "video_ideas by how many videos' pains/requests support them, weight "
+    "sentiment by how many comments each source video's pains/requests imply "
+    "it had. Detect the dominant language across sources."
+)
+
+
+def _dedupe_comments(comments: list, max_comments: int) -> list:
+    seen = set()
+    out = []
+    for c in comments:
+        text = (c.get("text") or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(c)
+        if len(out) >= max_comments:
+            break
+    return out
+
+
+def comment_insights(api_key: str, video_id: str, max_comments: int = 200,
+                     force_refresh: bool = False) -> dict:
+    """Stage 04: pains/requests/video ideas mined from a video's top
+    comments via LLMGateway (long-context model, comment threads can run to
+    thousands of tokens). Cached in video_insights for LLM_INSIGHTS_TTL_DAYS
+    -- a repeat call within that window costs neither YouTube quota nor an
+    LLM call. Spends 1 YouTube quota unit (comment_threads.list) only on a
+    cache miss; never called automatically by the worker (see worker_cycle.py
+    -- no comment-fetching step exists there by design, this is opt-in and
+    costs real money once an LLM provider is configured)."""
+    conn = db.get_conn()
+    if not force_refresh:
+        row = conn.execute(
+            "SELECT result, model, created_at FROM video_insights WHERE video_id=?",
+            (video_id,)).fetchone()
+        if row and row["created_at"] and P.days_since(row["created_at"]) <= LLM_INSIGHTS_TTL_DAYS:
+            conn.close()
+            return {"videoId": video_id, "cached": True, "model": row["model"],
+                   "createdAt": row["created_at"], "quotaSpent": 0, **row["result"]}
+    conn.close()
+
+    from application import collecting as collector
+    raw = collector.video_comments(api_key, video_id, max_results=max_comments)
+    quota_spent = (raw.get("quota") or {}).get("units_from_shared_pool", 0)
+    comments = _dedupe_comments(raw.get("comments") or [], max_comments)
+    if not comments:
+        return {"videoId": video_id, "cached": False, "quotaSpent": quota_spent,
+               "hint": "no comments found (or comments disabled) for this video",
+               **_EMPTY_INSIGHTS}
+
+    text_block = "\n".join(f"- {(c.get('text') or '').strip()[:300]}" for c in comments)
+    model = factory.long_context_model()
+    data = gw.run("comment_insights", _COMMENT_INSIGHTS_SYSTEM, text_block,
+                  COMMENT_INSIGHTS_SCHEMA, model=model)
+    if data is None:
+        return {"videoId": video_id, "cached": False, "quotaSpent": quota_spent,
+               "hint": "LLM_PROVIDER is none, or the daily LLM budget is exhausted -- "
+                       "set LLM_PROVIDER=openrouter + OPENROUTER_API_KEY to enable this",
+               **_EMPTY_INSIGHTS}
+
+    conn = db.get_conn()
+    db.save_video_insights(conn, video_id, data, model or "auto")
+    conn.commit()
+    conn.close()
+    return {"videoId": video_id, "cached": False, "model": model or "auto",
+           "quotaSpent": quota_spent, **data}
+
+
+def niche_comment_insights(niche_slug: str, top_n: int = 5) -> dict:
+    """Stage 04: merges whichever of the niche's top-viewed videos already
+    have a cached comment_insights() result into one niche-level summary --
+    a second LLM pass over those cached JSON reports, never over raw
+    comments, so this never spends YouTube quota and never triggers a new
+    per-video LLM call on its own."""
+    conn = db.get_conn()
+    rows = conn.execute(
+        "SELECT vi.video_id, vi.result, v.title, v.view_count FROM video_insights vi "
+        "JOIN videos v ON v.video_id = vi.video_id "
+        "JOIN video_niches vn ON vn.video_id = vi.video_id "
+        "WHERE vn.niche_slug = ? ORDER BY v.view_count DESC NULLS LAST LIMIT ?",
+        (niche_slug, top_n)).fetchall()
+    conn.close()
+    if not rows:
+        return {"niche": niche_slug, "found": False, "videosUsed": 0,
+               "hint": "no cached comment_insights for this niche's videos yet -- "
+                       "call comment_insights(video_id) on some of them first",
+               **_EMPTY_INSIGHTS}
+
+    combined_input = "\n\n".join(
+        f"Video: {r['title']}\n{json.dumps(r['result'], ensure_ascii=False)}" for r in rows)
+    model = factory.long_context_model()
+    data = gw.run("niche_comment_insights", _NICHE_INSIGHTS_SYSTEM, combined_input,
+                  COMMENT_INSIGHTS_SCHEMA, model=model)
+    video_ids = [r["video_id"] for r in rows]
+    if data is None:
+        return {"niche": niche_slug, "found": True, "videosUsed": len(rows),
+               "videoIds": video_ids,
+               "hint": "LLM_PROVIDER is none, or the daily LLM budget is exhausted",
+               **_EMPTY_INSIGHTS}
+    return {"niche": niche_slug, "found": True, "videosUsed": len(rows),
+           "videoIds": video_ids, "model": model or "auto", **data}

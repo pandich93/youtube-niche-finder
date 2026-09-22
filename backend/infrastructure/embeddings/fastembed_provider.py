@@ -29,6 +29,13 @@ def from_blob(blob: bytes) -> np.ndarray:
     return np.frombuffer(blob, dtype=np.float32)
 
 
+def to_pgvector_literal(vec: np.ndarray) -> str:
+    """Text form pgvector's input parser accepts for a ::vector cast --
+    stage 06's migration/dual-write path uses this instead of adding the
+    separate `pgvector` psycopg2 adapter package for one conversion."""
+    return "[" + ",".join(f"{float(x):.8f}" for x in vec) + "]"
+
+
 def cosine(a: np.ndarray, b: np.ndarray) -> float:
     denom = (np.linalg.norm(a) * np.linalg.norm(b))
     if denom == 0:

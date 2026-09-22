@@ -603,8 +603,10 @@ def backfill_embeddings(limit: int = 1000, batch_size: int = 256) -> dict:
         texts = [f"{r['title'] or ''}\n{(r['description'] or '')[:500]}" for r in chunk]
         vecs = emb.embed(texts)
         for r, vec in zip(chunk, vecs):
+            blob = emb.to_blob(vec)
             conn.execute("UPDATE videos SET embedding=? WHERE video_id=?",
-                        (emb.to_blob(vec), r["video_id"]))
+                        (blob, r["video_id"]))
+            db.sync_embedding_v(conn, r["video_id"], blob)
             embedded += 1
     conn.commit()
     remaining = conn.execute(

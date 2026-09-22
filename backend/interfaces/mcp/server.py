@@ -182,6 +182,32 @@ def video_comments(video_id: str, max_results: int = 100, order: str = "relevanc
                                     order=order, search_terms=search_terms)
 
 
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=False, open_world_hint=True))
+def comment_insights(video_id: str, max_comments: int = 200,
+                     force_refresh: bool = False) -> dict:
+    """Pains/requests/video ideas mined from a video's comments via LLM.
+    Cached for LLM_INSIGHTS_TTL_DAYS (7) -- a repeat call in that window is
+    free. On a cache miss: 1 YouTube quota unit + an LLM call (costs real
+    money once LLM_PROVIDER=openrouter is configured; a Null provider
+    returns a clear hint instead of silently doing nothing)."""
+    _require_key()
+    return enrich_uc.comment_insights(API_KEY, video_id, max_comments=max_comments,
+                                      force_refresh=force_refresh)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def niche_comment_insights(niche: str, top_n: int = 5) -> dict:
+    """Merges whichever of a niche's top-viewed videos already have a cached
+    comment_insights() result into one niche-level summary. Never fetches
+    comments or spends YouTube quota itself -- call comment_insights on the
+    videos you care about first."""
+    return enrich_uc.niche_comment_insights(niche, top_n=top_n)
+
+
 # ============================================================ DISCOVER
 
 @mcp.tool(annotations=ToolAnnotations(

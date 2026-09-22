@@ -20,10 +20,12 @@ from infrastructure.postgres.schema import (  # noqa: F401
     SCHEMA_VERSION,
     SCHEMA,
     MIGRATIONS,
+    EMBEDDING_DIM,
     now_iso,
     _existing_columns,
     migrate,
     init_db,
+    pgvector_available,
 )
 from infrastructure.postgres.repositories import (  # noqa: F401
     _CHANNEL_COLS,
@@ -46,4 +48,6 @@ from infrastructure.postgres.repositories import (  # noqa: F401
     upsert_video_tag,
     replace_video_tags,
     record_channel_llm_labels,
+    sync_embedding_v,
+    save_video_insights,
 )

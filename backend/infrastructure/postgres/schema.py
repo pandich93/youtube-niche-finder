@@ -208,6 +208,15 @@ CREATE TABLE IF NOT EXISTS video_tags (
 );
 
 CREATE INDEX IF NOT EXISTS idx_video_tags_group_tag ON video_tags(tag_group, tag);
+
+-- ---------- v7: comment insights cache (stage 04) ----------
+
+CREATE TABLE IF NOT EXISTS video_insights (
+    video_id TEXT PRIMARY KEY,
+    result JSONB,
+    model TEXT,
+    created_at TEXT
+);
 """
 
 # columns added to pre-existing tables (name -> DDL type)
@@ -246,6 +255,72 @@ def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
 
+# ---------------------------------------------------------------- pgvector (06)
+
+# sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (fastembed_provider.py)
+EMBEDDING_DIM = 384
+
+_pgvector_available = None  # None = not checked yet this process; else bool, cached
+
+
+def pgvector_available() -> bool:
+    """Whether embedding_v/HNSW are usable -- set once by init_db(). False on
+    a plain postgres:16-alpine image (no vector extension installed);
+    every caller that reads/writes embedding_v must check this first and
+    fall back to the BLOB + Python-cosine path when it's False."""
+    return bool(_pgvector_available)
+
+
+def _ensure_pgvector(conn) -> bool:
+    """Best-effort, never raises: enable the extension, add embedding_v +
+    its HNSW index if they're not there yet. Only succeeds on an image that
+    actually ships pgvector (pgvector/pgvector:pg16); a plain postgres image
+    fails at CREATE EXTENSION and this returns False without touching
+    anything else -- the BLOB column and Python-cosine functions keep
+    working exactly as before (see domain rollback notes in README)."""
+    try:
+        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+    except Exception:
+        conn.rollback()
+        return False
+    try:
+        if "embedding_v" not in _existing_columns(conn, "videos"):
+            conn.execute(f"ALTER TABLE videos ADD COLUMN embedding_v vector({EMBEDDING_DIM})")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_videos_embedding_v ON videos "
+            "USING hnsw (embedding_v vector_cosine_ops)")
+        conn.commit()
+        return True
+    except Exception:
+        conn.rollback()
+        return False
+
+
+def _backfill_embedding_v(conn, batch_size: int = 1000) -> int:
+    """One-time-per-gap migration: copy every BLOB embedding that doesn't
+    have a vector counterpart yet, batched so a large corpus doesn't hold one
+    huge transaction. Safe to call on every init_db() -- a no-op once caught
+    up. Returns rows migrated."""
+    from infrastructure.embeddings.fastembed_provider import to_pgvector_literal, from_blob
+    migrated = 0
+    while True:
+        rows = conn.execute(
+            "SELECT video_id, embedding FROM videos "
+            "WHERE embedding IS NOT NULL AND embedding_v IS NULL LIMIT ?",
+            (batch_size,)).fetchall()
+        if not rows:
+            break
+        for r in rows:
+            literal = to_pgvector_literal(from_blob(r["embedding"]))
+            conn.execute("UPDATE videos SET embedding_v = ?::vector WHERE video_id = ?",
+                        (literal, r["video_id"]))
+        conn.commit()
+        migrated += len(rows)
+        if len(rows) < batch_size:
+            break
+    return migrated
+
+
 def _existing_columns(conn, table):
     return {r["column_name"] for r in conn.execute(
         "SELECT column_name FROM information_schema.columns "
@@ -277,8 +352,12 @@ def migrate(conn):
 
 
 def init_db():
+    global _pgvector_available
     conn = get_conn()
     conn.executescript(SCHEMA)
     migrate(conn)
     conn.commit()
+    _pgvector_available = _ensure_pgvector(conn)
+    if _pgvector_available:
+        _backfill_embedding_v(conn)
     conn.close()

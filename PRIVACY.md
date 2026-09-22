@@ -34,11 +34,21 @@ but it is data about third parties, and how you use it is governed by the
 [YouTube Terms of Service](https://www.youtube.com/t/terms) and the
 [YouTube API Services Terms](https://developers.google.com/youtube/terms/api-services-terms-of-service).
 
-**Comments are not stored.** The `video_comments` tool reads comment threads
-live from the API and hands them straight back to the caller; nothing is
-written to the database. This is deliberate — comments are user-generated
-content attached to identifiable authors, and keeping a local copy of them is
-a liability the tool does not need.
+**Comments are not stored as themselves.** The `video_comments` tool reads
+comment threads live from the API and hands them straight back to the caller;
+nothing is written to the database. This is deliberate — comments are
+user-generated content attached to identifiable authors, and keeping a local
+copy of them is a liability the tool does not need.
+
+**Exception: `comment_insights` (stage 04), and only when you call it.**
+This tool sends comment *text* (not author names) to OpenRouter to extract
+pains/requests/video ideas, and caches the LLM's *output* (not the raw
+comments) in `video_insights`. It never runs on its own — the worker has no
+comment-fetching step, and neither the dashboard nor the MCP server call it
+automatically. Like every other `llm_gateway` call, it is a no-op unless you
+have already set `LLM_PROVIDER=openrouter`, and it additionally requires an
+explicit click (dashboard) or tool call (MCP) naming a specific video —
+there is no bulk or background mode.
 
 ## Where network traffic goes
 
@@ -79,8 +89,9 @@ returns `None` without touching the network unless you set
 
 What actually goes out is only what the calling code builds as `system`/
 `user` text and a JSON schema — a title, a description, a short prompt about
-one video or channel — never raw video/comment dumps, and never your
-YouTube API key. Every request is cached in Postgres (`llm_cache`, keyed by
+one video or channel, or (only for `comment_insights`, see above) the text of
+that video's comments — never your YouTube API key. Every request is cached
+in Postgres (`llm_cache`, keyed by
 task + model + normalized input) so the identical request is never sent
 twice, and `llm_usage` tracks daily spend against `LLM_DAILY_BUDGET_USD`
 (default $1.00/day) so a runaway loop can't run up an unbounded bill.

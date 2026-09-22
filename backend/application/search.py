@@ -407,32 +407,59 @@ def similar_videos(video_id: str, niche: str = None, limit: int = 10,
                      "track_channel default to embed=False; run backfill_embeddings, "
                      "or re-collect with embed=True, to make it eligible"),
         }
-    target = emb.from_blob(row["embedding"])
     own_channel = row["channel_id"]
 
-    if niche:
-        sql = ("SELECT v.video_id, v.embedding, v.channel_id, v.title, v.view_count, "
-               "v.published_at FROM videos v "
-               "JOIN video_niches vn ON vn.video_id = v.video_id "
-               "WHERE vn.niche_slug=? AND v.embedding IS NOT NULL AND v.video_id != ?")
-        params = (niche, video_id)
+    if db.pgvector_available():
+        # stage 06: server-side ANN via pgvector's HNSW index instead of
+        # pulling every candidate's BLOB into Python and cosine-scoring
+        # there -- see domain/idea_verdicts-style module docstrings for why:
+        # README "pgvector rollback" section has the fallback contract.
+        literal = emb.to_pgvector_literal(emb.from_blob(row["embedding"]))
+        joins, where, params = "", ["v.embedding_v IS NOT NULL", "v.video_id != ?"], [video_id]
+        if niche:
+            joins = " JOIN video_niches vn ON vn.video_id = v.video_id"
+            where.append("vn.niche_slug = ?")
+            params.append(niche)
+        if exclude_same_channel:
+            where.append("v.channel_id != ?")
+            params.append(own_channel)
+        where_sql = " AND ".join(where)
+        candidates = conn.execute(
+            f"SELECT COUNT(*) AS n FROM videos v{joins} WHERE {where_sql}", params
+        ).fetchone()["n"]
+        sql = (f"SELECT v.video_id, v.title, v.view_count, v.published_at, v.channel_id, "
+              f"(1 - (v.embedding_v <=> ?::vector)) AS similarity "
+              f"FROM videos v{joins} WHERE {where_sql} "
+              f"ORDER BY v.embedding_v <=> ?::vector LIMIT ?")
+        scored_rows = conn.execute(sql, [literal] + params + [literal, limit]).fetchall()
+        scored = [(r, r["similarity"]) for r in scored_rows]
     else:
-        sql = ("SELECT video_id, embedding, channel_id, title, view_count, published_at "
-               "FROM videos WHERE embedding IS NOT NULL AND video_id != ?")
-        params = (video_id,)
-    rows = conn.execute(sql, params).fetchall()
+        target = emb.from_blob(row["embedding"])
+        if niche:
+            sql = ("SELECT v.video_id, v.embedding, v.channel_id, v.title, v.view_count, "
+                  "v.published_at FROM videos v "
+                  "JOIN video_niches vn ON vn.video_id = v.video_id "
+                  "WHERE vn.niche_slug=? AND v.embedding IS NOT NULL AND v.video_id != ?")
+            params2 = (niche, video_id)
+        else:
+            sql = ("SELECT video_id, embedding, channel_id, title, view_count, published_at "
+                  "FROM videos WHERE embedding IS NOT NULL AND video_id != ?")
+            params2 = (video_id,)
+        rows = conn.execute(sql, params2).fetchall()
 
-    scored = []
-    for r in rows:
-        if exclude_same_channel and r["channel_id"] == own_channel:
-            continue
-        vec = emb.from_blob(r["embedding"])
-        scored.append((r, emb.cosine(target, vec)))
-    scored.sort(key=lambda t: t[1], reverse=True)
+        scored = []
+        for r in rows:
+            if exclude_same_channel and r["channel_id"] == own_channel:
+                continue
+            vec = emb.from_blob(r["embedding"])
+            scored.append((r, emb.cosine(target, vec)))
+        scored.sort(key=lambda t: t[1], reverse=True)
+        candidates = len(rows)
+        scored = scored[:limit]
 
     out = []
     channel_cache = {}
-    for r, score in scored[:limit]:
+    for r, score in scored:
         cid = r["channel_id"]
         if cid not in channel_cache:
             ch = conn.execute(
@@ -448,7 +475,7 @@ def similar_videos(video_id: str, niche: str = None, limit: int = 10,
             "similarity": round(score, 4),
         })
     conn.close()
-    return {"video_id": video_id, "candidatesConsidered": len(rows), "similar": out}
+    return {"video_id": video_id, "candidatesConsidered": candidates, "similar": out}
 
 
 def similar_channels(channel_id: str, niche: str = None, limit: int = 10,
@@ -479,31 +506,52 @@ def similar_channels(channel_id: str, niche: str = None, limit: int = 10,
         }
     target = sum(emb.from_blob(r["embedding"]) for r in target_rows) / len(target_rows)
 
-    if niche:
-        sql = ("SELECT v.channel_id, v.embedding FROM videos v "
-               "JOIN video_niches vn ON vn.video_id = v.video_id "
-               "WHERE vn.niche_slug=? AND v.embedding IS NOT NULL AND v.channel_id != ?")
-        params = (niche, channel_id)
+    if db.pgvector_available():
+        # stage 06: centroid computed server-side too (pgvector's avg(vector)
+        # aggregate), one query instead of pulling every candidate video's
+        # BLOB into Python -- see README's pgvector rollback section for the
+        # fallback contract this branch exists alongside.
+        literal = emb.to_pgvector_literal(target)
+        joins, where, params = "", ["v.embedding_v IS NOT NULL", "v.channel_id != ?"], [channel_id]
+        if niche:
+            joins = " JOIN video_niches vn ON vn.video_id = v.video_id"
+            where.append("vn.niche_slug = ?")
+            params.append(niche)
+        sql = (f"SELECT v.channel_id, AVG(v.embedding_v) AS centroid, COUNT(*) AS n, "
+              f"(1 - (AVG(v.embedding_v) <=> ?::vector)) AS similarity "
+              f"FROM videos v{joins} WHERE {' AND '.join(where)} "
+              f"GROUP BY v.channel_id HAVING COUNT(*) >= ? "
+              f"ORDER BY AVG(v.embedding_v) <=> ?::vector LIMIT ?")
+        rows = conn.execute(
+            sql, [literal] + params + [min_videos_embedded, literal, limit]).fetchall()
+        scored = [(r["channel_id"], r["similarity"], r["n"]) for r in rows]
     else:
-        sql = ("SELECT channel_id, embedding FROM videos "
-               "WHERE embedding IS NOT NULL AND channel_id != ?")
-        params = (channel_id,)
-    rows = conn.execute(sql, params).fetchall()
+        if niche:
+            sql = ("SELECT v.channel_id, v.embedding FROM videos v "
+                  "JOIN video_niches vn ON vn.video_id = v.video_id "
+                  "WHERE vn.niche_slug=? AND v.embedding IS NOT NULL AND v.channel_id != ?")
+            params2 = (niche, channel_id)
+        else:
+            sql = ("SELECT channel_id, embedding FROM videos "
+                  "WHERE embedding IS NOT NULL AND channel_id != ?")
+            params2 = (channel_id,)
+        rows = conn.execute(sql, params2).fetchall()
 
-    by_channel = {}
-    for r in rows:
-        by_channel.setdefault(r["channel_id"], []).append(emb.from_blob(r["embedding"]))
+        by_channel = {}
+        for r in rows:
+            by_channel.setdefault(r["channel_id"], []).append(emb.from_blob(r["embedding"]))
 
-    scored = []
-    for cid, vecs in by_channel.items():
-        if len(vecs) < min_videos_embedded:
-            continue
-        centroid = sum(vecs) / len(vecs)
-        scored.append((cid, emb.cosine(target, centroid), len(vecs)))
-    scored.sort(key=lambda t: t[1], reverse=True)
+        scored = []
+        for cid, vecs in by_channel.items():
+            if len(vecs) < min_videos_embedded:
+                continue
+            centroid = sum(vecs) / len(vecs)
+            scored.append((cid, emb.cosine(target, centroid), len(vecs)))
+        scored.sort(key=lambda t: t[1], reverse=True)
+        scored = scored[:limit]
 
     out = []
-    for cid, score, n in scored[:limit]:
+    for cid, score, n in scored:
         ch = conn.execute(
             "SELECT title, subscriber_count, thumbnail FROM channels WHERE channel_id=?",
             (cid,)).fetchone()

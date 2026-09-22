@@ -46,7 +46,15 @@ services:
   # Persistence. Everything worker/web/mcp/mcp-http read and write lives here
   # now instead of in a SQLite file on the `data` volume.
   postgres:
-    image: postgres:16-alpine
+    # stage 06: pgvector/pgvector:pg16 is upstream postgres:16 (debian, not
+    # alpine) plus the pgvector extension pre-installed -- same major
+    # version, same data directory format, so the existing postgres-data
+    # volume survives the swap. schema.py detects the extension at every
+    # init_db() and only uses it when present, so nothing breaks on an
+    # older/plain postgres:16 image either. See README's "pgvector rollback"
+    # section before running `docker compose up -d postgres` on a database
+    # that matters -- back up the volume first, this is a one-way image swap.
+    image: pgvector/pgvector:pg16
     container_name: niche-finder-postgres
     restart: unless-stopped
     environment:

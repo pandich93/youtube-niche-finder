@@ -574,6 +574,21 @@ def video_comments(video_id: str, payload: dict = Body(default={})):
         order=payload.get("order", "relevance"))
 
 
+@app.post("/api/videos/{video_id}/insights")
+def comment_insights(video_id: str, payload: dict = Body(default={})):
+    """Stage 04: by-click only (never automatic) -- costs 1 YouTube quota
+    unit plus an LLM call on a cache miss."""
+    _need_key()
+    return EN.comment_insights(
+        API_KEY, video_id, max_comments=int(payload.get("max_comments", 200)),
+        force_refresh=bool(payload.get("force_refresh", False)))
+
+
+@app.get("/api/niches/{slug}/insights")
+def niche_comment_insights(slug: str, top_n: int = 5):
+    return EN.niche_comment_insights(slug, top_n=top_n)
+
+
 @app.post("/api/channels/track")
 def track(payload: dict = Body(...)):
     raw = (payload.get("channel_id") or "").strip()

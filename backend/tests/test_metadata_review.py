@@ -72,6 +72,7 @@ reset()
 fake_db = types.ModuleType("infrastructure.postgres")
 fake_db.get_conn = lambda: _Conn()
 fake_db.now_iso = lambda: iso(datetime.now(timezone.utc))
+fake_db.pgvector_available = lambda: False  # stage 06: this sqlite double has no vector column
 sys.modules["infrastructure.postgres"] = fake_db
 
 fake_emb = types.ModuleType("infrastructure.embeddings.fastembed_provider")

@@ -63,6 +63,22 @@ def upsert_video(conn, v: dict):
     )
     _upsert(conn, "videos", "video_id", _VIDEO_COLS, v,
             coalesce=("embedding", "category_id", "region", "topic_categories", "tags"))
+    if v.get("embedding"):
+        sync_embedding_v(conn, v["video_id"], v["embedding"])
+
+
+def sync_embedding_v(conn, video_id: str, embedding_blob: bytes):
+    """Stage 06 dual-write: mirror a just-written BLOB embedding into
+    embedding_v, best-effort. No-op (not an error) when this Postgres image
+    has no pgvector -- schema.pgvector_available() is the single place that
+    decides that, checked once at init_db() and cached for the process."""
+    from infrastructure.postgres.schema import pgvector_available
+    if not pgvector_available():
+        return
+    from infrastructure.embeddings.fastembed_provider import to_pgvector_literal, from_blob
+    literal = to_pgvector_literal(from_blob(embedding_blob))
+    conn.execute("UPDATE videos SET embedding_v = ?::vector WHERE video_id = ?",
+                (literal, video_id))
 
 
 def record_video_stats(conn, video_id, view_count, like_count, comment_count,
@@ -180,6 +196,18 @@ def record_channel_llm_labels(conn, channel_id: str, labels: dict, model: str,
         "WHERE channel_id=?",
         (json.dumps(labels), labeled_at or now_iso(), model, channel_id),
     )
+
+
+def save_video_insights(conn, video_id: str, result: dict, model: str):
+    """Stage 04: cache one comment_insights() run -- LLM_INSIGHTS_TTL_DAYS in
+    application/enrichment.py decides when a cached row is stale, this just
+    stores/overwrites it."""
+    conn.execute(
+        "INSERT INTO video_insights (video_id, result, model, created_at) "
+        "VALUES (?, ?::jsonb, ?, ?) "
+        "ON CONFLICT (video_id) DO UPDATE SET "
+        "result=excluded.result, model=excluded.model, created_at=excluded.created_at",
+        (video_id, json.dumps(result), model, now_iso()))
 
 
 def upsert_category(conn, category_id, region, title, assignable):

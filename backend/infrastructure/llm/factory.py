@@ -32,6 +32,14 @@ def default_model() -> str | None:
     return os.environ.get("OPENROUTER_MODEL", "").strip() or None
 
 
+def long_context_model() -> str | None:
+    """Stage 04: a video can have hundreds of comments, more tokens than
+    some free-tier models accept -- OPENROUTER_MODEL_LONG pins a
+    long-context model for that one task. Unset falls back to
+    default_model() (same "let the provider choose" semantics)."""
+    return os.environ.get("OPENROUTER_MODEL_LONG", "").strip() or default_model()
+
+
 def display_model() -> str:
     """Human-readable model description for db_stats/doctor -- default_model()
     itself stays None so the provider keeps choosing freely."""

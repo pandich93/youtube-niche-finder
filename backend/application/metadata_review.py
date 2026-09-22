@@ -49,8 +49,34 @@ def _near_duplicates(title, description, niche=None, channel_id=None,
     if not text:
         return {"checked": 0, "near": [], "hint": "empty title/description"}
     target = emb.embed(text)
-
     conn = db.get_conn()
+
+    if db.pgvector_available():
+        # stage 06: threshold + top-k both pushed into SQL against the HNSW
+        # index -- see README's pgvector rollback section for the fallback
+        # contract this branch exists alongside.
+        literal = emb.to_pgvector_literal(target)
+        if channel_id:
+            where, params = "v.channel_id=? AND v.embedding_v IS NOT NULL", [channel_id]
+            joins = ""
+        else:
+            where = "vn.niche_slug=? AND v.embedding_v IS NOT NULL"
+            params = [niche]
+            joins = " JOIN video_niches vn ON vn.video_id = v.video_id"
+        checked = conn.execute(
+            f"SELECT COUNT(*) AS n FROM videos v{joins} WHERE {where}", params).fetchone()["n"]
+        sql = (f"SELECT v.video_id, v.title, v.view_count, "
+              f"(1 - (v.embedding_v <=> ?::vector)) AS similarity "
+              f"FROM videos v{joins} WHERE {where} "
+              f"AND (1 - (v.embedding_v <=> ?::vector)) >= ? "
+              f"ORDER BY v.embedding_v <=> ?::vector LIMIT ?")
+        rows = conn.execute(
+            sql, [literal] + params + [literal, min_similarity, literal, limit]).fetchall()
+        conn.close()
+        near = [{"videoId": r["video_id"], "title": r["title"], "views": r["view_count"],
+                "similarity": round(r["similarity"], 3)} for r in rows]
+        return {"checked": checked, "near": near}
+
     if channel_id:
         rows = conn.execute(
             "SELECT video_id, title, view_count, embedding FROM videos "

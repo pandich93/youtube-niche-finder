@@ -1,11 +1,11 @@
 # niche-finder — backend
 
-[![CI](https://img.shields.io/github/actions/workflow/status/pandich93/niche-finder/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/pandich93/niche-finder/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpandich93%2Fniche-finder%2Fmain%2Fassets%2Fcoverage.json&query=%24.totals.percent_covered_display&suffix=%25&label=coverage&style=flat-square)](../assets/coverage.json)
+[![CI](https://img.shields.io/github/actions/workflow/status/pandich93/youtube-niche-finder/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/pandich93/youtube-niche-finder/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpandich93%2Fyoutube-niche-finder%2Fmain%2Fassets%2Fcoverage.json&query=%24.totals.percent_covered_display&suffix=%25&label=coverage&style=flat-square)](../assets/coverage.json)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-29%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-46%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -61,6 +61,44 @@ docker compose logs -f worker
 Upgrading from the old SQLite version and want to keep your collected data?
 `python3 backend/migrate_sqlite_to_postgres.py path/to/old/niches.db` (once,
 after `docker compose up -d postgres`; safe to run again).
+
+### Upgrading to pgvector (stage 06)
+
+The `postgres` image changed from `postgres:16-alpine` to
+`pgvector/pgvector:pg16` -- same PostgreSQL 16, same data directory format
+(Debian base instead of Alpine, doesn't matter for the volume), plus the
+`vector` extension pre-installed. `init_db()` detects the extension every
+time it runs and only uses it when present -- similar_videos,
+similar_channels and the metadata-review "already covered this" check fall
+back to the old pure-Python cosine comparison on any Postgres that doesn't
+have it, so this upgrade is optional, not required.
+
+**Your data survives the swap** -- it's the same volume (`postgres-data`),
+same major Postgres version, same tables; the new image only adds an
+extension and one nullable column (`videos.embedding_v`), migrated from the
+existing `embedding` BLOB column in batches the first time `init_db()` runs
+against it. The BLOB column is kept (not dropped) specifically so this is
+reversible.
+
+To upgrade:
+```bash
+docker compose pull postgres     # or: docker compose build, if building locally
+docker compose up -d postgres    # recreates the container on the new image,
+                                  # same volume -- init_db() migrates on next connect
+docker compose restart web worker
+```
+
+**Back up first if this database matters to you** -- it's a one-way image
+swap for that container (not for the data, which is untouched either way):
+`docker run --rm -v niche-finder-postgres-data:/data -v "$PWD":/backup alpine \
+tar czf /backup/postgres-data-backup.tar.gz -C /data .`
+
+To roll back: change the image line in `docker-compose.yml` back to
+`postgres:16-alpine` and `docker compose up -d postgres` again -- the
+`embedding_v` column and its index simply go unused (they only exist on the
+pgvector image's own storage, so a genuine downgrade drops them along with
+the extension; nothing you have with plain `postgres:16-alpine` behavior is
+lost, since every read path already has that Python fallback).
 
 The dashboard is `frontend/`, see [frontend/README.md](../frontend/README.md).
 It shows the same sections as the MCP tools, and only listens on localhost.

@@ -914,26 +914,101 @@ function tagStatsSection(stats, tagGroup) {
    новым набором тегов этой группы для видео (см. application/tags.py:
    replace сохраняет защищённые manual/claude-mcp теги даже когда сам вызов
    идёт с другим source, здесь source всегда 'manual'). */
-function nicheVideoTagsSection(videos, tagsByVideo, tagGroup) {
+/* Панель Инсайты из комментариев (этап 04) -- строго по клику, никогда не
+   автоматически: тратит квоту YouTube + может тратить деньги на LLM. */
+function insightsPanelHtml(d) {
+  if (d.hint) return notice(esc(d.hint));
+  const pains = d.pains || [];
+  const requests = d.requests || [];
+  const ideas = d.video_ideas || [];
+  const s = d.sentiment;
+  const meta = d.cached ? 'из кеша' : `квота потрачена: ${d.quotaSpent ?? 0}`;
+  if (!pains.length && !requests.length && !ideas.length) {
+    return empty(`LLM не нашёл значимых сигналов в комментариях (${meta})`);
+  }
+  return `
+    <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
+      ${s ? `<div class="row-sub" style="margin-bottom:8px">
+        Тональность: ${Math.round(s.positive * 100)}% позитив ·
+        ${Math.round(s.neutral * 100)}% нейтрально ·
+        ${Math.round(s.negative * 100)}% негатив · ${meta}</div>` : ''}
+      ${pains.length ? `<div style="margin-bottom:8px"><b>Боли</b>
+        <ul style="margin:4px 0 0 18px">${pains.map((p) => `<li>${esc(p.text)}
+          (~${p.count_estimate})${p.quotes?.[0] ? ` <span class="row-sub">«${esc(p.quotes[0])}»</span>` : ''}</li>`).join('')}</ul></div>` : ''}
+      ${requests.length ? `<div style="margin-bottom:8px"><b>Запросы</b>
+        <ul style="margin:4px 0 0 18px">${requests.map((r) => `<li>${esc(r.topic)}
+          <span class="row-sub">«${esc(r.evidence)}»</span></li>`).join('')}</ul></div>` : ''}
+      ${ideas.length ? `<div><b>Идеи видео</b>
+        <ul style="margin:4px 0 0 18px">${ideas.map((i) => `<li>${esc(i.title)}
+          <span class="row-sub">— ${esc(i.why)}</span></li>`).join('')}</ul></div>` : ''}
+    </div>`;
+}
+
+function wireCommentInsights() {
+  view.querySelectorAll('.insights-btn').forEach((btn) => btn.addEventListener('click', async () => {
+    const videoId = btn.dataset.insightsVideoId;
+    const panel = view.querySelector(`.insights-panel[data-insights-video-id="${CSS.escape(videoId)}"]`);
+    if (!panel) return;
+    if (!panel.hidden) { panel.hidden = true; return; }
+    panel.hidden = false;
+    panel.innerHTML = empty('Загружаю… (тратит квоту YouTube и, если включён LLM, деньги)');
+    btn.disabled = true;
+    try {
+      const d = await api(`/api/videos/${encodeURIComponent(videoId)}/insights`,
+        { method: 'POST', body: {} });
+      panel.innerHTML = insightsPanelHtml(d);
+    } catch (e) {
+      panel.innerHTML = notice(esc(e.message));
+    } finally {
+      btn.disabled = false;
+    }
+  }));
+  const nicheBtn = $('#nicheInsightsBtn');
+  if (nicheBtn) nicheBtn.addEventListener('click', async () => {
+    const panel = $('#nicheInsightsPanel');
+    if (!panel) return;
+    if (!panel.hidden) { panel.hidden = true; return; }
+    panel.hidden = false;
+    panel.innerHTML = empty('Загружаю…');
+    nicheBtn.disabled = true;
+    try {
+      const d = await api(`/api/niches/${encodeURIComponent(nicheBtn.dataset.slug)}/insights`);
+      panel.innerHTML = d.found === false ? notice(esc(d.hint)) : insightsPanelHtml(d);
+    } catch (e) {
+      panel.innerHTML = notice(esc(e.message));
+    } finally {
+      nicheBtn.disabled = false;
+    }
+  });
+}
+
+function nicheVideoTagsSection(videos, tagsByVideo, tagGroup, nicheSlug) {
   if (!videos.length) return '';
   return `
     <div class="card">
-      ${sectionHead('Видео ниши', `теги группы «${esc(tagGroup)}» — правится вручную`)}
+      ${sectionHead('Видео ниши', `теги группы «${esc(tagGroup)}» — правится вручную`,
+        `<button class="btn btn-ghost btn-sm" id="nicheInsightsBtn" data-slug="${esc(nicheSlug)}">
+           Инсайты по нише из кеша</button>`)}
+      <div id="nicheInsightsPanel" hidden style="margin-bottom:12px"></div>
       <div class="rows">${videos.map((v) => `
-        <div class="row" data-video-id="${esc(v.videoId)}" style="align-items:flex-start">
-          <div class="row-main">
-            <div class="row-title">
-              <a href="https://www.youtube.com/watch?v=${esc(v.videoId)}" target="_blank" rel="noopener">${esc(v.title)}</a>
+        <div class="row" data-video-id="${esc(v.videoId)}" style="align-items:flex-start;flex-direction:column;gap:8px">
+          <div style="display:flex;width:100%;align-items:flex-start;gap:12px">
+            <div class="row-main">
+              <div class="row-title">
+                <a href="https://www.youtube.com/watch?v=${esc(v.videoId)}" target="_blank" rel="noopener">${esc(v.title)}</a>
+              </div>
+              <div class="row-sub">${compact(v.views)} просмотров · ${mult(v.outlierScore)}</div>
+              <div class="tag-editor" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+                ${(tagsByVideo[v.videoId] || []).map((t) => `
+                  <span class="chip tag-chip" data-tag="${esc(t)}">${esc(t)}
+                    <a href="#" class="tag-remove" data-tag="${esc(t)}" title="убрать тег">×</a>
+                  </span>`).join('')}
+                <input type="text" class="tag-add-input" placeholder="+ тег" style="width:100px">
+              </div>
             </div>
-            <div class="row-sub">${compact(v.views)} просмотров · ${mult(v.outlierScore)}</div>
-            <div class="tag-editor" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-              ${(tagsByVideo[v.videoId] || []).map((t) => `
-                <span class="chip tag-chip" data-tag="${esc(t)}">${esc(t)}
-                  <a href="#" class="tag-remove" data-tag="${esc(t)}" title="убрать тег">×</a>
-                </span>`).join('')}
-              <input type="text" class="tag-add-input" placeholder="+ тег" style="width:100px">
-            </div>
+            <button class="btn btn-ghost btn-sm insights-btn" data-insights-video-id="${esc(v.videoId)}">Инсайты из комментариев</button>
           </div>
+          <div class="insights-panel" data-insights-video-id="${esc(v.videoId)}" hidden style="width:100%"></div>
         </div>`).join('')}</div>
     </div>`;
 }
@@ -1068,12 +1143,13 @@ async function viewNiche(slug) {
     sectionHead(`Ниша: ${slug}`, `${esc(d.query || '')} · ${plabel(state.period)}`))
     + scatterSection(scatter.videos || [], scatterFilters)
     + tagStatsSection(stats, tagGroup)
-    + nicheVideoTagsSection(d.top_videos_by_outlier_score || [], tagsByVideo, tagGroup)
+    + nicheVideoTagsSection(d.top_videos_by_outlier_score || [], tagsByVideo, tagGroup, slug)
     + proposedTagsSection(proposed.proposed || []);
 
   wireNicheTagEditor(slug, tagGroup);
   wireProposedTags();
   wireScatterFilters(() => viewNiche(slug));
+  wireCommentInsights();
 }
 
 /* ----------------------------------------------------------------- Канал */
