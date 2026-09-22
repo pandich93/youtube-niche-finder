@@ -26,6 +26,7 @@ import infrastructure.postgres as db
 from application import collecting as collector
 from application import alerts as alerts_mod
 from application import enrichment as enrich_mod
+from application import niche_clusters as clusters_mod
 from domain import periods as P
 import infrastructure.youtube.client as yt
 from infrastructure.llm import factory as llm_factory
@@ -59,6 +60,7 @@ DO_EMBED = os.environ.get("WORKER_EMBED", "1") not in ("0", "false", "no")
 ENRICH_INTERVAL_MIN = int(os.environ.get("WORKER_ENRICH_INTERVAL_MIN", "120"))
 ENRICH_CHANNEL_BATCH = int(os.environ.get("WORKER_ENRICH_CHANNEL_BATCH", "50"))
 ENRICH_VIDEO_BATCH = int(os.environ.get("WORKER_ENRICH_VIDEO_BATCH", "100"))
+CLUSTER_INTERVAL_MIN = int(os.environ.get("WORKER_CLUSTER_INTERVAL_MIN", "1440"))
 
 _stop = False
 
@@ -174,6 +176,10 @@ def cycle():
                 _safe(f"collect '{query}'", lambda query=query: collector.collect_niche(
                     API_KEY, query, period=QUERY_PERIOD, pages=QUERY_PAGES, embed=True))
         _mark("daily")
+
+    if _due("clusters", CLUSTER_INTERVAL_MIN):
+        _safe("niche clusters", lambda: clusters_mod.compute_clusters())
+        _mark("clusters")
 
 
 def main():

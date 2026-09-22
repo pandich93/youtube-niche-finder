@@ -38,6 +38,7 @@ from application import alerts as AL
 from application import tags as TG
 from application import enrichment as EN
 from application import transcripts as TR
+from application import niche_clusters as NCL
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR")
@@ -624,6 +625,16 @@ def search_transcripts(query: str, niche: str = None, compare_group: str = None,
         return TR.search_transcripts(query, niche=niche, compare_group=compare_group, k=k)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/niche-clusters")
+def niche_clusters():
+    return NCL.niche_map()
+
+
+@app.post("/api/niche-clusters/recompute")
+def recompute_niche_clusters(k: int = None):
+    return NCL.compute_clusters(k=k)
 
 
 @app.get("/api/video/{video_id}/why")

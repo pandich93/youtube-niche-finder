@@ -28,6 +28,7 @@ from application import channel_tracking as T
 from application import tags as tags_uc
 from application import enrichment as enrich_uc
 from application import transcripts as transcripts_uc
+from application import niche_clusters as clusters_uc
 
 load_dotenv()
 API_KEY = os.environ.get("YOUTUBE_API_KEY")
@@ -246,6 +247,20 @@ def search_transcripts(query: str, niche: str = None, compare_group: str = None,
                                                   compare_group=compare_group, k=k)
     except ValueError as e:
         return {"error": str(e)}
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def niche_map() -> dict:
+    """Stage 08: informal niches discovered by k-means clustering channels'
+    video embeddings (no manual niche definition needed) -- name,
+    description, audience, channel count, median outlier score, total view
+    velocity, faceless share, and a competition count (channels over 100k
+    subs), sorted by opportunity (high outlier, low competition first).
+    Recomputed daily by the worker, or on demand via
+    POST /api/niche-clusters/recompute."""
+    return clusters_uc.niche_map()
 
 
 @mcp.tool(annotations=ToolAnnotations(

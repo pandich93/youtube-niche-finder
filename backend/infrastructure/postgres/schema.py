@@ -268,6 +268,25 @@ CREATE TABLE IF NOT EXISTS transcript_chunks (
 
 CREATE INDEX IF NOT EXISTS idx_transcript_chunks_fts
     ON transcript_chunks USING GIN (to_tsvector('simple', text));
+
+-- ---------- v10: niche clusters (stage 08) ----------
+-- Wholesale-replaced on every compute_clusters() run (k-means labels
+-- aren't stable identities across reruns) -- see application/niche_clusters.py.
+
+CREATE TABLE IF NOT EXISTS niche_clusters (
+    cluster_id TEXT PRIMARY KEY,
+    name TEXT,
+    description TEXT,
+    audience TEXT,
+    channel_count INTEGER,
+    median_outlier_score REAL,
+    total_velocity REAL,
+    faceless_share REAL,
+    competition_count INTEGER,
+    channel_ids TEXT,          -- JSON array of channel_id
+    model TEXT,
+    created_at TEXT
+);
 """
 
 # columns added to pre-existing tables (name -> DDL type)
