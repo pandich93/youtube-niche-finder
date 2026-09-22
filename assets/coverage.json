@@ -1,12 +1,12 @@
 {
   "totals": {
-    "covered_lines": 1814,
+    "covered_lines": 2341,
     "num_statements": 3119,
-    "percent_covered": 58.15966655979481,
-    "percent_covered_display": "58",
-    "missing_lines": 1305,
+    "percent_covered": 75.05610772683552,
+    "percent_covered_display": "75",
+    "missing_lines": 778,
     "excluded_lines": 19,
-    "percent_statements_covered": 58.15966655979481,
-    "percent_statements_covered_display": "58"
+    "percent_statements_covered": 75.05610772683552,
+    "percent_statements_covered_display": "75"
   }
 }
