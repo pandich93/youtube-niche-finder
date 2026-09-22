@@ -551,3 +551,4 @@ if __name__ == "__main__":
         finally:
             mp.undo()
     print(f"\n{len(fns) - failed}/{len(fns)} passed")
+    sys.exit(1 if failed else 0)

@@ -84,6 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 - HTTP API now sends CORS headers for `chrome-extension://` origins; it
   still binds to `127.0.0.1` only.
+- CI and `make local-test` now run every `backend/tests/test_*.py` (one
+  pytest process per file) instead of three hand-picked files; test scripts
+  run directly exit non-zero on failure.
 
 ## [0.1.0] - 2026-09-06
 

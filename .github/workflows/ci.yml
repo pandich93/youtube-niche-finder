@@ -35,15 +35,28 @@ jobs:
           cache-dependency-path: backend/requirements.txt
 
       - name: Install backend dependencies
-        run: pip install -r backend/requirements.txt coverage
+        run: pip install -r backend/requirements.txt coverage pytest
 
-      - name: Run smoke tests with coverage
+      # One process per file: several tests swap infrastructure.postgres for a
+      # sqlite double in sys.modules, so a single `pytest tests/` run would
+      # leak that double into the Postgres-backed files. The glob picks up any
+      # new test_*.py without touching this workflow; the loop runs every file
+      # and fails the step at the end if any of them failed.
+      - name: Run tests with coverage
         working-directory: backend
         run: |
-          coverage run --source=. --omit="tests/*" tests/test_smoke.py
-          coverage run -a --source=. --omit="tests/*" tests/test_mcp_tools.py
-          coverage run -a --source=. --omit="tests/*" tests/test_http_rate_limit.py
+          coverage erase
+          failed=""
+          for f in tests/test_*.py; do
+            echo "::group::$f"
+            coverage run -a --source=. --omit="tests/*" -m pytest -q -p no:cacheprovider "$f" || failed="$failed $f"
+            echo "::endgroup::"
+          done
           coverage report -m
+          if [ -n "$failed" ]; then
+            echo "::error::failed:$failed"
+            exit 1
+          fi
           coverage json -o /tmp/coverage_full.json
           python3 -c "
           import json

@@ -200,7 +200,8 @@ def _run_all():
         except Exception as e:  # pragma: no cover
             print(f"ERROR {name}: {e!r}")
     print(f"\n{passed}/{len(tests)} прошло")
+    return passed == len(tests)
 
 
 if __name__ == "__main__":
-    _run_all()
+    sys.exit(0 if _run_all() else 1)

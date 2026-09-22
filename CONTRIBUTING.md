@@ -19,8 +19,8 @@ tool, so the bar is low and the process is simple.
 ## Getting set up
 
 ```bash
-git clone https://github.com/pandich93/niche-finder.git
-cd niche-finder
+git clone https://github.com/pandich93/youtube-niche-finder.git
+cd youtube-niche-finder
 cp .env.example .env          # YOUTUBE_API_KEY is optional for local dev
 docker compose build
 docker compose up -d postgres worker
@@ -34,20 +34,40 @@ Or without Docker — see
 
 ```bash
 make up-db        # start just Postgres
-make test         # smoke tests inside the image, no YouTube key or network needed
-# or, without Docker:
 make local-install
-make local-test
+make local-test   # every backend/tests/test_*.py, no YouTube key or network needed
 ```
 
-`make test` / `make local-test` should print `17/17 passed`. CI runs the
-same suite (see `.github/workflows/ci.yml`) plus a `docker compose build`
-check on every push and pull request — both must be green before a PR is
-merged.
+`make local-test` runs each `backend/tests/test_*.py` in its own pytest
+process and ends with `all test files passed` (or `FAILED: <files>` and a
+non-zero exit). CI runs exactly the same loop under `coverage` (see
+`.github/workflows/ci.yml`) plus a `docker compose build` check on every
+push and pull request — both must be green before a PR is merged.
 
-If you add a new use case, add a smoke test for it in
-`backend/tests/test_smoke.py` alongside the existing ones; there's no
-mocking layer, tests run against a real (throwaway-schema) Postgres.
+Why one process per file: several tests (`test_alerts.py`,
+`test_inspection.py`, `test_library.py`, `test_metadata_review.py`,
+`test_top_tags.py`) replace `infrastructure.postgres` with an in-memory
+sqlite double in `sys.modules`. In a single `pytest tests/` run that double
+leaks into the files that need the real, throwaway-schema Postgres
+(`tests/schema_scope.py`), so don't run the whole directory at once.
+
+To run one file, from `backend/`:
+
+```bash
+./.venv/bin/python -m pytest -q tests/test_rss.py
+./.venv/bin/python tests/test_rss.py     # same tests, built-in runner, no pytest needed
+```
+
+`make test` runs only `tests/test_smoke.py`, inside the Docker image
+(which has no pytest).
+
+A new `backend/tests/test_*.py` is picked up by CI and `make local-test`
+automatically — no workflow edit needed. Postgres-backed tests import
+`schema_scope` first (see `test_smoke.py`, `test_mcp_tools.py`); pure logic
+and sqlite-double tests follow `test_metadata_domain.py` /
+`test_metadata_review.py`. External calls (YouTube, OpenRouter, Telegram)
+must be mocked. If you give a file its own `__main__` runner, make it exit
+non-zero when a test fails.
 
 ## Code layout
 
@@ -77,18 +97,19 @@ framework — keep it that way. New screens follow the existing pattern in
   (naming, docstrings, formatting).
 - Keep entry-point shims thin — real logic belongs in `domain/`,
   `infrastructure/`, or `application/`.
-- Prefer adding a smoke test over adding a mock.
+- Prefer a test against the throwaway Postgres schema over a mock of our own
+  code; mock only external services.
 
 ## Submitting a PR
 
 1. Fork the repo and create a branch off `main`.
 2. Make your change, keeping it focused — unrelated cleanup makes review
    harder.
-3. Run `make test` (or `make local-test`) and confirm `docker compose build`
+3. Run `make local-test` and confirm `docker compose build`
    still works if you touched `backend/requirements.txt` or the Dockerfile.
 4. Open a PR describing what changed and why. Link the issue it addresses,
    if any.
-5. CI must pass (smoke tests + Docker build) before merge.
+5. CI must pass (all backend tests + Docker build) before merge.
 
 By contributing, you agree your contribution is licensed under this
 project's [MIT License](LICENSE).
