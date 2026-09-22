@@ -391,6 +391,27 @@ def search_outliers(query: str = None, niche: str = None, languages: list = None
 @mcp.tool(annotations=ToolAnnotations(
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
+def check_ideas(ideas: list, niche: str = None, min_similarity: float = 0.55,
+                recent_days: float = 90, proven_outlier: float = 2.0,
+                flop_outlier: float = 0.5) -> dict:
+    """Batch-check up to 50 content ideas (free text, e.g. "car wash") against
+    what's already collected: free (nobody's covered it), recent (covered
+    within recent_days -- skip), proven (covered longer ago with a strong
+    outlier -- demand validated), flopped (covered longer ago without a
+    strong outlier). Uses local semantic embeddings when available, always
+    falls back to a title-substring match too (lower accuracy, still works
+    with zero embeddings). FREE, no quota."""
+    try:
+        return q.check_ideas(ideas, niche=niche, min_similarity=min_similarity,
+                             recent_days=recent_days, proven_outlier=proven_outlier,
+                             flop_outlier=flop_outlier)
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
 def niche_overview(niche: str, period: str = "all") -> dict:
     """Saturation and opportunity read on a collected niche: channel-size
     distribution, median outlier, viral skew, Shorts share, top categories and

@@ -12,11 +12,14 @@ import os
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from domain import metrics as M
+from domain import idea_verdicts as IV
 from application import collecting
 from application import discovery as trends
 from application import llm_gateway
 from infrastructure.categories import repository as C
 from infrastructure.llm import factory as llm_factory
+
+MAX_IDEAS_PER_CALL = 50
 
 
 def search_outliers(query: str = None, niche: str = None, languages: list = None,
@@ -194,6 +197,109 @@ def niche_videos(niche: str, period: str = "all", channel_ids: list = None,
             "outlierScorePeriod": r["outlierScorePeriod"],
             "outlierBand": r["outlierBand"],
         } for r in rows],
+    }
+
+
+def check_ideas(ideas: list, niche: str = None, min_similarity: float = 0.55,
+                recent_days: float = 90, proven_outlier: float = 2.0,
+                flop_outlier: float = 0.5, matches_per_idea: int = 10) -> dict:
+    """Stage 17: for each idea (free-text phrase, e.g. "car wash"), find
+    already-collected videos that cover it and turn that into a verdict via
+    domain.idea_verdicts -- free/recent/proven/flopped, see that module's
+    docstring for the exact rule order.
+
+    Matching is semantic (embedding cosine >= min_similarity) when the
+    corpus has embeddings, always supplemented by a plain title-substring
+    match so results stay useful even without them (semanticSearchAvailable
+    in the return value says which happened; accuracy is honestly lower on
+    title-only matching, as the plan for this stage requires)."""
+    ideas = [i.strip() for i in (ideas or []) if i and i.strip()]
+    if not ideas:
+        raise ValueError("ideas is required")
+    if len(ideas) > MAX_IDEAS_PER_CALL:
+        raise ValueError(f"max {MAX_IDEAS_PER_CALL} ideas per call, got {len(ideas)}")
+
+    rows = trends.load_window(period="all", niche=niche)
+    if not rows:
+        return {
+            "niche": niche, "ideaCount": len(ideas), "semanticSearchAvailable": False,
+            "hint": "nothing collected" + (f" under niche {niche!r}" if niche else "")
+                    + " -- run collect_niche/collect_channel first",
+            "ideas": [{"idea": i, "verdict": "free", "daysSinceLastCoverage": None,
+                      "bestOutlierScore": None, "performanceBand": None, "matches": []}
+                     for i in ideas],
+        }
+
+    video_vecs = {}
+    idea_vecs = None
+    semantic_available = False
+    try:
+        import infrastructure.embeddings.fastembed_provider as emb
+        conn = db.get_conn()
+        ids = [r["video_id"] for r in rows]
+        for i in range(0, len(ids), 400):
+            chunk = ids[i:i + 400]
+            sql = ("SELECT video_id, embedding FROM videos WHERE video_id IN (%s)"
+                   % ",".join("?" * len(chunk)))
+            for rec in conn.execute(sql, chunk).fetchall():
+                if rec["embedding"]:
+                    video_vecs[rec["video_id"]] = emb.from_blob(rec["embedding"])
+        conn.close()
+        if video_vecs:
+            idea_vecs = emb.embed(ideas)
+            if len(ideas) == 1:
+                idea_vecs = [idea_vecs]
+            semantic_available = True
+    except Exception:
+        semantic_available = False
+
+    out_ideas = []
+    for idx, idea in enumerate(ideas):
+        idea_lower = idea.lower()
+        matches = []
+        for r in rows:
+            title = r["title"] or ""
+            title_hit = idea_lower in title.lower()
+            sem_score = None
+            if semantic_available:
+                v = video_vecs.get(r["video_id"])
+                if v is not None:
+                    sem_score = round(emb.cosine(idea_vecs[idx], v), 4)
+            if title_hit or (sem_score is not None and sem_score >= min_similarity):
+                matches.append({
+                    "videoId": r["video_id"], "title": title,
+                    "channelId": r["channel_id"], "channelTitle": r["channel_title"],
+                    "publishedAt": r["published_at"], "ageDays": r["ageDays"],
+                    "views": r["view_count"], "outlierScore": r["outlierScore"],
+                    "outlierScoreRolling": r.get("outlierScoreRolling"),
+                    "outlierScorePeriod": r.get("outlierScorePeriod"),
+                    "matchedBy": "title" if title_hit else "semantic",
+                    "semanticScore": sem_score,
+                })
+
+        v = IV.verdict(matches, recent_days=recent_days, proven_outlier=proven_outlier,
+                       flop_outlier=flop_outlier)
+        matches.sort(key=lambda m: (m["outlierScore"] or 0), reverse=True)
+        out_ideas.append({
+            "idea": idea, **v, "matchCount": len(matches),
+            "matches": matches[:matches_per_idea],
+        })
+
+    return {
+        "niche": niche, "ideaCount": len(ideas), "semanticSearchAvailable": semantic_available,
+        "hint": None if semantic_available else
+            "эмбеддинги недоступны в этом прогоне -- совпадения только по вхождению фразы "
+            "в название, точность ниже, чем с семантическим поиском",
+        "rules": {
+            "free": "совпадений не найдено",
+            "recent": f"последнее совпадение младше {recent_days} дней -- пропустить, недавно снимали",
+            "proven": f"совпадения старше {recent_days} дней, лучший outlier >= {proven_outlier} "
+                     "-- спрос доказан",
+            "flopped": f"совпадения старше {recent_days} дней и лучший outlier < {proven_outlier} "
+                      f"(включая {flop_outlier}-{proven_outlier} -- сигнал слабый, не считаем "
+                      "доказанным без явного провала)",
+        },
+        "ideas": out_ideas,
     }
 
 

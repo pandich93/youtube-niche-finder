@@ -250,6 +250,21 @@ def search(query: str = None, niche: str = None, period: str = "all",
         sort_by=sort_by, limit=limit)}
 
 
+@app.post("/api/ideas/check")
+def check_ideas(payload: dict = Body(...)):
+    """Stage 17: batch verdicts (free/recent/proven/flopped) for a list of
+    content ideas, against whatever is already collected locally."""
+    try:
+        return Q.check_ideas(
+            payload.get("ideas") or [], niche=payload.get("niche"),
+            min_similarity=payload.get("minSimilarity", 0.55),
+            recent_days=payload.get("recentDays", 90),
+            proven_outlier=payload.get("provenOutlier", 2.0),
+            flop_outlier=payload.get("flopOutlier", 0.5))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.get("/api/overview")
 def overview(period: str = "24h", niche: str = None):
     """Всё для главной одним запросом -- иначе страница делает шесть.
