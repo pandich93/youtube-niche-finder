@@ -182,7 +182,7 @@ def test_niche_comment_insights_merges_cached_per_video_results(monkeypatch):
     })
     db.upsert_niche(conn, "n-comment-insights", "n-comment-insights", "n-comment-insights")
     db.link_video_niche(conn, "vni1", "n-comment-insights")
-    db.save_video_insights(conn, "vni1", _FAKE_INSIGHTS, "m/x")
+    db.save_video_insights(conn, "vni1", "comment_insights", _FAKE_INSIGHTS, "m/x")
     conn.commit()
     conn.close()
 

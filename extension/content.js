@@ -155,7 +155,7 @@
 
   // ------------------------------------------------------- страница ролика
 
-  function videoHtml(d, similar) {
+  function videoHtml(d, similar, llmOn) {
     const v = d.video, c = d.channel, m = d.metrics;
     const similarList = (similar?.similar || []).slice(0, 5);
     const score = m.outlierScore;
@@ -237,6 +237,11 @@
           <div class="nf-comments-body"></div>
         </div>
 
+        ${llmOn ? `<div class="nf-sec nf-why-sec">
+          <button class="nf-btn nf-ghost nf-why-btn">Почему выстрелило?</button>
+          <div class="nf-why-body"></div>
+        </div>` : ''}
+
         <div class="nf-foot">${d.history.points > 1
           ? `история: ${d.history.points} ${plural(d.history.points, 'снапшот', 'снапшота', 'снапшотов')}`
           : 'история пустая — запустите воркер, чтобы появились скорость и ускорение'}</div>
@@ -281,8 +286,11 @@
 
     const sr = await send({ type: 'similarVideos', videoId });
     if (!root.isConnected || getVideoId() !== videoId) return;
+    const statsRes = await send({ type: 'stats' });
+    const llmOn = statsRes.ok && statsRes.data?.llm?.provider && statsRes.data.llm.provider !== 'none';
+    if (!root.isConnected || getVideoId() !== videoId) return;
 
-    root.innerHTML = videoHtml(d, sr.ok ? sr.data : null);
+    root.innerHTML = videoHtml(d, sr.ok ? sr.data : null, llmOn);
     wireCommon(root, () => renderWatch(videoId, { refresh: true }));
 
     const dash = root.querySelector('.nf-dash');
@@ -335,6 +343,35 @@
       commentsBtn.remove();
       if (body) body.innerHTML = commentsHtml(r.data, d.video.publishedAt);
     });
+
+    const whyBtn = root.querySelector('.nf-why-btn');
+    if (whyBtn) whyBtn.addEventListener('click', async () => {
+      whyBtn.disabled = true;
+      whyBtn.textContent = 'Спрашиваю…';
+      const body = root.querySelector('.nf-why-body');
+      const r = await send({ type: 'why', videoId });
+      if (!root.isConnected) return;
+      if (!r.ok || !r.data || !r.data.hooks) {
+        whyBtn.disabled = false;
+        whyBtn.textContent = 'Не получилось, повторить';
+        if (body) body.innerHTML = `<div class="nf-hint">${esc(
+          (r.ok ? r.data?.hint : r.error) || 'LLM недоступен')}</div>`;
+        return;
+      }
+      whyBtn.remove();
+      if (body) body.innerHTML = whyViralHtml(r.data);
+    });
+  }
+
+  function whyViralHtml(d) {
+    const hooks = d.hooks || [];
+    return `
+      ${hooks.length ? `<div class="nf-hint"><b>Зацепки:</b></div>
+        <ul class="nf-why-list">${hooks.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
+      ${d.title_pattern ? `<div class="nf-hint"><b>Паттерн заголовка:</b> ${esc(d.title_pattern)}</div>` : ''}
+      ${d.timing_factor ? `<div class="nf-hint"><b>Время публикации:</b> ${esc(d.timing_factor)}</div>` : ''}
+      ${d.replicable_formula ? `<div class="nf-hint"><b>Формула:</b> ${esc(d.replicable_formula)}</div>` : ''}
+      <div class="nf-hint">уверенность: ${Math.round((d.confidence || 0) * 100)}%</div>`;
   }
 
   function commentsHtml(data, videoPublishedAt) {

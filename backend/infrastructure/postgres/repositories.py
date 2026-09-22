@@ -198,16 +198,18 @@ def record_channel_llm_labels(conn, channel_id: str, labels: dict, model: str,
     )
 
 
-def save_video_insights(conn, video_id: str, result: dict, model: str):
-    """Stage 04: cache one comment_insights() run -- LLM_INSIGHTS_TTL_DAYS in
-    application/enrichment.py decides when a cached row is stale, this just
+def save_video_insights(conn, video_id: str, task: str, result: dict, model: str):
+    """Cache one LLM analysis run for a video -- task discriminates stage
+    04's 'comment_insights' from stage 05's 'why_viral' on the same
+    video_id. LLM_INSIGHTS_TTL_DAYS / LLM_WHY_VIRAL_TTL_DAYS in
+    application/enrichment.py decide when a cached row is stale, this just
     stores/overwrites it."""
     conn.execute(
-        "INSERT INTO video_insights (video_id, result, model, created_at) "
-        "VALUES (?, ?::jsonb, ?, ?) "
-        "ON CONFLICT (video_id) DO UPDATE SET "
+        "INSERT INTO video_insights (video_id, task, result, model, created_at) "
+        "VALUES (?, ?, ?::jsonb, ?, ?) "
+        "ON CONFLICT (video_id, task) DO UPDATE SET "
         "result=excluded.result, model=excluded.model, created_at=excluded.created_at",
-        (video_id, json.dumps(result), model, now_iso()))
+        (video_id, task, json.dumps(result), model, now_iso()))
 
 
 def upsert_category(conn, category_id, region, title, assignable):

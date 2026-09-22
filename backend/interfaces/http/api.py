@@ -13,7 +13,7 @@ import time
 from collections import defaultdict, deque
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, Body, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -587,6 +587,17 @@ def comment_insights(video_id: str, payload: dict = Body(default={})):
 @app.get("/api/niches/{slug}/insights")
 def niche_comment_insights(slug: str, top_n: int = 5):
     return EN.niche_comment_insights(slug, top_n=top_n)
+
+
+@app.get("/api/video/{video_id}/why")
+def why_viral(video_id: str, force_refresh: bool = False):
+    """Stage 05: 204 (no body) when LLM_PROVIDER=none or the daily budget is
+    exhausted -- the plan's contract for "feature is off", distinct from a
+    normal empty result."""
+    result = EN.explain_outlier(video_id, force_refresh=force_refresh)
+    if result.get("hint") and "LLM_PROVIDER" in result["hint"]:
+        return Response(status_code=204)
+    return result
 
 
 @app.post("/api/channels/track")

@@ -18,7 +18,8 @@ const DEFAULTS = {
   timeoutMs: 12000,
 };
 
-const TTL = { video: 120e3, channel: 300e3, deep: 300e3, batch: 600e3, health: 30e3, comments: 1800e3 };
+const TTL = { video: 120e3, channel: 300e3, deep: 300e3, batch: 600e3, health: 30e3, comments: 1800e3,
+             stats: 60e3, why: 1800e3 };
 
 async function getSettings() {
   const stored = await chrome.storage.sync.get(DEFAULTS);
@@ -149,6 +150,30 @@ async function videoComments(videoId, maxResults = 50) {
   return data;
 }
 
+async function stats() {
+  const hit = cacheGet('stats', TTL.stats);
+  if (hit) return hit;
+  const data = await api('/api/stats');
+  cacheSet('stats', data);
+  return data;
+}
+
+async function explainOutlier(videoId, refresh) {
+  /* Stage 05 -- zero YouTube quota, but a real LLM call on a cache miss (the
+     server also caches for LLM_WHY_VIRAL_TTL_DAYS; this is just the
+     extension's own short-lived copy so re-opening the panel is free). The
+     server returns 204 with no body when LLM_PROVIDER=none -- api() below
+     resolves that to null, same as a cache miss looks to the caller. */
+  const key = 'why:' + videoId;
+  if (!refresh) {
+    const hit = cacheGet(key, TTL.why);
+    if (hit !== undefined) return hit;
+  }
+  const data = await api(`/api/video/${videoId}/why${refresh ? '?force_refresh=true' : ''}`);
+  cacheSet(key, data);
+  return data;
+}
+
 async function inspectBatch(ids) {
   const results = {};
   const need = [];
@@ -234,6 +259,8 @@ const HANDLERS = {
   'settings:get': () => getSettings(),
   'settings:set': async (m) => { await chrome.storage.sync.set(m.patch || {}); cache.clear(); return getSettings(); },
   'health': () => health(),
+  'stats': () => stats(),
+  'why': (m) => explainOutlier(m.videoId, m.refresh),
   'video': (m) => inspectVideo(m.videoId, m.refresh),
   'channel': (m) => inspectChannel(m.ref, m.refresh),
   'deep': (m) => channelDeep(m.channelId),

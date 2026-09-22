@@ -1228,11 +1228,13 @@ async function viewChannel(id) {
         { label: 'С поправкой на возраст', num: true, render: (r) => mult(r.outlierScoreAgeAdjusted) },
         { label: 'Полоса', render: (r) => esc(r.band) },
         { label: 'Опубликовано', render: (r) => ago(r.publishedAt) },
-        { label: '', render: (r) => `<button class="btn btn-ghost btn-sm js-comments" data-video-id="${esc(r.videoId)}" data-video-title="${esc(r.title)}">комментарии</button>` },
+        { label: '', render: (r) => `<button class="btn btn-ghost btn-sm js-comments" data-video-id="${esc(r.videoId)}" data-video-title="${esc(r.title)}">комментарии</button>
+          <button class="btn btn-ghost btn-sm js-why" data-video-id="${esc(r.videoId)}" data-video-title="${esc(r.title)}">почему выстрелило</button>` },
       ], a.topOutliers)}
     </div>
 
     <div class="card" id="commentsPanel" hidden></div>
+    <div class="card" id="whyPanel" hidden></div>
 
     <div class="card">
       ${sectionHead('Похожие каналы', 'по эмбеддингам собранных видео -- ' +
@@ -1288,6 +1290,36 @@ async function viewChannel(id) {
         'живой запрос к YouTube, потратил 1 unit квоты') + commentList(res.comments);
     } catch (e) {
       panel.innerHTML = sectionHead(`Комментарии: ${esc(b.dataset.videoTitle)}`, '') + empty(e.message);
+    }
+  }));
+
+  view.querySelectorAll('.js-why').forEach((b) => b.addEventListener('click', async () => {
+    const panel = $('#whyPanel');
+    panel.hidden = false;
+    panel.innerHTML = sectionHead(`Почему выстрелило: ${esc(b.dataset.videoTitle)}`, '') + empty('загружаю…');
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    try {
+      const res = await api(`/api/video/${encodeURIComponent(b.dataset.videoId)}/why`);
+      if (!res) {
+        panel.innerHTML = sectionHead(`Почему выстрелило: ${esc(b.dataset.videoTitle)}`, '')
+          + notice('LLM выключен -- задайте LLM_PROVIDER=openrouter и OPENROUTER_API_KEY, чтобы включить');
+        return;
+      }
+      if (res.hint) {
+        panel.innerHTML = sectionHead(`Почему выстрелило: ${esc(b.dataset.videoTitle)}`, '') + notice(esc(res.hint));
+        return;
+      }
+      panel.innerHTML = sectionHead(`Почему выстрелило: ${esc(b.dataset.videoTitle)}`,
+        `уверенность: ${Math.round((res.confidence || 0) * 100)}%${res.cached ? ' · из кеша' : ''}`) + `
+        <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
+          ${res.hooks?.length ? `<div style="margin-bottom:8px"><b>Зацепки</b>
+            <ul style="margin:4px 0 0 18px">${res.hooks.map((h) => `<li>${esc(h)}</li>`).join('')}</ul></div>` : ''}
+          ${res.title_pattern ? `<div class="row-sub" style="margin-bottom:6px"><b>Паттерн заголовка:</b> ${esc(res.title_pattern)}</div>` : ''}
+          ${res.timing_factor ? `<div class="row-sub" style="margin-bottom:6px"><b>Фактор времени:</b> ${esc(res.timing_factor)}</div>` : ''}
+          ${res.replicable_formula ? `<div><b>Формула для повтора:</b> ${esc(res.replicable_formula)}</div>` : ''}
+        </div>`;
+    } catch (e) {
+      panel.innerHTML = sectionHead(`Почему выстрелило: ${esc(b.dataset.videoTitle)}`, '') + empty(e.message);
     }
   }));
 }

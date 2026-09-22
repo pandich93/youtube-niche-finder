@@ -209,13 +209,18 @@ CREATE TABLE IF NOT EXISTS video_tags (
 
 CREATE INDEX IF NOT EXISTS idx_video_tags_group_tag ON video_tags(tag_group, tag);
 
--- ---------- v7: comment insights cache (stage 04) ----------
+-- ---------- v7: LLM-derived per-video insights cache ----------
+-- task discriminates independent analyses on the same video -- stage 04's
+-- 'comment_insights' and stage 05's 'why_viral' must not overwrite each
+-- other's cached row.
 
 CREATE TABLE IF NOT EXISTS video_insights (
-    video_id TEXT PRIMARY KEY,
+    video_id TEXT,
+    task TEXT,
     result JSONB,
     model TEXT,
-    created_at TEXT
+    created_at TEXT,
+    PRIMARY KEY (video_id, task)
 );
 """
 

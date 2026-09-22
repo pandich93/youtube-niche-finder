@@ -198,6 +198,18 @@ def comment_insights(video_id: str, max_comments: int = 200,
 
 
 @mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=False, open_world_hint=False))
+def explain_outlier(video_id: str, force_refresh: bool = False) -> dict:
+    """Why this video beat its channel's own baseline: up to 3 hooks, a
+    title pattern, a timing factor, a short replicable formula, and a
+    confidence score -- grounded only in this video's real numbers, never
+    invented. Cached for LLM_WHY_VIRAL_TTL_DAYS (14). Zero YouTube quota;
+    costs an LLM call on a cache miss."""
+    return enrich_uc.explain_outlier(video_id, force_refresh=force_refresh)
+
+
+@mcp.tool(annotations=ToolAnnotations(
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
 def niche_comment_insights(niche: str, top_n: int = 5) -> dict:

@@ -379,8 +379,8 @@ def comment_insights(api_key: str, video_id: str, max_comments: int = 200,
     conn = db.get_conn()
     if not force_refresh:
         row = conn.execute(
-            "SELECT result, model, created_at FROM video_insights WHERE video_id=?",
-            (video_id,)).fetchone()
+            "SELECT result, model, created_at FROM video_insights WHERE video_id=? AND task=?",
+            (video_id, "comment_insights")).fetchone()
         if row and row["created_at"] and P.days_since(row["created_at"]) <= LLM_INSIGHTS_TTL_DAYS:
             conn.close()
             return {"videoId": video_id, "cached": True, "model": row["model"],
@@ -407,7 +407,7 @@ def comment_insights(api_key: str, video_id: str, max_comments: int = 200,
                **_EMPTY_INSIGHTS}
 
     conn = db.get_conn()
-    db.save_video_insights(conn, video_id, data, model or "auto")
+    db.save_video_insights(conn, video_id, "comment_insights", data, model or "auto")
     conn.commit()
     conn.close()
     return {"videoId": video_id, "cached": False, "model": model or "auto",
@@ -425,7 +425,8 @@ def niche_comment_insights(niche_slug: str, top_n: int = 5) -> dict:
         "SELECT vi.video_id, vi.result, v.title, v.view_count FROM video_insights vi "
         "JOIN videos v ON v.video_id = vi.video_id "
         "JOIN video_niches vn ON vn.video_id = vi.video_id "
-        "WHERE vn.niche_slug = ? ORDER BY v.view_count DESC NULLS LAST LIMIT ?",
+        "WHERE vn.niche_slug = ? AND vi.task = 'comment_insights' "
+        "ORDER BY v.view_count DESC NULLS LAST LIMIT ?",
         (niche_slug, top_n)).fetchall()
     conn.close()
     if not rows:
@@ -447,3 +448,116 @@ def niche_comment_insights(niche_slug: str, top_n: int = 5) -> dict:
                **_EMPTY_INSIGHTS}
     return {"niche": niche_slug, "found": True, "videosUsed": len(rows),
            "videoIds": video_ids, "model": model or "auto", **data}
+
+
+# ------------------------------------------------------------ why viral (05)
+
+LLM_WHY_VIRAL_TTL_DAYS = int(os.environ.get("LLM_WHY_VIRAL_TTL_DAYS", "14"))
+
+_EMPTY_EXPLAIN = {"hooks": [], "title_pattern": None, "timing_factor": None,
+                  "replicable_formula": None, "confidence": None}
+
+EXPLAIN_OUTLIER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "hooks": {"type": "array", "items": {"type": "string"}},
+        "title_pattern": {"type": "string"},
+        "timing_factor": {"type": "string"},
+        "replicable_formula": {"type": "string"},
+        "confidence": {"type": "number"},
+    },
+    "required": ["hooks", "title_pattern", "timing_factor", "replicable_formula", "confidence"],
+}
+
+_EXPLAIN_OUTLIER_SYSTEM = (
+    "You explain why one YouTube video outperformed its channel's own "
+    "baseline, for a creator's content-strategy dashboard. Base your answer "
+    "ONLY on the numbers and text given below -- title, description, tags, "
+    "duration, publish time, the outlier multiplier, the channel's baseline "
+    "views, view velocity, up to 10 other titles from the same channel for "
+    "comparison, and the channel's format/topic labels if given. Never "
+    "invent facts the input doesn't support. Output at most 3 hooks (specific "
+    "packaging choices that plausibly drove the outperformance), one "
+    "title_pattern (the structural pattern vs. the channel's other titles), "
+    "a timing_factor (empty string if publish timing doesn't plausibly "
+    "explain anything), a replicable_formula (<=160 chars, actionable for "
+    "the creator's next video), and a confidence 0..1 reflecting how much "
+    "the given numbers actually support this explanation -- low confidence "
+    "is fine and expected when the signal is thin."
+)
+
+
+def _build_explain_input(vrow, target, other_titles: list, labels: dict) -> str:
+    lines = [
+        f"Title: {vrow['title']}",
+        f"Description: {(vrow.get('description') or '')[:500]}",
+        f"Tags: {vrow.get('tags') or 'none'}",
+        f"Duration (s): {vrow.get('duration_seconds')}",
+        f"Published at: {vrow.get('published_at')}",
+        f"Outlier multiplier (rolling, vs. last N uploads): {target.get('outlierScoreRolling')}",
+        f"Outlier multiplier (period, vs. same-season uploads): {target.get('outlierScorePeriod')}",
+        f"Channel baseline median views: {target.get('baselineMedianViews')}",
+        f"Views per hour (first 24h): {target.get('vph24h')}",
+        "Other titles from this channel:",
+        *[f"- {t}" for t in other_titles],
+    ]
+    if labels:
+        lines.append(f"Channel format/topic labels: {json.dumps(labels)}")
+    return "\n".join(lines)
+
+
+def explain_outlier(video_id: str, force_refresh: bool = False) -> dict:
+    """Stage 05: LLM explanation of why one video beat its channel's
+    baseline -- hooks, title pattern, timing factor, a short replicable
+    formula. Cached in video_insights (task='why_viral') for
+    LLM_WHY_VIRAL_TTL_DAYS (14). Zero YouTube quota (reads only what's
+    already collected); costs an LLM call on a cache miss."""
+    conn = db.get_conn()
+    vrow = conn.execute(
+        "SELECT video_id, channel_id, title, description, tags, duration_seconds, "
+        "published_at FROM videos WHERE video_id = ?", (video_id,)).fetchone()
+    if not vrow:
+        conn.close()
+        return {"videoId": video_id, "found": False,
+               "hint": "video not collected -- run collect_channel first", **_EMPTY_EXPLAIN}
+    vrow = dict(vrow)
+    channel_id = vrow["channel_id"]
+
+    if not force_refresh:
+        cached = conn.execute(
+            "SELECT result, model, created_at FROM video_insights WHERE video_id=? AND task=?",
+            (video_id, "why_viral")).fetchone()
+        if cached and cached["created_at"] and P.days_since(cached["created_at"]) <= LLM_WHY_VIRAL_TTL_DAYS:
+            conn.close()
+            return {"videoId": video_id, "found": True, "cached": True, "model": cached["model"],
+                   "createdAt": cached["created_at"], **cached["result"]}
+
+    ch = conn.execute("SELECT llm_labels FROM channels WHERE channel_id=?", (channel_id,)).fetchone()
+    conn.close()
+
+    from application import discovery as trends
+    rows = trends.load_window(period="all", channel_ids=[channel_id])
+    target = next((r for r in rows if r["video_id"] == video_id), None)
+    if target is None or (target.get("outlierScoreRolling") is None
+                          and target.get("outlierScorePeriod") is None):
+        return {"videoId": video_id, "found": True, "cached": False,
+               "hint": "not enough channel history yet for an outlier baseline -- "
+                       "collect more of this channel's videos first", **_EMPTY_EXPLAIN}
+
+    other_titles = [r["title"] for r in rows if r["video_id"] != video_id][:10]
+    labels = (ch["llm_labels"] if ch else None) or {}
+    user_input = _build_explain_input(vrow, target, other_titles, labels)
+    model = factory.default_model()
+    data = gw.run("explain_outlier", _EXPLAIN_OUTLIER_SYSTEM, user_input,
+                  EXPLAIN_OUTLIER_SCHEMA, model=model)
+    if data is None:
+        return {"videoId": video_id, "found": True, "cached": False,
+               "hint": "LLM_PROVIDER is none, or the daily LLM budget is exhausted -- "
+                       "set LLM_PROVIDER=openrouter + OPENROUTER_API_KEY to enable this",
+               **_EMPTY_EXPLAIN}
+
+    conn = db.get_conn()
+    db.save_video_insights(conn, video_id, "why_viral", data, model or "auto")
+    conn.commit()
+    conn.close()
+    return {"videoId": video_id, "found": True, "cached": False, "model": model or "auto", **data}
