@@ -37,6 +37,7 @@ from application import metadata_review as MR
 from application import alerts as AL
 from application import tags as TG
 from application import enrichment as EN
+from application import transcripts as TR
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR")
@@ -587,6 +588,42 @@ def comment_insights(video_id: str, payload: dict = Body(default={})):
 @app.get("/api/niches/{slug}/insights")
 def niche_comment_insights(slug: str, top_n: int = 5):
     return EN.niche_comment_insights(slug, top_n=top_n)
+
+
+@app.post("/api/transcripts/request")
+def request_transcript(payload: dict = Body(...)):
+    video_id = payload.get("videoId") or payload.get("video_id")
+    if not video_id:
+        raise HTTPException(status_code=400, detail="videoId is required")
+    return TR.request_transcript(video_id, reason=payload.get("reason"),
+                                 compare_group=payload.get("compareGroup"),
+                                 requested_by=payload.get("requestedBy") or "dashboard")
+
+
+@app.get("/api/transcripts/queue")
+def transcript_queue(status: str = None):
+    return {"queue": TR.list_transcript_queue(status=status)}
+
+
+@app.post("/api/transcripts/{video_id}/save")
+def save_transcript(video_id: str, payload: dict = Body(...)):
+    text = payload.get("text") or ""
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="text is required")
+    return TR.save_transcript(video_id, text, language=payload.get("language"))
+
+
+@app.post("/api/transcripts/{video_id}/reindex")
+def reindex_transcript(video_id: str):
+    return TR.reindex_transcript(video_id)
+
+
+@app.get("/api/transcripts/search")
+def search_transcripts(query: str, niche: str = None, compare_group: str = None, k: int = 10):
+    try:
+        return TR.search_transcripts(query, niche=niche, compare_group=compare_group, k=k)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/video/{video_id}/why")

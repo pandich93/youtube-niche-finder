@@ -233,6 +233,41 @@ CREATE TABLE IF NOT EXISTS alert_deliveries (
     channel TEXT,
     sent_at TEXT
 );
+
+-- ---------- v9: manually-pasted transcripts + hybrid search (stage 19) ----------
+-- Never fetched automatically -- the user copies a transcript off YouTube's
+-- own UI and pastes it in; see PRIVACY.md.
+
+CREATE TABLE IF NOT EXISTS transcript_requests (
+    video_id TEXT PRIMARY KEY,
+    reason TEXT,
+    compare_group TEXT,
+    requested_by TEXT,
+    status TEXT,              -- 'pending' | 'ready' | 'error'
+    error TEXT,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS transcripts (
+    video_id TEXT PRIMARY KEY,
+    language TEXT,
+    text TEXT,
+    has_timestamps INTEGER,
+    word_count INTEGER,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS transcript_chunks (
+    video_id TEXT,
+    idx INTEGER,
+    start_sec INTEGER,
+    text TEXT,
+    embedding BYTEA,
+    PRIMARY KEY (video_id, idx)
+);
+
+CREATE INDEX IF NOT EXISTS idx_transcript_chunks_fts
+    ON transcript_chunks USING GIN (to_tsvector('simple', text));
 """
 
 # columns added to pre-existing tables (name -> DDL type)

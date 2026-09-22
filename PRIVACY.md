@@ -50,6 +50,17 @@ have already set `LLM_PROVIDER=openrouter`, and it additionally requires an
 explicit click (dashboard) or tool call (MCP) naming a specific video —
 there is no bulk or background mode.
 
+**Transcripts (stage 19) are never fetched — you paste them, and they stay
+local.** There is no subtitle-download code anywhere in this project: you
+copy the text off YouTube's own transcript panel and paste it into the
+dashboard's Транскрипты screen (or via the MCP tool). The pasted text and
+its chunk embeddings are stored only in your own Postgres
+(`transcripts`/`transcript_chunks`) -- nothing about a transcript is sent
+to YouTube, OpenRouter, or anywhere else. Chunk embeddings are computed by
+the same local `fastembed` model everything else in this project uses (see
+"Optional LLM enrichment" above for the one-time model download, the only
+network call in this whole feature).
+
 ## Where network traffic goes
 
 By default — `LLM_PROVIDER=none`, the setting nothing changes out of the

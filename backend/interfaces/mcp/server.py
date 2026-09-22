@@ -27,6 +27,7 @@ from application import discovery as trends
 from application import channel_tracking as T
 from application import tags as tags_uc
 from application import enrichment as enrich_uc
+from application import transcripts as transcripts_uc
 
 load_dotenv()
 API_KEY = os.environ.get("YOUTUBE_API_KEY")
@@ -207,6 +208,44 @@ def explain_outlier(video_id: str, force_refresh: bool = False) -> dict:
     invented. Cached for LLM_WHY_VIRAL_TTL_DAYS (14). Zero YouTube quota;
     costs an LLM call on a cache miss."""
     return enrich_uc.explain_outlier(video_id, force_refresh=force_refresh)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def request_transcript(video_id: str, reason: str = None, compare_group: str = None) -> dict:
+    """Queue a video for a manually-pasted transcript (stage 19) -- we never
+    fetch subtitles automatically, someone has to copy the text off
+    YouTube's own transcript panel and paste it via the dashboard's
+    Транскрипты screen. Shows up in list_transcript_queue(status='pending')
+    until then."""
+    return transcripts_uc.request_transcript(video_id, reason=reason,
+                                             compare_group=compare_group,
+                                             requested_by="claude-mcp")
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def list_transcript_queue(status: str = None) -> list:
+    """status: 'pending' | 'ready' | 'error', or omit for everything."""
+    return transcripts_uc.list_transcript_queue(status=status)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def search_transcripts(query: str, niche: str = None, compare_group: str = None,
+                       k: int = 10) -> dict:
+    """Hybrid search (vector + Postgres full-text, RRF-merged) over every
+    saved transcript's chunks. Each result: text fragment, video/channel,
+    a youtu.be link with ?t=<seconds> when the chunk has a timestamp,
+    views. FREE, no quota -- only searches what's already been pasted in."""
+    try:
+        return transcripts_uc.search_transcripts(query, niche=niche,
+                                                  compare_group=compare_group, k=k)
+    except ValueError as e:
+        return {"error": str(e)}
 
 
 @mcp.tool(annotations=ToolAnnotations(
