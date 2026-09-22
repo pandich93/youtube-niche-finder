@@ -26,6 +26,7 @@ from application import search as q
 from application import discovery as trends
 from application import channel_tracking as T
 from application import tags as tags_uc
+from application import enrichment as enrich_uc
 
 load_dotenv()
 API_KEY = os.environ.get("YOUTUBE_API_KEY")
@@ -645,6 +646,50 @@ def tag_stats(niche: str, tag_group: str, outlier_threshold: float = 3.0,
     drops videos too young to have a stable outlier signal yet."""
     return tags_uc.tag_stats(niche, tag_group, outlier_threshold=outlier_threshold,
                              exclude_recent_days=exclude_recent_days)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def list_proposed_tags(niche: str) -> list:
+    """Stage 03 LLM tags that missed the niche's taxonomy and need a human
+    accept/reject before they count in tag_stats (see resolve_proposed_tag)."""
+    return tags_uc.list_proposed_tags(niche)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=True,
+    idempotent_hint=True, open_world_hint=False))
+def resolve_proposed_tag(video_id: str, tag_group: str, tag: str, accept: bool) -> dict:
+    """Accept (joins the niche's taxonomy, counted by tag_stats from now on)
+    or reject (deleted outright) one row from list_proposed_tags."""
+    return tags_uc.resolve_proposed_tag(video_id, tag_group, tag, accept)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=False, open_world_hint=False))
+def enrich_channels(limit: int = 50) -> dict:
+    """Background AI labeling (stage 03): classify up to `limit` channels
+    that were never labeled or were labeled more than LLM_RELABEL_DAYS ago --
+    is_faceless, content_format, topic, language, ... Costs LLM budget (the
+    worker also runs this automatically); no-op if LLM_PROVIDER=none or the
+    daily budget is already spent."""
+    return enrich_uc.classify_channels(limit=limit)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=False, open_world_hint=False))
+def tag_new_videos(limit: int = 100) -> dict:
+    """Background AI tagging (stage 03): auto-tag up to `limit` videos in
+    niches whose tag taxonomy is trained enough (>=20 manual/claude-mcp tags
+    in that tag_group). Writes with source='llm' (never overwrites a manual
+    or claude-mcp tag); a tag outside the existing taxonomy is written with
+    proposed=true and excluded from tag_stats until accepted via
+    resolve_proposed_tag. Costs LLM budget; no-op if LLM_PROVIDER=none or
+    the daily budget is already spent."""
+    return enrich_uc.tag_new_videos(limit=limit)
 
 
 @mcp.tool(annotations=ToolAnnotations(

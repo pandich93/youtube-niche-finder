@@ -25,8 +25,11 @@ from datetime import datetime, timezone
 import infrastructure.postgres as db
 from application import collecting as collector
 from application import alerts as alerts_mod
+from application import enrichment as enrich_mod
 from domain import periods as P
 import infrastructure.youtube.client as yt
+from infrastructure.llm import factory as llm_factory
+from infrastructure.llm.null import NullProvider
 
 load_env = None
 try:
@@ -53,6 +56,9 @@ QUERY_PAGES = int(os.environ.get("WORKER_QUERY_PAGES", "1"))
 EMBED_INTERVAL_MIN = int(os.environ.get("WORKER_EMBED_INTERVAL_MIN", "60"))
 EMBED_BATCH = int(os.environ.get("WORKER_EMBED_BATCH", "500"))
 DO_EMBED = os.environ.get("WORKER_EMBED", "1") not in ("0", "false", "no")
+ENRICH_INTERVAL_MIN = int(os.environ.get("WORKER_ENRICH_INTERVAL_MIN", "120"))
+ENRICH_CHANNEL_BATCH = int(os.environ.get("WORKER_ENRICH_CHANNEL_BATCH", "50"))
+ENRICH_VIDEO_BATCH = int(os.environ.get("WORKER_ENRICH_VIDEO_BATCH", "100"))
 
 _stop = False
 
@@ -105,6 +111,10 @@ def _mark(key):
     _set_meta(f"worker_last_{key}", datetime.now(timezone.utc).isoformat())
 
 
+def _llm_enrichment_enabled() -> bool:
+    return not isinstance(llm_factory.get_provider(), NullProvider)
+
+
 def _safe(name, fn):
     try:
         result = fn()
@@ -137,6 +147,16 @@ def cycle():
         _safe("embed backfill", lambda: collector.backfill_embeddings(limit=EMBED_BATCH))
         _mark("embed")
 
+    if _due("enrich", ENRICH_INTERVAL_MIN):
+        if not _llm_enrichment_enabled():
+            log("enrich: skipped, LLM_PROVIDER=none")
+        else:
+            _safe("enrich channels", lambda: enrich_mod.classify_channels(
+                limit=ENRICH_CHANNEL_BATCH))
+            _safe("enrich videos", lambda: enrich_mod.tag_new_videos(
+                limit=ENRICH_VIDEO_BATCH))
+        _mark("enrich")
+
     if _due("daily", DAILY_INTERVAL_MIN):
         _safe("full refresh", lambda: collector.refresh_stats(
             API_KEY, scope="recent", period=FULL_PERIOD, limit=FULL_LIMIT))
@@ -168,12 +188,15 @@ def main():
     db.init_db()
     embed_status = (f"embed backfill every {EMBED_INTERVAL_MIN}min (batch {EMBED_BATCH})"
                      if DO_EMBED else "embed backfill=off")
+    enrich_status = (f"enrich every {ENRICH_INTERVAL_MIN}min "
+                     f"(channels {ENRICH_CHANNEL_BATCH}/videos {ENRICH_VIDEO_BATCH})"
+                     if _llm_enrichment_enabled() else "enrich=off (LLM_PROVIDER=none)")
     log(f"worker started | db={db.display_dsn()} | rss watch every {RSS_INTERVAL_MIN}min | "
         f"alerts scan every {ALERTS_INTERVAL_MIN}min | "
         f"hot every {HOT_INTERVAL_MIN}min "
         f"({HOT_PERIOD}) | daily every {DAILY_INTERVAL_MIN}min ({FULL_PERIOD}) "
         f"| regions={REGIONS} | trending={DO_TRENDING} | queries={len(QUERIES)} "
-        f"| {embed_status}")
+        f"| {embed_status} | {enrich_status}")
     while not _stop:
         cycle()
         for _ in range(60):

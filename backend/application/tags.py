@@ -87,9 +87,48 @@ def tag_stats(niche: str, tag_group: str, outlier_threshold: float = 3.0,
     tag_rows = [{"video_id": t["video_id"], "tag": t["tag"]} for t in conn.execute(
         "SELECT vt.video_id, vt.tag FROM video_tags vt "
         "JOIN video_niches vn ON vn.video_id = vt.video_id "
-        "WHERE vn.niche_slug = ? AND vt.tag_group = ?", (niche, tag_group)).fetchall()]
+        "WHERE vn.niche_slug = ? AND vt.tag_group = ? "
+        "AND (vt.proposed IS NULL OR vt.proposed = 0)", (niche, tag_group)).fetchall()]
     conn.close()
 
     result = TS.compute(video_rows, tag_rows, outlier_threshold=outlier_threshold)
     result.update({"niche": niche, "tagGroup": tag_group, "found": True})
     return result
+
+
+def list_proposed_tags(niche: str) -> list:
+    """LLM tags (stage 03) that missed the niche's existing taxonomy --
+    pending a human's accept/reject via resolve_proposed_tag. Excluded from
+    tag_stats until accepted."""
+    conn = db.get_conn()
+    rows = conn.execute(
+        "SELECT vt.video_id, vt.tag_group, vt.tag, vt.created_at "
+        "FROM video_tags vt JOIN video_niches vn ON vn.video_id = vt.video_id "
+        "WHERE vn.niche_slug = ? AND vt.source = 'llm' AND vt.proposed = 1 "
+        "ORDER BY vt.created_at DESC", (niche,)).fetchall()
+    conn.close()
+    return [{"videoId": r["video_id"], "tagGroup": r["tag_group"], "tag": r["tag"],
+            "createdAt": r["created_at"]} for r in rows]
+
+
+def resolve_proposed_tag(video_id: str, tag_group: str, tag: str, accept: bool) -> dict:
+    """accept=True: the tag joins the niche's taxonomy (clears `proposed`, now
+    counted by tag_stats). accept=False: the row is deleted outright -- a
+    rejected proposal isn't a real tag."""
+    conn = db.get_conn()
+    try:
+        if accept:
+            cur = conn.execute(
+                "UPDATE video_tags SET proposed = 0 "
+                "WHERE video_id = ? AND tag_group = ? AND tag = ? AND source = 'llm' "
+                "AND proposed = 1", (video_id, tag_group, tag))
+        else:
+            cur = conn.execute(
+                "DELETE FROM video_tags "
+                "WHERE video_id = ? AND tag_group = ? AND tag = ? AND source = 'llm' "
+                "AND proposed = 1", (video_id, tag_group, tag))
+        found = cur.rowcount > 0
+        conn.commit()
+    finally:
+        conn.close()
+    return {"accepted": accept, "found": found}

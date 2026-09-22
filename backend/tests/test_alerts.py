@@ -19,7 +19,8 @@ iso = lambda dt: dt.isoformat()
 SCHEMA = """
 CREATE TABLE channels (
   channel_id TEXT PRIMARY KEY, title TEXT, custom_url TEXT, country TEXT,
-  subscriber_count INTEGER, video_count INTEGER, view_count INTEGER
+  subscriber_count INTEGER, video_count INTEGER, view_count INTEGER,
+  llm_labels TEXT, llm_labeled_at TEXT
 );
 CREATE TABLE videos (
   video_id TEXT PRIMARY KEY, channel_id TEXT, title TEXT, tags TEXT,

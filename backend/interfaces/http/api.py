@@ -36,6 +36,7 @@ from application import library as L
 from application import metadata_review as MR
 from application import alerts as AL
 from application import tags as TG
+from application import enrichment as EN
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR")
@@ -290,8 +291,9 @@ def niche_detail(slug: str, period: str = "all", top_n: int = 5):
 
 
 @app.get("/api/channels/tracked")
-def tracked():
-    return {"channels": T.list_tracked()}
+def tracked(faceless: bool = None, content_format: str = None, topic: str = None):
+    return {"channels": T.list_tracked(faceless=faceless, content_format=content_format,
+                                       topic=topic)}
 
 
 @app.get("/api/channels/{channel_id}")
@@ -380,6 +382,30 @@ def tag_stats(niche: str, tag_group: str, outlier_threshold: float = 3.0,
              exclude_recent_days: int = 30):
     return TG.tag_stats(niche, tag_group, outlier_threshold=outlier_threshold,
                         exclude_recent_days=exclude_recent_days)
+
+
+@app.get("/api/tags/proposed")
+def proposed_tags(niche: str):
+    return {"proposed": TG.list_proposed_tags(niche)}
+
+
+@app.post("/api/tags/proposed/resolve")
+def resolve_proposed_tag(payload: dict = Body(...)):
+    return TG.resolve_proposed_tag(payload.get("videoId") or payload.get("video_id"),
+                                   payload.get("tagGroup") or payload.get("tag_group"),
+                                   payload.get("tag"), bool(payload.get("accept")))
+
+
+# ------------------------------------------------------------ AI enrichment (03)
+
+@app.post("/api/enrich/channels")
+def enrich_channels(limit: int = 50):
+    return EN.classify_channels(limit=limit)
+
+
+@app.post("/api/enrich/videos")
+def enrich_videos(limit: int = 100):
+    return EN.tag_new_videos(limit=limit)
 
 
 # ---------------------------------------------------- metadata review (8.8)

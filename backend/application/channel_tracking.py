@@ -38,20 +38,44 @@ def _dt(iso):
 
 # ------------------------------------------------------------- watchlist
 
-def list_tracked() -> list:
+def list_tracked(faceless: bool = None, content_format: str = None, topic: str = None) -> list:
+    """faceless/content_format/topic (stage 03) filter on channels.llm_labels
+    -- a channel never AI-labeled simply doesn't match any of the three."""
     conn = db.get_conn()
+    where = ["t.active = 1"]
+    params = []
+    if faceless is not None:
+        where.append("(c.llm_labels->>'is_faceless')::boolean = ?")
+        params.append(faceless)
+    if content_format:
+        where.append("c.llm_labels->>'content_format' = ?")
+        params.append(content_format)
+    if topic:
+        where.append("c.llm_labels->>'topic' = ?")
+        params.append(topic)
     rows = conn.execute(
-        """
+        f"""
         SELECT t.channel_id, t.note, t.added_at, t.last_refreshed_at, t.active,
                c.title, c.custom_url, c.subscriber_count, c.video_count, c.view_count,
+               c.llm_labels, c.llm_labeled_at,
                (SELECT COUNT(*) FROM channel_stats_history h WHERE h.channel_id=t.channel_id)
                    AS snapshots
         FROM tracked_channels t LEFT JOIN channels c ON c.channel_id = t.channel_id
-        WHERE t.active = 1 ORDER BY c.subscriber_count DESC
-        """
+        WHERE {' AND '.join(where)} ORDER BY c.subscriber_count DESC
+        """, params
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        labels = d.pop("llm_labels", None) or {}
+        labeled_at = d.pop("llm_labeled_at", None)
+        d["aiLabels"] = {
+            "isFaceless": labels.get("is_faceless"), "contentFormat": labels.get("content_format"),
+            "topic": labels.get("topic"), "labeledAt": labeled_at,
+        } if labels else None
+        out.append(d)
+    return out
 
 
 def resolve_channel_id(conn, api_key: str, raw: str) -> str:
@@ -261,6 +285,14 @@ def channel_analytics(channel_id: str, period: str = "30d",
             "topics": json.loads(ch["topic_categories"]) if ch.get("topic_categories") else [],
             "keywords": (ch.get("keywords") or "")[:300] or None,
             "mainCategory": C.title_for(cat) if cat else None,
+            "aiLabels": {
+                "isFaceless": ch["llm_labels"].get("is_faceless"),
+                "contentFormat": ch["llm_labels"].get("content_format"),
+                "topic": ch["llm_labels"].get("topic"),
+                "language": ch["llm_labels"].get("language"),
+                "labeledAt": ch.get("llm_labeled_at"),
+                "model": ch.get("llm_model"),
+            } if ch.get("llm_labels") else None,
         },
         "cadence": {
             "uploadsPerWeekLifetime": M.uploads_per_week(ch["video_count"] or 0, age_days),

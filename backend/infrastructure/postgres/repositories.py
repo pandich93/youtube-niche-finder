@@ -4,6 +4,8 @@ All functions take an already-open connection (from connection.get_conn())
 as their first argument, matching the original db.py call convention used
 throughout application/* and interfaces/*.
 """
+import json
+
 from infrastructure.postgres.schema import now_iso
 
 _CHANNEL_COLS = [
@@ -168,6 +170,18 @@ def set_meta(conn, key: str, value):
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
 
 
+def record_channel_llm_labels(conn, channel_id: str, labels: dict, model: str,
+                              labeled_at: str = None):
+    """Stage 03: write the background classifier's verdict for one channel
+    (is_faceless/content_format/topic/...). Always overwrites -- there is no
+    human channel-level label to protect, unlike video_tags."""
+    conn.execute(
+        "UPDATE channels SET llm_labels=?::jsonb, llm_labeled_at=?, llm_model=? "
+        "WHERE channel_id=?",
+        (json.dumps(labels), labeled_at or now_iso(), model, channel_id),
+    )
+
+
 def upsert_category(conn, category_id, region, title, assignable):
     conn.execute(
         "INSERT INTO video_categories (category_id, region, title, assignable, updated_at) "
@@ -182,21 +196,28 @@ PROTECTED_TAG_SOURCES = ("manual", "claude-mcp")
 
 
 def upsert_video_tag(conn, video_id: str, tag_group: str, tag: str, source: str,
-                     created_at: str = None, protected_sources=PROTECTED_TAG_SOURCES) -> bool:
+                     created_at: str = None, protected_sources=PROTECTED_TAG_SOURCES,
+                     proposed: bool = False) -> bool:
     """Insert or update one (video_id, tag_group, tag) row. A brand new row
     always writes; overwriting an existing row is blocked only when that
     row's source is protected and `source` is not. Returns whether the row
-    was actually written."""
+    was actually written.
+
+    proposed=True (stage 03) marks a tag the LLM invented outside the
+    niche's existing taxonomy -- it lands in the table so a reviewer can see
+    it, but application.tags.tag_stats excludes it until accepted (see
+    resolve_proposed_tag)."""
     cur = conn._conn.cursor()
     cur.execute(
-        "INSERT INTO video_tags (video_id, tag_group, tag, source, created_at) "
-        "VALUES (%(video_id)s, %(tag_group)s, %(tag)s, %(source)s, %(created_at)s) "
+        "INSERT INTO video_tags (video_id, tag_group, tag, source, created_at, proposed) "
+        "VALUES (%(video_id)s, %(tag_group)s, %(tag)s, %(source)s, %(created_at)s, %(proposed)s) "
         "ON CONFLICT (video_id, tag_group, tag) DO UPDATE SET "
-        "source=excluded.source, created_at=excluded.created_at "
+        "source=excluded.source, created_at=excluded.created_at, proposed=excluded.proposed "
         "WHERE NOT (video_tags.source IN %(protected)s AND excluded.source NOT IN %(protected)s) "
         "RETURNING 1",
         {"video_id": video_id, "tag_group": tag_group, "tag": tag, "source": source,
-         "created_at": created_at or now_iso(), "protected": tuple(protected_sources)},
+         "created_at": created_at or now_iso(), "protected": tuple(protected_sources),
+         "proposed": 1 if proposed else 0},
     )
     written = cur.fetchone() is not None
     cur.close()

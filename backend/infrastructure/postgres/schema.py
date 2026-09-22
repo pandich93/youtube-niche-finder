@@ -228,6 +228,16 @@ MIGRATIONS = {
         "uploads_playlist": "TEXT",
         "first_seen_at": "TEXT",
         "hidden_subs": "INTEGER",
+        # v6: stage 03 background AI labeling (faceless/format/topic/...)
+        "llm_labels": "JSONB",
+        "llm_labeled_at": "TEXT",
+        "llm_model": "TEXT",
+    },
+    # v6: LLM-proposed tags (source='llm', taxonomy miss) sit in the same
+    # table as manual/claude-mcp tags but stay out of tag_stats/lift until a
+    # human accepts them -- see application/tags.py resolve_proposed_tag().
+    "video_tags": {
+        "proposed": "INTEGER",
     },
 }
 
@@ -254,6 +264,10 @@ def migrate(conn):
             if col not in have:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
                 added.append(f"{table}.{col}")
+    if "llm_labels" in _existing_columns(conn, "channels"):
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_channels_llm_faceless "
+            "ON channels ((llm_labels->>'is_faceless'))")
     conn.execute(
         "INSERT INTO meta (key, value) VALUES ('schema_version', ?) "
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
