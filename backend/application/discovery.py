@@ -535,12 +535,18 @@ def trending_keywords(period="7d", period_by="published", niche=None, region=Non
                       languages=None, category_id=None, max_subscribers=None,
                       exclude_shorts=False, source="both", ngram_max=3, min_videos=3,
                       top_n=30, sort_by="momentum", outlier_threshold=3.0,
-                      compare_previous=True) -> dict:
+                      compare_previous=True, keywords_mode="ngram",
+                      semantic_similarity: float = 0.85) -> dict:
     """Phrases rising in this window, each with a performance lift.
 
     source: "titles" | "tags" | "both". Tags are still returned by the API to
     non-owners, but most creators leave them empty -- low tag coverage in the
     output means creators didn't set tags, not that we failed to read them.
+
+    keywords_mode="semantic" (stage 10) merges phrases whose embeddings read
+    as near-duplicates (paraphrases an n-gram model can't see) via
+    domain.keywords.merge_semantic_synonyms -- the default "ngram" mode is
+    byte-identical to before this existed.
     """
     common = dict(niche=niche, region=region, languages=languages,
                   category_id=category_id, max_subscribers=max_subscribers,
@@ -562,6 +568,27 @@ def trending_keywords(period="7d", period_by="published", niche=None, region=Non
         prev_stats, prev_total, _ = K.aggregate(shape(prev), use_tags, use_title,
                                                 ngram_max, outlier_threshold)
 
+    if keywords_mode == "semantic" and stats:
+        try:
+            import infrastructure.embeddings.fastembed_provider as emb
+            # A real corpus can have tens of thousands of distinct n-gram
+            # phrases; embedding+pairwise-comparing all of them is neither
+            # fast nor useful (score() below only ever keeps ones with
+            # >= min_videos anyway). Apply that same filter *before*
+            # merging so semantic mode stays fast at real scale.
+            candidates = {p: s for p, s in stats.items() if s["videos"] >= min_videos}
+            below_threshold = {p: s for p, s in stats.items() if s["videos"] < min_videos}
+            phrases = list(candidates.keys())
+            phrase_vectors = dict(zip(phrases, emb.embed(phrases))) if phrases else {}
+            merged = K.merge_semantic_synonyms(candidates, phrase_vectors,
+                                               similarity_threshold=semantic_similarity)
+            cluster_map = {name: s["mergedFrom"] for name, s in merged.items()}
+            stats = {**merged, **below_threshold}
+            if prev_stats:
+                prev_stats = K.realign_prev_stats(prev_stats, cluster_map)
+        except Exception:
+            pass  # embeddings unavailable -- silently fall back to ngram stats
+
     ranked = K.score(stats, total, base_rate, prev_stats or None, prev_total,
                      min_videos=min_videos, top_n=top_n, sort_by=sort_by)
     _add_opportunity_scores(ranked)
@@ -581,6 +608,7 @@ def trending_keywords(period="7d", period_by="published", niche=None, region=Non
         "outlierBaseRate": round(base_rate * 100, 2),
         "tagCoveragePercent": round(tagged / total * 100, 1) if total else 0,
         "source": source,
+        "keywordsMode": keywords_mode,
         "sortBy": sort_by,
         "quotaUsed": 0,
         "hint": hint,

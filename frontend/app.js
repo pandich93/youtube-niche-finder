@@ -436,10 +436,16 @@ async function viewCategories() {
 /* --------------------------------------------------------- Ключевые слова */
 
 async function viewKeywords() {
-  const d = await api(`/api/keywords${q({ ...base(), sort_by: 'trend', top_n: 60, min_videos: 2 })}`);
+  const semantic = localStorage.getItem('nf.keywordsMode') === 'semantic';
+  const d = await api(`/api/keywords${q({ ...base(), sort_by: 'trend', top_n: 60, min_videos: 2,
+    keywords_mode: semantic ? 'semantic' : 'ngram' })}`);
   view.innerHTML = `
     <div class="card">
-      ${sectionHead('Трендовые ключевые слова', plabel(state.period))}
+      ${sectionHead('Трендовые ключевые слова', plabel(state.period), `
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
+          <input type="checkbox" id="semanticModeToggle" ${semantic ? 'checked' : ''}>
+          смысловой режим (слияние синонимов через эмбеддинги)
+        </label>`)}
       <div class="tiles">
         ${tile('Видео в анализе', num(d.videosAnalysed))}
         ${tile('В предыдущем окне', num(d.previousWindowVideos))}
@@ -473,6 +479,11 @@ async function viewKeywords() {
         больше 1.5 значит, что фраза реально коррелирует с пробитиями.
       </div>
     </div>`;
+
+  $('#semanticModeToggle').addEventListener('change', (e) => {
+    localStorage.setItem('nf.keywordsMode', e.target.checked ? 'semantic' : 'ngram');
+    render();
+  });
 }
 
 /* ---------------------------------------------------- Топ теги по категориям */

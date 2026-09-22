@@ -204,11 +204,13 @@ def categories(period: str = "7d", period_by: str = "published", niche: str = No
 @app.get("/api/keywords")
 def keywords(period: str = "24h", period_by: str = "published", niche: str = None,
              region: str = None, category_id: str = None, source: str = "both",
-             sort_by: str = "momentum", min_videos: int = 2, top_n: int = 30):
+             sort_by: str = "momentum", min_videos: int = 2, top_n: int = 30,
+             keywords_mode: str = "ngram", semantic_similarity: float = 0.85):
     return trends.trending_keywords(
         period=period, period_by=period_by, niche=niche, region=region,
         category_id=category_id, source=source, sort_by=sort_by,
-        min_videos=min_videos, top_n=top_n)
+        min_videos=min_videos, top_n=top_n, keywords_mode=keywords_mode,
+        semantic_similarity=semantic_similarity)
 
 
 @app.get("/api/tags/top-by-category")

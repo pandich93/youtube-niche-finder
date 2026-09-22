@@ -390,7 +390,8 @@ def trending_keywords(period: str = "24h", period_by: str = "published",
                       source: str = "both", ngram_max: int = 3, min_videos: int = 3,
                       top_n: int = 30, sort_by: str = "momentum",
                       outlier_threshold: float = 3.0,
-                      compare_previous: bool = True) -> dict:
+                      compare_previous: bool = True, keywords_mode: str = "ngram",
+                      semantic_similarity: float = 0.85) -> dict:
     """Phrases rising in a window, each with a breakout-correlation score. FREE.
 
     momentum     share now / share in the previous equal window (smoothed)
@@ -399,6 +400,9 @@ def trending_keywords(period: str = "24h", period_by: str = "published",
     trendScore   log(1+videos) * outlierLift * momentum
 
     source: titles | tags | both. sort_by: momentum | trend | lift | count | views.
+    keywords_mode="semantic" (stage 10) merges paraphrases an n-gram model
+    can't see ("cold shower" / "cold showers") via local embeddings --
+    default "ngram" mode is unchanged from before this existed.
     There is no such thing as YouTube search volume in the public API; anything
     advertising one is reselling Google Trends or scraping autocomplete.
     """
@@ -408,7 +412,8 @@ def trending_keywords(period: str = "24h", period_by: str = "published",
         category_id=category_id, max_subscribers=max_subscribers,
         exclude_shorts=exclude_shorts, source=source, ngram_max=ngram_max,
         min_videos=min_videos, top_n=top_n, sort_by=sort_by,
-        outlier_threshold=outlier_threshold, compare_previous=compare_previous)
+        outlier_threshold=outlier_threshold, compare_previous=compare_previous,
+        keywords_mode=keywords_mode, semantic_similarity=semantic_similarity)
 
 
 @mcp.tool(annotations=ToolAnnotations(

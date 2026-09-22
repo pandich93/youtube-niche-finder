@@ -148,6 +148,102 @@ def aggregate(rows, use_tags=True, use_title=True, n_max=3, outlier_threshold=3.
     return stats, total_videos, base_rate
 
 
+def merge_semantic_synonyms(stats: dict, phrase_vectors: dict,
+                            similarity_threshold: float = 0.85, namer=None) -> dict:
+    """Stage 10: post-aggregate step that merges phrases whose embeddings
+    are near-duplicates (paraphrases an n-gram model can't see -- "cold
+    shower" / "cold showers" / "ice bath") into one group. Runs on
+    aggregate()'s *output*, never touches aggregate() itself, so the
+    default n-gram mode is unaffected unless a caller opts in.
+
+    phrase_vectors: {phrase: vector} for (at least) every key in stats --
+    computed by the caller, keeping this function embedding-library-
+    agnostic. namer(cluster_phrases) -> str picks the canonical name for a
+    merged cluster; default is the most frequent (by videos) member.
+    Every returned entry carries "mergedFrom": [original phrases] (a
+    single-element list for a phrase that didn't merge with anything), so
+    a caller can realign a previous period's stats under the same
+    canonical names for period-over-period momentum."""
+    import numpy as np
+
+    phrases_with_vec = [p for p in stats if phrase_vectors.get(p) is not None]
+    phrases_without_vec = [p for p in stats if phrase_vectors.get(p) is None]
+
+    # Vectorized pairwise cosine (one matrix multiply) instead of a
+    # cosine() call per pair -- real corpora can have hundreds of
+    # candidate phrases even after the caller's own min_videos filter, and
+    # nested-Python-loop cosine calls do not scale to that.
+    clusters = []  # [{"rep": phrase, "members": [phrase, ...]}]
+    if phrases_with_vec:
+        matrix = np.array([phrase_vectors[p] for p in phrases_with_vec], dtype=np.float64)
+        norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+        norms[norms == 0] = 1.0
+        unit = matrix / norms
+        sims = unit @ unit.T  # (n, n) cosine similarity matrix
+
+        rep_indices = []  # index into phrases_with_vec of each cluster's rep
+        for i, phrase in enumerate(phrases_with_vec):
+            placed = False
+            for cluster_idx, rep_i in enumerate(rep_indices):
+                if sims[i, rep_i] >= similarity_threshold:
+                    clusters[cluster_idx]["members"].append(phrase)
+                    placed = True
+                    break
+            if not placed:
+                rep_indices.append(i)
+                clusters.append({"rep": phrase, "members": [phrase]})
+
+    for phrase in phrases_without_vec:
+        clusters.append({"rep": phrase, "members": [phrase]})
+
+    merged = {}
+    for cluster in clusters:
+        members = cluster["members"]
+        name = members[0] if len(members) == 1 else \
+            (namer(members) if namer else max(members, key=lambda p: stats[p]["videos"]))
+        combined = {"videos": 0, "views": 0, "view_list": [], "outliers": [], "hits": 0,
+                   "examples": [], "video_ids": set(), "mergedFrom": members}
+        for m in members:
+            s = stats[m]
+            combined["videos"] += s["videos"]
+            combined["views"] += s["views"]
+            combined["view_list"] += s["view_list"]
+            combined["outliers"] += s["outliers"]
+            combined["hits"] += s["hits"]
+            combined["video_ids"] |= s["video_ids"]
+            combined["examples"] += s["examples"]
+        combined["examples"] = combined["examples"][:3]
+        merged[name] = combined
+    return merged
+
+
+def realign_prev_stats(prev_stats: dict, cluster_map: dict) -> dict:
+    """cluster_map: {canonical_name: [member_phrases]}, straight from a
+    merge_semantic_synonyms() result's "mergedFrom" fields -- sums a
+    previous period's raw per-phrase stats under the SAME canonical names
+    the current period merged to, so score()'s exact-key momentum lookup
+    still lines up after semantic merging."""
+    out = {}
+    for name, members in cluster_map.items():
+        combined = {"videos": 0, "views": 0, "view_list": [], "outliers": [], "hits": 0,
+                   "examples": [], "video_ids": set()}
+        found = False
+        for m in members:
+            s = prev_stats.get(m)
+            if not s:
+                continue
+            found = True
+            combined["videos"] += s["videos"]
+            combined["views"] += s["views"]
+            combined["view_list"] += s["view_list"]
+            combined["outliers"] += s["outliers"]
+            combined["hits"] += s["hits"]
+            combined["video_ids"] |= s["video_ids"]
+        if found:
+            out[name] = combined
+    return out
+
+
 def collapse_redundant(items):
     """Drop "ai" and "robot" when "ai robot" covers exactly the same videos.
 
