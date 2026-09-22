@@ -213,6 +213,15 @@ function videoCard(v) {
   </article>`;
 }
 
+/* Бейдж AI-разметки канала (этап 03) -- "faceless · voiceover_stock".
+   Пусто, если канал ещё не размечен (aiLabels отсутствует/null). */
+function aiLabelsBadge(ai) {
+  if (!ai || !ai.contentFormat) return '';
+  const parts = [ai.isFaceless ? 'faceless' : 'on-camera', ai.contentFormat];
+  const tip = `AI-разметка${ai.topic ? ` · тема: ${ai.topic}` : ''}${ai.labeledAt ? ` · ${ago(ai.labeledAt)}` : ''}`;
+  return `<span class="chip" data-tip="${esc(tip)}">${esc(parts.join(' · '))}</span>`;
+}
+
 function commentList(comments) {
   if (!comments.length) return empty('нет комментариев');
   return `<div class="comments-list">${comments.map((c) => `
@@ -261,6 +270,62 @@ function lineChart(points, { height = 180, valueLabel = 'значение' } = {
   </svg>`;
 }
 
+/* Стабильный цвет на channelId -- один и тот же канал везде одного цвета
+   без палитры/легенды (в scatter'е их может быть десятки). */
+function _channelColor(id) {
+  let h = 0;
+  for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `hsl(${h} 65% 55%)`;
+}
+
+/* Точечный график ниши (этап 15): X — дата публикации, Y — просмотры (лог.
+   шкала, иначе один вирусный ролик сплющивает всё остальное в одну линию).
+   Полые точки — моложе 30 дней (только выросли, сравнивать рано). Крупный
+   контур — аномалия по periodScore (или rolling, если period нет). Свой SVG,
+   без сторонних библиотек графиков -- та же техника viewBox, что и lineChart:
+   ширина тянется по контейнеру через CSS (.chart{width:100%}), без JS на
+   resize. */
+function scatterChart(videos, { height = 340, outlierThreshold = 3 } = {}) {
+  if (!videos.length) return empty('нет видео в нише за этот период');
+  const W = 720, H = height, m = { t: 12, r: 14, b: 26, l: 52 };
+
+  const xs = videos.map((v) => new Date(v.publishedAt).getTime()).filter(Number.isFinite);
+  if (!xs.length) return empty('у видео нет дат публикации');
+  const x0 = Math.min(...xs), x1 = Math.max(Math.max(...xs), x0 + 86400000);
+  const ys = videos.map((v) => Math.log10(Math.max(1, v.views || 0)));
+  const y0 = Math.min(...ys), y1 = Math.max(Math.max(...ys), Math.min(...ys) + 1);
+  const px = (t) => m.l + ((t - x0) / (x1 - x0 || 1)) * (W - m.l - m.r);
+  const py = (logV) => m.t + (1 - (logV - y0) / (y1 - y0 || 1)) * (H - m.t - m.b);
+
+  const points = videos.map((v) => {
+    const t = new Date(v.publishedAt).getTime();
+    const views = Math.max(1, v.views || 0);
+    const score = v.outlierScorePeriod ?? v.outlierScoreRolling ?? v.outlierScore;
+    const isNew = (v.ageDays ?? Infinity) < 30;
+    const isOutlier = (score || 0) >= outlierThreshold;
+    const color = _channelColor(v.channelId);
+    const tip = `${esc(v.title)}&lt;br&gt;${esc(v.channelTitle || v.channelId)}&lt;br&gt;`
+      + `${num(views)} просмотров · outlier ${score != null ? mult(score) : '—'}&lt;br&gt;`
+      + `${Math.round((v.durationSeconds || 0) / 60)} мин${isNew ? ' · моложе 30 дней' : ''}`;
+    return { cx: px(t), cy: py(Math.log10(views)), color, isNew, isOutlier, tip };
+  }).filter((p) => Number.isFinite(p.cx) && Number.isFinite(p.cy));
+
+  const yTicks = [y0, (y0 + y1) / 2, y1];
+
+  return `<svg class="chart chart-scatter" viewBox="0 0 ${W} ${H}" role="img"
+      aria-label="Просмотры видео ниши по датам публикации, логарифмическая шкала">
+    ${yTicks.map((t) => `<line class="gridline" x1="${m.l}" x2="${W - m.r}"
+        y1="${py(t).toFixed(1)}" y2="${py(t).toFixed(1)}"/>
+      <text x="${m.l - 8}" y="${(py(t) + 4).toFixed(1)}" text-anchor="end">${compact(10 ** t)}</text>`).join('')}
+    <line class="axis" x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}"/>
+    ${points.map((p) => `<circle r="${p.isOutlier ? 6 : 4}" cx="${p.cx.toFixed(1)}" cy="${p.cy.toFixed(1)}"
+        fill="${p.isNew ? 'none' : p.color}" stroke="${p.color}" stroke-width="${p.isNew ? 2 : 1}"
+        opacity="${p.isOutlier ? 1 : 0.75}" data-tip="${p.tip}"/>`).join('')}
+    <text x="${m.l}" y="${H - 6}">${esc(new Date(x0).toLocaleDateString('ru-RU'))}</text>
+    <text x="${W - m.r}" y="${H - 6}" text-anchor="end">${esc(new Date(x1).toLocaleDateString('ru-RU'))}</text>
+  </svg>`;
+}
+
 function funnelBlock(res) {
   if (!res.funnel) return '';
   const rows = res.funnel.map((f) =>
@@ -272,4 +337,4 @@ function funnelBlock(res) {
 
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
-         lineChart, funnelBlock, state };
+         lineChart, funnelBlock, aiLabelsBadge, scatterChart, state };

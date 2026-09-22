@@ -290,6 +290,17 @@ def niche_detail(slug: str, period: str = "all", top_n: int = 5):
     return Q.niche_overview(slug, period=period, top_n=top_n)
 
 
+@app.get("/api/niches/{slug}/videos")
+def niche_videos(slug: str, period: str = "all", channels: str = None,
+                 include_shorts: bool = True):
+    """Flat per-video list for the stage 15 scatter chart. channels is a
+    comma-separated list of channel_id to narrow the niche to (frontend
+    channel filter); omit for every channel in the niche."""
+    channel_ids = [c for c in (channels or "").split(",") if c] or None
+    return Q.niche_videos(slug, period=period, channel_ids=channel_ids,
+                          include_shorts=include_shorts)
+
+
 @app.get("/api/channels/tracked")
 def tracked(faceless: bool = None, content_format: str = None, topic: str = None):
     return {"channels": T.list_tracked(faceless=faceless, content_format=content_format,

@@ -401,6 +401,18 @@ def niche_overview(niche: str, period: str = "all") -> dict:
 @mcp.tool(annotations=ToolAnnotations(
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
+def niche_videos(niche: str, period: str = "all", channel_ids: list = None,
+                 include_shorts: bool = True) -> dict:
+    """Flat per-video list for a niche: date, views, channel, both outlier
+    bases from stage 14 (rolling and period), duration. channel_ids narrows
+    to a subset of the niche's channels; include_shorts=False drops Shorts."""
+    return q.niche_videos(niche, period=period, channel_ids=channel_ids,
+                          include_shorts=include_shorts)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
 def similar_channels(channel_id: str, niche: str = None, limit: int = 10,
                      min_videos_embedded: int = 1) -> dict:
     """Channels whose collected content reads as semantically closest to this

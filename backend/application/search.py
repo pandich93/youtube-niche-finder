@@ -169,6 +169,34 @@ def niche_overview(niche: str, period: str = "all", top_n: int = 5) -> dict:
     return overview
 
 
+def niche_videos(niche: str, period: str = "all", channel_ids: list = None,
+                 include_shorts: bool = True) -> dict:
+    """Flat per-video list for stage 15's scatter chart: date, views, channel,
+    both outlier bases from stage 14, duration. channel_ids narrows to a
+    subset of the niche's channels (frontend channel filter); include_shorts
+    =False drops Shorts entirely rather than just deprioritizing them."""
+    rows = trends.load_window(period=period, niche=niche, channel_ids=channel_ids,
+                              exclude_shorts=not include_shorts)
+    if not rows:
+        return {"niche": niche, "found": False,
+                "hint": "nothing collected under this slug yet -- run collect_niche",
+                "videos": []}
+    return {
+        "niche": niche, "found": True, "period": period, "videoCount": len(rows),
+        "videos": [{
+            "videoId": r["video_id"], "title": r["title"],
+            "publishedAt": r["published_at"], "ageDays": r["ageDays"],
+            "views": r["view_count"] or 0,
+            "channelId": r["channel_id"], "channelTitle": r["channel_title"],
+            "durationSeconds": r["duration_seconds"], "isShort": bool(r["isShort"]),
+            "outlierScore": r["outlierScore"],
+            "outlierScoreRolling": r["outlierScoreRolling"],
+            "outlierScorePeriod": r["outlierScorePeriod"],
+            "outlierBand": r["outlierBand"],
+        } for r in rows],
+    }
+
+
 def niche_overview_from_channel(channel_id: str, limit: int = 15,
                                 min_videos_embedded: int = 1,
                                 period: str = "all") -> dict:

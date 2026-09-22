@@ -1,7 +1,8 @@
 /* Экраны и роутинг. Компоненты и форматтеры — в ui.js. */
 import {
   $, api, q, num, compact, mult, ago, esc, delta, toast, tile, sectionHead,
-  notice, empty, barList, channelRow, videoCard, table, commentList, lineChart, funnelBlock, pl, state,
+  notice, empty, barList, channelRow, videoCard, table, commentList, lineChart, funnelBlock, pl,
+  aiLabelsBadge, scatterChart, state,
 } from './ui.js';
 
 const view = $('#view');
@@ -504,23 +505,50 @@ async function viewTopTags() {
 
 /* ----------------------------------------------------------------- Трекер */
 
+/* faceless/format/topic (этап 03) живут только в памяти вкладки -- фильтр
+   по AI-разметке не настолько важен, чтобы переживать перезагрузку, в
+   отличие от state.period/niche. */
+let channelFilters = { faceless: '', format: '', topic: '' };
+
 async function viewTracker() {
-  const d = await api('/api/channels/tracked');
+  const f = channelFilters;
+  const d = await api(`/api/channels/tracked${q({
+    faceless: f.faceless || undefined, content_format: f.format || undefined, topic: f.topic || undefined,
+  })}`);
   view.innerHTML = `
     <div class="card">
-      ${sectionHead('Трекер каналов', 'воркер снимает статистику по этим каналам и копит историю')}
+      ${sectionHead('Трекер каналов', 'воркер снимает статистику по этим каналам и копит историю', `
+        <select id="filterFaceless">
+          <option value="" ${f.faceless === '' ? 'selected' : ''}>faceless: любой</option>
+          <option value="true" ${f.faceless === 'true' ? 'selected' : ''}>faceless: да</option>
+          <option value="false" ${f.faceless === 'false' ? 'selected' : ''}>faceless: нет</option>
+        </select>
+        <input type="text" id="filterFormat" placeholder="формат" value="${esc(f.format)}" style="width:120px">
+        <input type="text" id="filterTopic" placeholder="тема" value="${esc(f.topic)}" style="width:120px">`)}
       ${d.channels.length ? table([
         { label: 'Канал', render: (r) => `<a href="#/channel/${esc(r.channel_id)}">${esc(r.title || r.channel_id)}</a>` },
+        { label: 'AI', render: (r) => aiLabelsBadge(r.aiLabels) || '—' },
         { label: 'Подписчиков', num: true, render: (r) => compact(r.subscriber_count) },
         { label: 'Видео', num: true, render: (r) => num(r.video_count) },
         { label: 'Просмотров', num: true, render: (r) => compact(r.view_count) },
         { label: 'Снимков', num: true, render: (r) => num(r.snapshots) },
         { label: 'Обновлён', render: (r) => ago(r.last_refreshed_at) },
         { label: '', render: (r) => `<button class="btn btn-ghost btn-sm untrack" data-id="${esc(r.channel_id)}">убрать</button>` },
-      ], d.channels) : empty('пока никого — добавьте канал ниже')}
+      ], d.channels) : empty('пока никого — добавьте канал ниже, или фильтр по AI-разметке ничего не нашёл')}
     </div>
     ${collectForm()}`;
   wireCollect(render);
+  const applyFilters = () => {
+    channelFilters = {
+      faceless: $('#filterFaceless').value,
+      format: $('#filterFormat').value.trim(),
+      topic: $('#filterTopic').value.trim(),
+    };
+    render();
+  };
+  $('#filterFaceless').addEventListener('change', applyFilters);
+  $('#filterFormat').addEventListener('change', applyFilters);
+  $('#filterTopic').addEventListener('change', applyFilters);
   view.querySelectorAll('.untrack').forEach((b) => b.addEventListener('click', async () => {
     try {
       await api(`/api/channels/tracked/${b.dataset.id}`, { method: 'DELETE' });
@@ -841,12 +869,86 @@ function wireNicheTagEditor(slug, tagGroup) {
   });
 }
 
+/* Предложенные LLM-теги вне таксономии ниши (этап 03) -- принять/отклонить
+   через POST /api/tags/proposed/resolve. Не привязана к tagGroup выбранной
+   в tagStatsSection: proposed-теги могут быть в любой группе. */
+function proposedTagsSection(proposed) {
+  if (!proposed.length) return '';
+  return `
+    <div class="card">
+      ${sectionHead('Предложенные теги', 'LLM предложил теги вне таксономии ниши — подтвердите или отклоните')}
+      <div class="rows">${proposed.map((p) => `
+        <div class="row" data-proposed-video-id="${esc(p.videoId)}" data-tag-group="${esc(p.tagGroup)}" data-tag="${esc(p.tag)}">
+          <div class="row-main">
+            <div class="row-title">${esc(p.tag)} <span class="chip">${esc(p.tagGroup)}</span></div>
+            <div class="row-sub">видео <a href="https://www.youtube.com/watch?v=${esc(p.videoId)}"
+              target="_blank" rel="noopener">${esc(p.videoId)}</a> · ${ago(p.createdAt)}</div>
+          </div>
+          <div class="row-metrics">
+            <button class="btn btn-ghost btn-sm proposed-accept">принять</button>
+            <button class="btn btn-ghost btn-sm proposed-reject">отклонить</button>
+          </div>
+        </div>`).join('')}</div>
+    </div>`;
+}
+
+function wireProposedTags() {
+  view.querySelectorAll('[data-proposed-video-id]').forEach((rowEl) => {
+    const { proposedVideoId: videoId, tagGroup, tag } = rowEl.dataset;
+    const resolve = async (accept) => {
+      try {
+        await api('/api/tags/proposed/resolve', { method: 'POST',
+          body: { videoId, tagGroup, tag, accept } });
+        toast(accept ? 'Тег принят' : 'Тег отклонён', 'ok');
+        render();
+      } catch (e) { toast(e.message, 'err'); }
+    };
+    rowEl.querySelector('.proposed-accept')?.addEventListener('click', () => resolve(true));
+    rowEl.querySelector('.proposed-reject')?.addEventListener('click', () => resolve(false));
+  });
+}
+
+/* этап 15: фильтры точечного графика живут в памяти вкладки, как
+   channelFilters у трекера -- не настолько важны, чтобы переживать
+   перезагрузку. */
+let scatterFilters = { channels: '', includeShorts: true };
+
+function scatterSection(videos, filters) {
+  return `
+    <div class="card">
+      ${sectionHead('Просмотры по датам публикации', 'цвет — канал; полый контур — моложе 30 дней; крупный контур — аномалия', `
+        <input type="text" id="scatterChannels" placeholder="ID каналов через запятую"
+          value="${esc(filters.channels)}" style="width:220px">
+        <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)">
+          <input type="checkbox" id="scatterHideShorts" ${filters.includeShorts ? '' : 'checked'}> скрыть Shorts
+        </label>`)}
+      ${scatterChart(videos)}
+    </div>`;
+}
+
+function wireScatterFilters(rerender) {
+  const apply = () => {
+    scatterFilters = {
+      channels: $('#scatterChannels').value.trim(),
+      includeShorts: !$('#scatterHideShorts').checked,
+    };
+    rerender();
+  };
+  $('#scatterChannels').addEventListener('change', apply);
+  $('#scatterHideShorts').addEventListener('change', apply);
+}
+
 async function viewNiche(slug) {
   const tagGroup = localStorage.getItem('nf.tagGroup') || 'theme';
-  const [d, stats, videoTags] = await Promise.all([
+  const [d, stats, videoTags, proposed, scatter] = await Promise.all([
     api(`/api/niches/${encodeURIComponent(slug)}${q({ period: state.period, top_n: 30 })}`),
     api(`/api/tags/stats${q({ niche: slug, tag_group: tagGroup })}`),
     api(`/api/tags${q({ niche: slug })}`),
+    api(`/api/tags/proposed${q({ niche: slug })}`),
+    api(`/api/niches/${encodeURIComponent(slug)}/videos${q({
+      period: state.period, channels: scatterFilters.channels || undefined,
+      include_shorts: scatterFilters.includeShorts,
+    })}`),
   ]);
   if (!d.found) { view.innerHTML = notice(esc(d.hint || 'ниша не найдена')); return; }
 
@@ -858,10 +960,14 @@ async function viewNiche(slug) {
 
   view.innerHTML = nicheOverviewBlock(d,
     sectionHead(`Ниша: ${slug}`, `${esc(d.query || '')} · ${plabel(state.period)}`))
+    + scatterSection(scatter.videos || [], scatterFilters)
     + tagStatsSection(stats, tagGroup)
-    + nicheVideoTagsSection(d.top_videos_by_outlier_score || [], tagsByVideo, tagGroup);
+    + nicheVideoTagsSection(d.top_videos_by_outlier_score || [], tagsByVideo, tagGroup)
+    + proposedTagsSection(proposed.proposed || []);
 
   wireNicheTagEditor(slug, tagGroup);
+  wireProposedTags();
+  wireScatterFilters(() => viewNiche(slug));
 }
 
 /* ----------------------------------------------------------------- Канал */
@@ -879,7 +985,8 @@ async function viewChannel(id) {
       ${sectionHead(a.profile.title || id,
         `${a.profile.handle || ''} · ${a.profile.country || '—'} · создан ${
           a.profile.createdAt ? new Date(a.profile.createdAt).toLocaleDateString('ru-RU') : '—'}`,
-        `<button class="btn btn-ghost btn-sm" id="trackThis">В трекер</button>
+        `${aiLabelsBadge(a.profile.aiLabels)}
+         <button class="btn btn-ghost btn-sm" id="trackThis">В трекер</button>
          <a class="btn btn-ghost btn-sm" href="https://www.youtube.com/channel/${esc(id)}" target="_blank" rel="noopener">YouTube</a>`)}
       <div class="tiles">
         ${tile('Подписчиков', compact(a.profile.subscribers))}
