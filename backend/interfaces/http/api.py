@@ -39,6 +39,7 @@ from application import tags as TG
 from application import enrichment as EN
 from application import transcripts as TR
 from application import niche_clusters as NCL
+from application import niche_export as NE
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR")
@@ -657,6 +658,18 @@ def niche_clusters():
 @app.post("/api/niche-clusters/recompute")
 def recompute_niche_clusters(k: int = None):
     return NCL.compute_clusters(k=k)
+
+
+@app.get("/api/niche/{slug}/export.{fmt}")
+def export_niche(slug: str, fmt: str):
+    try:
+        out = NE.export_niche(slug, fmt=fmt)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    media_type = "text/tab-separated-values" if fmt == "tsv" else "text/csv"
+    return Response(
+        content=out["content"], media_type=f"{media_type}; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{out["filename"]}"'})
 
 
 @app.get("/api/video/{video_id}/why")

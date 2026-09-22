@@ -13,6 +13,7 @@
     python cli.py channels --period 24h       outlier-каналы
     python cli.py stats
     python cli.py notify-test                 тестовое сообщение в Telegram/webhook
+    python cli.py export-niche my-niche --format csv --out out.csv
     python cli.py seed                        синтетические данные для примера
 
 В Docker:  docker compose run --rm mcp python cli.py doctor
@@ -231,6 +232,19 @@ def cmd_notify_test(args):
     out({"sent": ok, "channel": notify_factory.display_target()})
 
 
+def cmd_export_niche(args):
+    from application import niche_export as niche_export_uc
+    try:
+        result = niche_export_uc.export_niche(args.slug, fmt=args.format)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    path = args.out or result["filename"]
+    with open(path, "wb") as f:
+        f.write(result["content"])
+    out({"written": path, "rows": result["rowCount"]})
+
+
 def cmd_seed(args):
     # cli.py now lives at backend/interfaces/cli/ (two levels deeper than the
     # old flat backend/cli.py), so climb back up to backend/ before reaching
@@ -258,6 +272,12 @@ def main():
     p = sub.add_parser("embed-videos", help="досчитать эмбеддинги для уже собранных видео (0 quota)")
     p.add_argument("--limit", type=int, default=1000)
     p.set_defaults(fn=cmd_embed_videos)
+
+    p = sub.add_parser("export-niche", help="экспорт видео ниши в TSV/CSV")
+    p.add_argument("slug")
+    p.add_argument("--out", default=None, help="путь файла (по умолчанию <slug>_videos_ДАТА.EXT)")
+    p.add_argument("--format", choices=["tsv", "csv"], default="tsv")
+    p.set_defaults(fn=cmd_export_niche)
 
     p = sub.add_parser("fix-tracked", help="почистить watchlist от handle/url вместо channel_id")
     p.add_argument("--apply", action="store_true",

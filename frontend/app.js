@@ -1404,7 +1404,9 @@ async function viewNiche(slug) {
   }
 
   view.innerHTML = nicheOverviewBlock(d,
-    sectionHead(`Ниша: ${slug}`, `${esc(d.query || '')} · ${plabel(state.period)}`))
+    sectionHead(`Ниша: ${slug}`, `${esc(d.query || '')} · ${plabel(state.period)}`, `
+      <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.tsv">Экспорт TSV</a>
+      <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.csv">Экспорт CSV</a>`))
     + scatterSection(scatter.videos || [], scatterFilters)
     + tagStatsSection(stats, tagGroup)
     + nicheVideoTagsSection(d.top_videos_by_outlier_score || [], tagsByVideo, tagGroup, slug)
