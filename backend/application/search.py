@@ -222,6 +222,7 @@ def db_stats() -> dict:
         "channel_stat_snapshots": one("SELECT COUNT(*) FROM channel_stats_history"),
         "chart_snapshots": one("SELECT COUNT(*) FROM chart_snapshots"),
         "title_thumbnail_changes": one("SELECT COUNT(*) FROM video_changes"),
+        "videos_without_embedding": one("SELECT COUNT(*) FROM videos WHERE embedding IS NULL"),
         "oldest_video": one("SELECT MIN(published_at) FROM videos"),
         "newest_video": one("SELECT MAX(published_at) FROM videos"),
         "history_since": one("SELECT MIN(captured_at) FROM video_stats_history"),

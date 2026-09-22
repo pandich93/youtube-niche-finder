@@ -63,6 +63,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   scrolling search results). Static frontend files are not counted, and the
   429 still carries CORS headers.
 
+- **Worker backfills embeddings on a schedule.** `collect_channel`,
+  `collect_trending` and the RSS watch collect with `embed=False` for speed,
+  so most of the corpus built that way had `videos.embedding IS NULL` and
+  `similar_channels` / `similar_videos` / `niche_overview_from_channel` /
+  `review_metadata` ran on an incomplete index. The worker now runs
+  `backfill_embeddings` every `WORKER_EMBED_INTERVAL_MIN` (default 60min),
+  up to `WORKER_EMBED_BATCH` videos (default 500) per pass — zero YouTube
+  quota, pure local compute over title+description already in Postgres.
+  `WORKER_EMBED=0` turns the step off; a missing/broken fastembed model logs
+  a warning and skips the step instead of crashing the cycle. `db_stats` and
+  the dashboard overview now show `videos_without_embedding`.
+
 ### Fixed
 
 - **`scripts/mcp-docker.sh` больше не полагается на `docker run --env-file`.**

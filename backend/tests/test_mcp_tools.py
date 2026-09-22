@@ -63,6 +63,12 @@ def test_db_stats_exposes_search_quota_and_worker_flag():
     assert "worker_quota_blocked_until" in s
 
 
+def test_db_stats_exposes_videos_without_embedding():
+    s = query.db_stats()
+    assert "videos_without_embedding" in s
+    assert isinstance(s["videos_without_embedding"], int)
+
+
 def test_data_coverage_exposes_search_quota():
     cov = trends.coverage(period="30d")
     assert "searchCallsToday" in cov

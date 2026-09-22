@@ -50,6 +50,9 @@ DO_TRENDING = os.environ.get("WORKER_TRENDING", "1") not in ("0", "false", "no")
 QUERIES = [q.strip() for q in os.environ.get("WORKER_QUERIES", "").split(",") if q.strip()]
 QUERY_PERIOD = os.environ.get("WORKER_QUERY_PERIOD", "24h")
 QUERY_PAGES = int(os.environ.get("WORKER_QUERY_PAGES", "1"))
+EMBED_INTERVAL_MIN = int(os.environ.get("WORKER_EMBED_INTERVAL_MIN", "60"))
+EMBED_BATCH = int(os.environ.get("WORKER_EMBED_BATCH", "500"))
+DO_EMBED = os.environ.get("WORKER_EMBED", "1") not in ("0", "false", "no")
 
 _stop = False
 
@@ -130,6 +133,10 @@ def cycle():
         _safe("alerts scan", lambda: alerts_mod.scan())
         _mark("alerts")
 
+    if DO_EMBED and _due("embed", EMBED_INTERVAL_MIN):
+        _safe("embed backfill", lambda: collector.backfill_embeddings(limit=EMBED_BATCH))
+        _mark("embed")
+
     if _due("daily", DAILY_INTERVAL_MIN):
         _safe("full refresh", lambda: collector.refresh_stats(
             API_KEY, scope="recent", period=FULL_PERIOD, limit=FULL_LIMIT))
@@ -159,11 +166,14 @@ def main():
     signal.signal(signal.SIGTERM, _handle_stop)
     signal.signal(signal.SIGINT, _handle_stop)
     db.init_db()
+    embed_status = (f"embed backfill every {EMBED_INTERVAL_MIN}min (batch {EMBED_BATCH})"
+                     if DO_EMBED else "embed backfill=off")
     log(f"worker started | db={db.display_dsn()} | rss watch every {RSS_INTERVAL_MIN}min | "
         f"alerts scan every {ALERTS_INTERVAL_MIN}min | "
         f"hot every {HOT_INTERVAL_MIN}min "
         f"({HOT_PERIOD}) | daily every {DAILY_INTERVAL_MIN}min ({FULL_PERIOD}) "
-        f"| regions={REGIONS} | trending={DO_TRENDING} | queries={len(QUERIES)}")
+        f"| regions={REGIONS} | trending={DO_TRENDING} | queries={len(QUERIES)} "
+        f"| {embed_status}")
     while not _stop:
         cycle()
         for _ in range(60):

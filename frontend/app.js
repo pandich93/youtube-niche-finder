@@ -226,6 +226,7 @@ async function viewOverview() {
                               : 'истории пока нет')}
       ${tile('В трекере', num(d.stats.tracked_channels))}
       ${tile('Видео в окне', num(cov.videosPublishedInPeriod), plabel(state.period))}
+      ${tile('Без эмбеддинга', num(d.stats.videos_without_embedding), 'досчитает воркер')}
     </div>
 
     <div class="grid-2">
