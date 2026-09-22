@@ -194,7 +194,8 @@ def viral_videos_small_channels(period: str = "7d", period_by: str = "published"
                                 category_id: str = None,
                                 max_channel_video_count: int = None,
                                 exclude_shorts: bool = True, only_shorts: bool = False,
-                                sort_by: str = "viral", limit: int = 25) -> dict:
+                                sort_by: str = "viral", limit: int = 25,
+                                preset: str = None) -> dict:
     """Videos that went far beyond their channel's size, in a time window. FREE.
 
     period: 24h | 48h | 7d | 30d | 90d | all
@@ -205,6 +206,9 @@ def viral_videos_small_channels(period: str = "7d", period_by: str = "published"
     sort_by: viral (age-normalised views per subscriber, default) | vsr | views |
         outlier | outlier_adjusted | vph | velocity | engagement | acceleration |
         published
+    preset: "niche_all" drops max_subscribers/min_views/min_views_per_subscriber
+        entirely -- every video collected under `niche`, not just the small-channel
+        breakouts. Requires niche.
 
     Each result carries viewsPerSubscriber, an age-adjusted outlier score against
     the channel's own median, and -- once history exists -- vph24h and
@@ -219,7 +223,7 @@ def viral_videos_small_channels(period: str = "7d", period_by: str = "published"
         region=region, category_id=category_id,
         max_channel_video_count=max_channel_video_count,
         exclude_shorts=exclude_shorts, only_shorts=only_shorts,
-        sort_by=sort_by, limit=limit)
+        sort_by=sort_by, limit=limit, preset=preset)
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -484,11 +488,24 @@ def track_channel(channel: str, note: str = None, collect: bool = True,
     uploads immediately (cheap: uploads playlist, ~1 unit per 50 videos).
     """
     _require_key()
-    res = collector.collect_channel(API_KEY, channel, max_videos=max_videos) \
-        if collect else {"channelId": channel}
-    cid = res.get("channelId")
-    if not cid:
-        return res
+    if collect:
+        res = collector.collect_channel(API_KEY, channel, max_videos=max_videos)
+        cid = res.get("channelId")
+        if not cid:
+            return res
+    else:
+        # collect_channel above always resolves through the YouTube API, so
+        # channelId there is already a real UC id. Without it, a raw @handle
+        # or URL would otherwise land in tracked_channels as-is and the
+        # worker could never poll it (#12 bug 1).
+        conn = db.get_conn()
+        try:
+            cid = T.resolve_channel_id(conn, API_KEY, channel)
+        except ValueError as e:
+            return {"error": str(e)}
+        finally:
+            conn.close()
+        res = {"channelId": cid}
     T.track(cid, note)
     return {**res, "tracked": True, "note": note}
 

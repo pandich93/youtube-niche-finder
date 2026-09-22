@@ -6,6 +6,7 @@
     python cli.py collect "ai automation" --period 24h
     python cli.py refresh                     обновить счётчики (история)
     python cli.py embed-videos                досчитать эмбеддинги (0 quota)
+    python cli.py fix-tracked [--apply]       почистить watchlist от handle/url вместо id
     python cli.py viral --period 24h
     python cli.py categories --period 7d --rank-by channels
     python cli.py keywords --period 24h
@@ -182,6 +183,11 @@ def cmd_embed_videos(args):
     out(collector.backfill_embeddings(limit=args.limit))
 
 
+def cmd_fix_tracked(args):
+    from application import channel_tracking as tracking
+    out(tracking.fix_tracked(_key() or None, apply=args.apply))
+
+
 def cmd_seed(args):
     # cli.py now lives at backend/interfaces/cli/ (two levels deeper than the
     # old flat backend/cli.py), so climb back up to backend/ before reaching
@@ -204,6 +210,11 @@ def main():
     p = sub.add_parser("embed-videos", help="досчитать эмбеддинги для уже собранных видео (0 quota)")
     p.add_argument("--limit", type=int, default=1000)
     p.set_defaults(fn=cmd_embed_videos)
+
+    p = sub.add_parser("fix-tracked", help="почистить watchlist от handle/url вместо channel_id")
+    p.add_argument("--apply", action="store_true",
+                   help="применить изменения (по умолчанию — только просмотр)")
+    p.set_defaults(fn=cmd_fix_tracked)
 
     p = sub.add_parser("collect-channel", help="собрать канал (1 unit / 50 видео)")
     p.add_argument("channel")

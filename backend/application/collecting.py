@@ -370,10 +370,17 @@ def collect_channel(api_key: str, channel_ref: str, max_videos: int = 100,
     ids = [e["video_id"] for e in entries]
     items = yt.videos_list(api_key, ids) if ids else []
 
+    niche_slug = slugify(niche) if niche else None
+
     conn = db.get_conn()
     now = db.now_iso()
     store_channels(conn, [ch], now)
-    stored = store_videos(conn, items, niche_slug=niche, embed=embed, now=now)
+    if niche_slug:
+        # Without this, video_niches gets rows under niche_slug but no
+        # matching niches row -- the Niches screen and list_niches never
+        # see the niche (#12 bug 2).
+        db.upsert_niche(conn, niche_slug, niche, niche)
+    stored = store_videos(conn, items, niche_slug=niche_slug, embed=embed, now=now)
     conn.commit()
     conn.close()
     return {

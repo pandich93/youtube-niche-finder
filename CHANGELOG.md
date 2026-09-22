@@ -79,6 +79,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `docker ps`, curl к `videoCategories`/`search` с хоста и изнутри контейнера,
   `cli.py doctor`, логи воркера. Пишет `scripts/diag-output.txt` с
   замаскированным ключом.
+- **Трекинг канала по хэндлу.** `track_channel(collect=False)` (MCP) и
+  `POST /api/channels/track` (HTTP) писали в watchlist сырой `@handle`/URL
+  вместо channel_id — воркер не мог опрашивать такой канал, и история молча
+  не копилась. Новая `resolve_channel_id` сначала ищет канал в локальной базе
+  по `custom_url` (0 квоты), потом через `channels.list?forHandle=`;
+  неразрешённый канал не пишется в watchlist вовсе. `cli.py fix-tracked
+  [--apply]` чистит уже накопившийся мусор в `tracked_channels`.
+- **Ниша не создавалась при `collect_channel(niche=...)`.** Видео привязывались
+  к `video_niches`, но строка в `niches` не появлялась — экран Niches и
+  `list_niches` ничего не видели. Теперь `collect_channel` делает upsert в
+  `niches`, как и `collect_niche`.
+- **Viral прятал крупных конкурентов внутри уже выбранной ниши.** Добавлен
+  `preset="niche_all"` в `viral_videos_small_channels` (MCP, HTTP, дашборд) —
+  снимает пороги по подписчикам/просмотрам/VSR и показывает все собранные
+  видео ниши.
 
 ### Changed
 

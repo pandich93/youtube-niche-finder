@@ -19,6 +19,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 
 import infrastructure.postgres as db
+from application import collecting
 from domain import metrics as M
 from domain import periods as P
 from domain import keywords as K
@@ -53,6 +54,37 @@ def list_tracked() -> list:
     return [dict(r) for r in rows]
 
 
+def resolve_channel_id(conn, api_key: str, raw: str) -> str:
+    """Turn a UC id, @handle or channel URL into a real UC channel id.
+
+    A raw handle/URL must never land in tracked_channels as-is -- the worker
+    can't poll it. Checks the local `channels` table first (0 quota, via a
+    previously-collected custom_url), then falls back to the YouTube API.
+    Raises ValueError with a readable message when it can't be resolved;
+    callers must not write anything to the watchlist in that case.
+    """
+    raw = (raw or "").strip()
+    if not raw:
+        raise ValueError("empty channel reference")
+    m = collecting.CHANNEL_ID_RE.search(raw)
+    if m:
+        return m.group(1)
+    handle_m = collecting.HANDLE_RE.search(raw)
+    handle = handle_m.group(1) if handle_m else (raw if not raw.startswith("http") else None)
+    if handle:
+        row = conn.execute(
+            "SELECT channel_id FROM channels WHERE lower(custom_url) IN (?, ?) LIMIT 1",
+            ("@" + handle.lower(), handle.lower())).fetchone()
+        if row:
+            return row["channel_id"]
+    if not api_key:
+        raise ValueError(f"can't resolve channel without an API key: {raw}")
+    ch = collecting.resolve_channel(api_key, raw)
+    if not ch:
+        raise ValueError(f"channel not found: {raw}")
+    return ch["id"]
+
+
 def track(channel_id: str, note: str = None) -> dict:
     conn = db.get_conn()
     db.track_channel(conn, channel_id, note)
@@ -67,6 +99,46 @@ def untrack(channel_id: str) -> dict:
     conn.commit()
     conn.close()
     return {"channelId": channel_id, "tracked": False}
+
+
+def fix_tracked(api_key: str = None, apply: bool = False) -> dict:
+    """Watchlist rows whose channel_id isn't a real UC id -- written before
+    resolve_channel_id existed, when track_channel(collect=False) stored the
+    raw @handle/URL. Dry-run by default: reports what would change. With
+    apply=True, resolvable rows are rewritten to the real UC id (dropping the
+    row if that id is already tracked), and rows that can't be resolved are
+    removed.
+    """
+    conn = db.get_conn()
+    try:
+        rows = [dict(r) for r in conn.execute(
+            "SELECT channel_id FROM tracked_channels WHERE channel_id NOT LIKE 'UC%'"
+        ).fetchall()]
+        fixed, unresolved = [], []
+        for r in rows:
+            raw = r["channel_id"]
+            try:
+                cid = resolve_channel_id(conn, api_key, raw)
+            except ValueError:
+                unresolved.append(raw)
+                continue
+            fixed.append({"was": raw, "now": cid})
+            if apply:
+                dup = conn.execute(
+                    "SELECT 1 FROM tracked_channels WHERE channel_id=?", (cid,)).fetchone()
+                if dup:
+                    conn.execute("DELETE FROM tracked_channels WHERE channel_id=?", (raw,))
+                else:
+                    conn.execute(
+                        "UPDATE tracked_channels SET channel_id=? WHERE channel_id=?",
+                        (cid, raw))
+        if apply:
+            for raw in unresolved:
+                conn.execute("DELETE FROM tracked_channels WHERE channel_id=?", (raw,))
+            conn.commit()
+        return {"applied": apply, "fixed": fixed, "removed": unresolved}
+    finally:
+        conn.close()
 
 
 # --------------------------------------------------------------- analytics

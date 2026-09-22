@@ -178,13 +178,13 @@ def viral(period: str = "7d", period_by: str = "published",
           min_outlier_score: float = None, niche: str = None,
           region: str = None, category_id: str = None,
           exclude_shorts: bool = True, only_shorts: bool = False,
-          sort_by: str = "viral", limit: int = 24):
+          sort_by: str = "viral", limit: int = 24, preset: str = None):
     return trends.viral_videos_small_channels(
         period=period, period_by=period_by, max_subscribers=max_subscribers,
         min_views=min_views, min_views_per_subscriber=min_views_per_subscriber,
         min_outlier_score=min_outlier_score, niche=niche, region=region,
         category_id=category_id, exclude_shorts=exclude_shorts,
-        only_shorts=only_shorts, sort_by=sort_by, limit=limit)
+        only_shorts=only_shorts, sort_by=sort_by, limit=limit, preset=preset)
 
 
 @app.get("/api/categories")
@@ -497,9 +497,16 @@ def video_comments(video_id: str, payload: dict = Body(default={})):
 
 @app.post("/api/channels/track")
 def track(payload: dict = Body(...)):
-    cid = (payload.get("channel_id") or "").strip()
-    if not cid:
+    raw = (payload.get("channel_id") or "").strip()
+    if not raw:
         raise HTTPException(status_code=400, detail="нужно поле channel_id")
+    conn = db.get_conn()
+    try:
+        cid = T.resolve_channel_id(conn, API_KEY or None, raw)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    finally:
+        conn.close()
     return T.track(cid, payload.get("note"))
 
 

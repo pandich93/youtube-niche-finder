@@ -244,7 +244,7 @@ def viral_videos_small_channels(period="7d", period_by="published",
                                 niche=None, languages=None, region=None,
                                 category_id=None, max_channel_video_count=None,
                                 exclude_shorts=True, only_shorts=False,
-                                sort_by="viral", limit=25) -> dict:
+                                sort_by="viral", limit=25, preset=None) -> dict:
     """Small channel + big video = the algorithm chose the content, not the brand.
 
     NexLev's version of this list is literally `views >= X AND subs <= Y` sorted
@@ -252,7 +252,25 @@ def viral_videos_small_channels(period="7d", period_by="published",
     actually matter: views-per-subscriber (so a 5k-view video on a 200-sub
     channel outranks a 50k-view video on a 500k-sub one) and age normalisation
     (so a 12-hour-old rocket is not buried under a 3-week-old video).
+
+    preset="niche_all" drops the size/views/VSR thresholds entirely -- "every
+    video collected under this niche", for when you've already picked a niche
+    and want to see the whole field rather than just the breakouts. Requires
+    `niche`; without it, returns an error explaining why.
     """
+    if preset == "niche_all":
+        if not niche:
+            return {
+                "period": period, "periodBy": period_by,
+                "error": "preset='niche_all' requires 'niche' to be set",
+                "filters": {"preset": preset, "niche": niche},
+                "sortBy": sort_by, "matched": 0, "quotaUsed": 0,
+                "funnel": [], "hint": None, "results": [],
+            }
+        max_subscribers = None
+        min_views = 0
+        min_views_per_subscriber = 0
+
     # Filters are applied here rather than in SQL so we can count survivors at
     # each step: "matched: 0" with no explanation is useless, and the usual
     # cause is a default threshold, not an empty corpus.
@@ -293,6 +311,7 @@ def viral_videos_small_channels(period="7d", period_by="published",
             "minOutlierScore": min_outlier_score, "niche": niche,
             "region": region, "categoryId": category_id,
             "excludeShorts": exclude_shorts, "onlyShorts": only_shorts,
+            "preset": preset,
         },
         "sortBy": sort_by,
         "matched": len(rows),
