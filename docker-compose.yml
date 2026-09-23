@@ -205,6 +205,23 @@ services:
     ports:
       - "127.0.0.1:${MCP_PORT:-8765}:8765"
 
+  # Stage 11: fully local LLM enrichment -- nothing leaves the machine.
+  # Opt-in (`docker compose --profile llm-local up -d ollama`) because it
+  # pulls a multi-GB image and model on first run. Point LLM_PROVIDER=ollama
+  # and OLLAMA_URL=http://ollama:11434 at it from `.env` once it's up; web/
+  # worker/mcp reach it by service name on the same compose network. Running
+  # `ollama serve` on the host instead (not in Docker) works too -- that's
+  # what DEFAULT_OLLAMA_URL in factory.py assumes when this service isn't used.
+  ollama:
+    image: ollama/ollama:latest
+    container_name: niche-finder-ollama
+    profiles: ["llm-local"]
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    ports:
+      - "127.0.0.1:${OLLAMA_HOST_PORT:-11434}:11434"
+
 volumes:
   postgres-data:
     name: niche-finder-postgres-data
@@ -214,3 +231,5 @@ volumes:
     name: niche-finder-caddy-data
   caddy-config:
     name: niche-finder-caddy-config
+  ollama-data:
+    name: niche-finder-ollama-data

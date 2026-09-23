@@ -4,9 +4,18 @@ import logging
 import os
 
 from infrastructure.llm.null import NullProvider
+from infrastructure.llm.ollama import OllamaProvider
 from infrastructure.llm.openrouter import FREE_MODEL_FALLBACKS, OpenRouterProvider
 
 log = logging.getLogger(__name__)
+
+# host.docker.internal resolves to the host machine from inside a container
+# (Docker Desktop on Mac/Windows, and on Linux when docker-compose.yml adds
+# the extra_hosts entry) -- that's where `ollama serve` runs, since Ollama
+# itself is never containerized by this project. Outside Docker (running
+# cli.py directly) OLLAMA_URL should be the loopback address instead.
+DEFAULT_OLLAMA_URL = "http://host.docker.internal:11434" if os.path.exists("/.dockerenv") \
+    else "http://127.0.0.1:11434"
 
 
 def get_provider():
@@ -21,6 +30,11 @@ def get_provider():
             key,
             referer=os.environ.get("OPENROUTER_REFERER") or None,
             title=os.environ.get("OPENROUTER_TITLE") or None,
+        )
+    if provider == "ollama":
+        return OllamaProvider(
+            os.environ.get("OLLAMA_URL", "").strip() or DEFAULT_OLLAMA_URL,
+            model=os.environ.get("OLLAMA_MODEL", "").strip() or None,
         )
     return NullProvider()
 
@@ -43,6 +57,8 @@ def long_context_model() -> str | None:
 def display_model() -> str:
     """Human-readable model description for db_stats/doctor -- default_model()
     itself stays None so the provider keeps choosing freely."""
+    if os.environ.get("LLM_PROVIDER", "none").strip().lower() == "ollama":
+        return os.environ.get("OLLAMA_MODEL", "").strip() or "(OLLAMA_MODEL не задан)"
     pinned = default_model()
     if pinned:
         return pinned

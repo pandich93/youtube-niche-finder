@@ -115,6 +115,17 @@ their own OpenRouter-side rate limit (50 requests/day without purchased
 credits, 1000/day with $10+), independent of `LLM_DAILY_BUDGET_USD`. Set
 `OPENROUTER_MODEL` to pin one specific model — free or paid — instead.
 
+**`LLM_PROVIDER=ollama` (stage 11) sends nothing anywhere.** `infrastructure/
+llm/ollama.py` talks only to `OLLAMA_URL` — your own [Ollama](https://ollama.com)
+install, whether that's the host machine (`127.0.0.1:11434`) or the optional
+`ollama` service in `docker-compose.yml` (`--profile llm-local`, still on
+your machine, just in its own container). No OpenRouter call, no external
+host, no API key — every `llm_gateway.run()` request that would otherwise go
+to `openrouter.ai` goes to that local server instead, and `llm_usage.cost_usd`
+is always 0. The one exception is the model file itself: the first `ollama
+pull <model>` downloads it from Ollama's own registry, same one-time
+category as the `fastembed` download mentioned above.
+
 ## Alert delivery (Telegram / webhook)
 
 Off by default -- the worker only writes detected events (outlier, acceleration,

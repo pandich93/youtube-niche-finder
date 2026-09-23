@@ -40,6 +40,23 @@ def _key():
     return os.environ.get("YOUTUBE_API_KEY", "").strip()
 
 
+def _ping_llm(problems):
+    """Shared by doctor's openrouter/ollama branches -- one real llm_gateway
+    call, spending a little budget (openrouter) or a few local CPU/GPU
+    seconds (ollama)."""
+    from application import llm_gateway
+    ping_schema = {"type": "object", "properties": {"ok": {"type": "boolean"}},
+                   "required": ["ok"]}
+    data = llm_gateway.run("doctor_ping", "Reply with JSON only.",
+                           "Return {\"ok\": true}.", ping_schema)
+    if data == {"ok": True}:
+        print("   ОК -- провайдер ответил")
+    else:
+        print("   ОШИБКА или бюджет исчерпан -- см. лог выше")
+        problems.append("Пинг LLM-провайдера не удался -- проверьте ключ/модель/URL "
+                        "и LLM_DAILY_BUDGET_USD")
+
+
 def cmd_doctor(args):
     """Всё, что может пойти не так, по порядку -- и что именно делать."""
     from application import search as query
@@ -109,6 +126,19 @@ def cmd_doctor(args):
     llm_provider = os.environ.get("LLM_PROVIDER", "none").strip().lower()
     if llm_provider == "none":
         print("   выключен (LLM_PROVIDER=none) -- это по умолчанию, ничего чинить не нужно")
+    elif llm_provider == "ollama":
+        from infrastructure.llm import factory as llm_factory
+        provider = llm_factory.get_provider()  # always an OllamaProvider for this branch
+        print(f"   provider=ollama model={llm_factory.display_model()} url={provider.base_url}")
+        ok, msg = provider.available()
+        print(f"   {msg}")
+        if not ok:
+            problems.append(f"Ollama: {msg} -- запустите `ollama serve` и "
+                            "`ollama pull <модель>`, либо проверьте OLLAMA_URL")
+        elif args.llm:
+            _ping_llm(problems)
+        else:
+            print("   сервер и модель на месте, пинг пропущен (передайте --llm)")
     else:
         from infrastructure.llm import factory as llm_factory
         has_key = bool(os.environ.get("OPENROUTER_API_KEY", "").strip())
@@ -118,17 +148,7 @@ def cmd_doctor(args):
             problems.append("LLM_PROVIDER=openrouter, но OPENROUTER_API_KEY не задан -- "
                             "используется NullProvider")
         elif args.llm:
-            from application import llm_gateway
-            ping_schema = {"type": "object", "properties": {"ok": {"type": "boolean"}},
-                           "required": ["ok"]}
-            data = llm_gateway.run("doctor_ping", "Reply with JSON only.",
-                                   "Return {\"ok\": true}.", ping_schema)
-            if data == {"ok": True}:
-                print("   ОК -- провайдер ответил")
-            else:
-                print("   ОШИБКА или бюджет исчерпан -- см. лог выше")
-                problems.append("Пинг LLM-провайдера не удался -- проверьте ключ, "
-                                "модель и LLM_DAILY_BUDGET_USD")
+            _ping_llm(problems)
         else:
             print("   ключ есть, пинг пропущен (передайте --llm, чтобы проверить и "
                   "потратить немного бюджета)")

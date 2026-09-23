@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Local Ollama LLM provider** (`backend/infrastructure/llm/ollama.py`,
+  stage 11) — `LLM_PROVIDER=ollama` routes every `llm_gateway.run()` call to
+  a local [Ollama](https://ollama.com) install (`OLLAMA_URL`, `OLLAMA_MODEL`)
+  instead of OpenRouter, so every AI feature works with nothing leaving the
+  machine. `POST /api/chat` with `format: <json-schema>`, `stream: false`;
+  `cost_usd` is always `0.0`. `docker-compose.yml` gets an optional `ollama`
+  service under the `llm-local` profile. `cli.py doctor` checks reachability
+  and whether `OLLAMA_MODEL` is actually pulled. 18 tests (mocked HTTP, no
+  network) in `backend/tests/test_ollama_provider.py`, covering the provider
+  itself and `infrastructure/llm/factory.py`'s provider selection.
+
 - **Chrome extension** (`extension/`, Manifest V3) — vidIQ/NexLev-style
   panels on top of YouTube, served entirely from the local backend: outlier
   score against the channel's own median, view velocity and acceleration,
@@ -186,5 +197,5 @@ Initial public release.
   coverage badge.
 - MIT license.
 
-[Unreleased]: https://github.com/pandich93/niche-finder/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/pandich93/niche-finder/releases/tag/v0.1.0
+[Unreleased]: https://github.com/pandich93/youtube-niche-finder/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/pandich93/youtube-niche-finder/releases/tag/v0.1.0

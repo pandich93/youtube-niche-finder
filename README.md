@@ -1,19 +1,19 @@
 # niche-finder
 
-[![Stars](https://img.shields.io/github/stars/pandich93/niche-finder?style=flat-square)](https://github.com/pandich93/niche-finder/stargazers)
-[![Forks](https://img.shields.io/github/forks/pandich93/niche-finder?style=flat-square)](https://github.com/pandich93/niche-finder/forks)
-[![Release](https://img.shields.io/github/v/release/pandich93/niche-finder?style=flat-square)](https://github.com/pandich93/niche-finder/releases/latest)
-[![CI](https://img.shields.io/github/actions/workflow/status/pandich93/niche-finder/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/pandich93/niche-finder/actions/workflows/ci.yml)
-[![Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpandich93%2Fniche-finder%2Fmain%2Fassets%2Fcoverage.json&query=%24.totals.percent_covered_display&suffix=%25&label=coverage&style=flat-square)](assets/coverage.json)
-[![License: MIT](https://img.shields.io/github/license/pandich93/niche-finder?style=flat-square)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/stargazers)
+[![Forks](https://img.shields.io/github/forks/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/forks)
+[![Release](https://img.shields.io/github/v/release/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/pandich93/youtube-niche-finder/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/pandich93/youtube-niche-finder/actions/workflows/ci.yml)
+[![Coverage](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fpandich93%2Fyoutube-niche-finder%2Fmain%2Fassets%2Fcoverage.json&query=%24.totals.percent_covered_display&suffix=%25&label=coverage&style=flat-square)](assets/coverage.json)
+[![License: MIT](https://img.shields.io/github/license/pandich93/youtube-niche-finder?style=flat-square)](LICENSE)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](backend/Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](backend/interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](docker-compose.yml)
 [![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-29%20tools-8A2BE2?style=flat-square)](backend/interfaces/mcp/server.py)
-[![Last commit](https://img.shields.io/github/last-commit/pandich93/niche-finder?style=flat-square)](https://github.com/pandich93/niche-finder/commits/main)
-[![Open issues](https://img.shields.io/github/issues/pandich93/niche-finder?style=flat-square)](https://github.com/pandich93/niche-finder/issues)
-[![Open PRs](https://img.shields.io/github/issues-pr/pandich93/niche-finder?style=flat-square)](https://github.com/pandich93/niche-finder/pulls)
+[![MCP](https://img.shields.io/badge/MCP-50%20tools-8A2BE2?style=flat-square)](backend/interfaces/mcp/server.py)
+[![Last commit](https://img.shields.io/github/last-commit/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/commits/main)
+[![Open issues](https://img.shields.io/github/issues/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/issues)
+[![Open PRs](https://img.shields.io/github/issues-pr/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/pulls)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords over arbitrary
@@ -185,8 +185,11 @@ optional LLM step via [OpenRouter](https://openrouter.ai) (`LLM_PROVIDER`,
 off by default) adds a third, `openrouter.ai`, only when you turn it on —
 left unset, `OPENROUTER_MODEL` picks and rotates through OpenRouter's free
 models on its own; set it to pin one specific model (free or paid) instead.
-See [PRIVACY.md](PRIVACY.md) for the full picture, including what the first
-run downloads and how to delete everything.
+`LLM_PROVIDER=ollama` (stage 11) skips OpenRouter entirely and points that
+same LLM step at a local [Ollama](https://ollama.com) install instead — no
+external host, no API key, everything stays on your machine. See
+[PRIVACY.md](PRIVACY.md) for the full picture, including what the first run
+downloads and how to delete everything.
 
 ## Changelog
 
