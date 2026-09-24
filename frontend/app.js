@@ -1638,15 +1638,18 @@ async function viewHelp() {
         <p class="lead"><strong>niche-finder</strong> — свой инструмент поиска ниш и вирусных видео на
           YouTube: те же разделы, что у NexLev / vidIQ / ViewStats (вирусные видео у маленьких
           каналов, топ категорий, растущие ключевые слова, разбор и трекинг каналов), но поверх
-          бесплатного YouTube Data API v3 и локальной базы SQLite — без подписки и без чужого сервера.</p>
+          бесплатного YouTube Data API v3 и локальной базы Postgres (с pgvector для смыслового
+          поиска) — без подписки и без чужого сервера.</p>
         <p>Работает в двух формах одновременно: как <strong>MCP-сервер</strong> для Claude Desktop
           (инструкция — на отдельной странице «MCP-подключение» в меню слева) и как этот
           <strong>веб-дашборд</strong>, который вы сейчас открыли. Оба читают одну и ту же базу и
           одни и те же формулы — расхождений в цифрах между ними быть не может.</p>
-        <p>Смысловую классификацию вида «faceless / AI-канал / подходит по теме» намеренно не считает
-          сервер — это делает модель, которая обращается к MCP-инструментам в диалоге. Сервер
-          отдаёт только сырые цифры, заголовки и обложки; никакой отдельный платный ключ к LLM для
-          этого не нужен.</p>
+        <p>Все базовые разделы работают без какого-либо ключа к LLM: сервер отдаёт сырые цифры,
+          заголовки и обложки, а смысловые решения вида «faceless / подходит по теме» может принять
+          модель, которая обращается к MCP-инструментам в диалоге. Опционально можно подключить
+          LLM (<code>LLM_PROVIDER</code>: OpenRouter, в том числе бесплатные модели, или локальный
+          Ollama) — тогда включаются фоновые AI-метки каналов, «почему выстрелило», выжимка
+          комментариев, генерация заголовков, названия кластеров на карте ниш и авто-теги.</p>
       </div>
     </div>
 
@@ -1656,6 +1659,10 @@ async function viewHelp() {
         <h4>Обзор</h4>
         <p>Всё сразу одним запросом: топ outlier-каналов, кто скоро станет конкурентом, категории,
           ключевые слова и вирусные видео за выбранный период. Стартовая точка каждой сессии.</p>
+        <h4>Найти нишу</h4>
+        <p>Смысловой поиск по уже собранной базе (по эмбеддингам заголовков и описаний) — бесплатно,
+          без квоты. Фильтры: минимальный множитель, максимум подписчиков, оценка RPM, длина видео,
+          Shorts. Внизу — форма сбора, которая уже тратит квоту.</p>
         <h4>Вирусные видео</h4>
         <p>Видео маленьких каналов, которые выстрелили сильнее ожидаемого. Есть фильтры (подписчики,
           просмотры, период) и «воронка фильтров» внизу — видно, какой именно порог отсёк результаты,
@@ -1670,12 +1677,36 @@ async function viewHelp() {
         <h4>Ключевые слова</h4>
         <p>Растущие фразы (n-граммы) из заголовков с momentum и outlier-lift — насколько видео с этой
           фразой в среднем выстреливают сильнее прочих.</p>
+        <h4>Топ теги по категориям</h4>
+        <p>Авторские теги YouTube целиком, по категориям: сколько видео, доля и outlier-lift —
+          lift выше 1,5 значит, что тег связан с выстрелами, а не просто популярен.</p>
         <h4>Трекер каналов</h4>
         <p>Вотчлист: каналы отсюда регулярно обновляет фоновый воркер, поэтому только для них со
-          временем появляются рост подписчиков, грейд и вкладка «просмотры во времени».</p>
+          временем появляются рост подписчиков, грейд и вкладка «просмотры во времени». Если
+          подключён LLM, список можно фильтровать по AI-меткам (faceless, формат, тема).</p>
+        <h4>Проверка идей</h4>
+        <p>Идея на строку → вердикт по вашей базе: свободно, недавно снимали, спрос доказан или
+          провалилось. Результат можно выгрузить в CSV.</p>
+        <h4>Транскрипты</h4>
+        <p>Ручная очередь: транскрипты никогда не скачиваются автоматически — текст вставляется
+          вручную, после чего по нему работает гибридный поиск (векторный + полнотекстовый).</p>
+        <h4>Карта ниш</h4>
+        <p>Каналы, сгруппированные k-means по эмбеддингам их видео: ниши, найденные без ручной
+          разметки, с медианным множителем, скоростью, долей faceless и числом крупных конкурентов.</p>
+        <h4>Проверить заголовки</h4>
+        <p>Оценка заголовков 0–100 по паттернам выбранной ниши и проверка на дубли уже вышедших
+          видео; генерация новых заголовков требует LLM.</p>
+        <h4>Избранное</h4>
+        <p>Swipe file: видео и каналы, сохранённые из расширения, со снимком метрик на момент
+          сохранения, папкой и заметкой.</p>
+        <h4>Разбор метаданных</h4>
+        <p>Проверка черновика заголовка/описания/тегов по вашей базе — отдельные сигналы с размером
+          выборки, а не один выдуманный «SEO-балл». Черновик можно сохранить и потом привязать к
+          вышедшему видео, чтобы проверить прогноз.</p>
         <h4>Ниши</h4>
-        <p>Список тем, под которыми вы собирали данные (поле <code>niche</code> при сборе), и
-          насыщенность каждой: распределение каналов по размеру, viral skew, доля Shorts.</p>
+        <p>Список тем, под которыми вы собирали данные (поле <code>niche</code> при сборе). Внутри
+          ниши — сводка, scatter просмотров по дате публикации, hit rate по группам тегов, видео с
+          редактором тегов, выжимка комментариев и выгрузка в TSV/CSV.</p>
         <h4>Данные</h4>
         <p>Состояние ключа API, базы и истории, плюс формы сбора и ручное обновление статистики.
           Первая остановка, если какой-то раздел выглядит пустым или подозрительным.</p>
@@ -1798,10 +1829,13 @@ async function viewHelp() {
         </details>
         <details>
           <summary>Нужен платный ключ к ИИ для классификации ниш?</summary>
-          <div class="a">Нет. Сервер отдаёт только сырые данные (заголовки, описания, обложки,
-            цифры); смысловые решения вроде «это faceless-канал» или «подходит под эту нишу»
+          <div class="a">Нет. Без LLM сервер отдаёт сырые данные (заголовки, описания, обложки,
+            цифры), а смысловые решения вроде «это faceless-канал» или «подходит под эту нишу»
             принимает модель, которая вызывает MCP-инструменты в диалоге — она у вас уже есть в
-            Claude Desktop.</div>
+            Claude Desktop. Если хочется, чтобы метки ставились сами в фоне, задайте
+            <code>LLM_PROVIDER</code> в <code>.env</code>: OpenRouter (есть бесплатные модели,
+            суточный бюджет ограничивается) или локальный Ollama — тогда ничего не уходит с
+            машины.</div>
         </details>
         <details>
           <summary>Ключ не работает или квота внезапно кончилась</summary>
@@ -1826,10 +1860,12 @@ async function viewMcp() {
           дашборда в набор инструментов, которыми Claude пользуется прямо в диалоге: собирает
           данные, ищет вирусные видео, разбирает каналы и сам решает, что из найденного релевантно
           вашей теме. Дашборд (страница «Справка и FAQ» рядом) и MCP-сервер читают одну и ту же
-          базу SQLite — можно собирать данные откуда угодно, а смотреть результат в другом месте.</p>
-        <p>Всего 26 инструментов в трёх группах: <strong>сбор</strong> (тратят квоту YouTube),
-          <strong>разделы</strong> (бесплатны, читают уже собранное) и <strong>трекинг/анализ
-          каналов</strong>. Полный список — ниже.</p>
+          базу Postgres — можно собирать данные откуда угодно, а смотреть результат в другом месте.</p>
+        <p>Всего 61 инструмент. Тратят квоту YouTube только инструменты <strong>сбора</strong>;
+          всё остальное — <strong>разделы</strong>, трекинг и анализ каналов, теги, идеи, заголовки,
+          алерты, избранное, транскрипты — читает уже собранную базу бесплатно. Отдельная группа
+          <strong>LLM-функций</strong> работает, только если задан <code>LLM_PROVIDER</code>.
+          Краткий обзор групп — ниже.</p>
       </div>
     </div>
 
@@ -1842,47 +1878,60 @@ async function viewMcp() {
         <pre><code>{
   "mcpServers": {
     "niche-finder": {
-      "command": "/Users/kamola/Desktop/projects/youtube/analytic/scripts/mcp-docker.sh"
+      "command": "/path/to/youtube-niche-finder/scripts/mcp-docker.sh"
     }
   }
 }</code></pre>
-        <p>Скрипт сам подставит <code>--env-file</code> и подключит те же тома
-          (<code>niche-finder-data</code>, <code>niche-finder-models</code>), что и воркер и
-          дашборд — инструменты сразу видят всё, что уже собрано. Без скрипта, вручную:</p>
-        <pre><code>{
-  "mcpServers": {
-    "niche-finder": {
-      "command": "docker",
-      "args": ["run", "--rm", "-i",
-               "--env-file", "/Users/kamola/Desktop/projects/youtube/analytic/.env",
-               "-v", "niche-finder-data:/data",
-               "-v", "niche-finder-models:/models",
-               "niche-finder:latest", "python", "server.py"]
-    }
-  }
-}</code></pre>
+        <p>Скрипт запускает <code>server.py</code> в образе <code>niche-finder:latest</code>,
+          подключает контейнер к сети <code>niche-finder_default</code> (там живёт Postgres из
+          compose), монтирует <code>backend/</code> только для чтения и общий том
+          <code>niche-finder-models</code>. Переменные из <code>.env</code> он разбирает сам: снимает
+          кавычки вокруг значений (у <code>docker run --env-file</code> они уехали бы в ключ
+          вместе со значением) и пропускает <code>NICHE_DATABASE_URL</code> — это адрес базы с хоста,
+          внутри контейнера он не работает. Поэтому вместо ручной команды <code>docker run</code>
+          используйте именно скрипт.</p>
+        <p>Сеть появляется только после первого <code>docker compose up</code> — сначала поднимите
+          хотя бы базу: <code>docker compose up -d postgres</code>.</p>
         <p>После правки конфига полностью перезапустите Claude Desktop (не просто закрыть окно —
           выйти из приложения), иначе он не перечитает список серверов.</p>
       </div>
     </div>
 
     <div class="card">
+      ${sectionHead('Подключение по HTTPS', 'для клиентов, которым удобнее URL, а не процесс')}
+      <div class="prose">
+        <pre><code>docker compose --profile http up -d mcp-http mcp-https</code></pre>
+        <p>Сервер слушает <code>https://localhost:8765/mcp</code> (только 127.0.0.1). Конфиг клиента:</p>
+        <pre><code>{
+  "mcpServers": {
+    "niche-finder": { "url": "https://localhost:8765/mcp", "type": "http" }
+  }
+}</code></pre>
+        <p>TLS терминирует Caddy сертификатом своего локального CA (<code>tls internal</code>),
+          поэтому корневой сертификат этого CA нужно один раз добавить в доверенные в системе.</p>
+      </div>
+    </div>
+
+    <div class="card">
       ${sectionHead('Подключение без Docker', 'если запускаете backend напрямую, через venv')}
       <div class="prose">
-        <pre><code>cd ~/Desktop/projects/youtube/analytic/backend
+        <pre><code>cd /path/to/youtube-niche-finder/backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env   # впишите YOUTUBE_API_KEY</code></pre>
+        <p>Базе Postgres всё равно нужно где-то работать — проще всего поднять её из compose
+          (<code>docker compose up -d postgres</code>, на хосте она на порту 5433) и прописать в
+          <code>.env</code> <code>NICHE_DATABASE_URL=postgresql://niches:niches@localhost:5433/niches</code>.</p>
         <p>Конфиг:</p>
         <pre><code>{
   "mcpServers": {
     "niche-finder": {
-      "command": "/Users/kamola/Desktop/projects/youtube/analytic/backend/.venv/bin/python3",
-      "args": ["/Users/kamola/Desktop/projects/youtube/analytic/backend/server.py"]
+      "command": "/path/to/youtube-niche-finder/backend/.venv/bin/python3",
+      "args": ["/path/to/youtube-niche-finder/backend/server.py"]
     }
   }
 }</code></pre>
-        <p>В этом режиме история не собирается сама — фонового воркера в Docker уже нет, запускайте
+        <p>В этом режиме история не собирается сама — фоновый воркер не запущен, запускайте
           <code>python3 worker.py</code> отдельно (или по cron), иначе поля скорости (VPH за 24ч,
           ускорение, рост) останутся пустыми.</p>
       </div>
@@ -1901,15 +1950,30 @@ cp .env.example .env   # впишите YOUTUBE_API_KEY</code></pre>
           <li><code>refresh_stats</code> — перечитать счётчики видео, дописать снимок в историю.</li>
           <li><code>refresh_channels</code> — снапшот подписчиков/просмотров каналов.</li>
           <li><code>refresh_categories</code> — актуальная карта id → название категории.</li>
+          <li><code>video_comments</code> — комментарии одного видео вживую, без сохранения (1 unit).</li>
+          <li><code>backfill_embeddings</code> — эмбеддинги для видео, собранных без них (квоту не
+            тратит, считается локально).</li>
         </ul>
         <h4>Разделы</h4>
         <ul>
           <li><code>viral_videos_small_channels</code>, <code>recently_added_outlier_channels</code>,
             <code>high_future_competition</code> — вирусные видео/каналы за период.</li>
-          <li><code>most_popular_categories</code>, <code>trending_keywords</code> — топ категорий и
-            растущие фразы.</li>
-          <li><code>search_outliers</code>, <code>niche_overview</code>, <code>list_niches</code>,
-            <code>db_stats</code>, <code>data_coverage</code> — поиск по базе и диагностика покрытия.</li>
+          <li><code>most_popular_categories</code>, <code>trending_keywords</code>,
+            <code>top_tags_by_category</code> — топ категорий, растущие фразы и теги.</li>
+          <li><code>search_outliers</code>, <code>similar_channels</code>, <code>similar_videos</code> —
+            смысловой поиск по базе (pgvector).</li>
+          <li><code>niche_overview</code>, <code>niche_overview_from_channel</code>,
+            <code>niche_videos</code>, <code>niche_map</code> — насыщенность ниши, её видео и карта
+            ниш по кластерам каналов.</li>
+          <li><code>check_ideas</code> — пакетная проверка идей по базе.</li>
+          <li><code>list_niches</code>, <code>db_stats</code>, <code>data_coverage</code> — что собрано и
+            хватает ли данных на окно.</li>
+        </ul>
+        <h4>Теги</h4>
+        <ul>
+          <li><code>tag_videos</code>, <code>list_video_tags</code>, <code>tag_stats</code>,
+            <code>list_proposed_tags</code> / <code>resolve_proposed_tag</code> — своя разметка видео
+            и какой угол реально выстреливает.</li>
         </ul>
         <h4>Трекинг и анализ каналов</h4>
         <ul>
@@ -1920,8 +1984,27 @@ cp .env.example .env   # впишите YOUTUBE_API_KEY</code></pre>
           <li><code>title_changes</code>, <code>title_patterns</code>, <code>best_time_to_publish</code>,
             <code>calibrate_maturity_curve</code> — более тонкие разборы.</li>
         </ul>
-        <p>Полные описания и формулы — в <code>backend/README.md</code> и
-          <code>docs/research-tools.md</code> в папке проекта.</p>
+        <h4>Алерты, заголовки, избранное, транскрипты</h4>
+        <ul>
+          <li><code>scan_for_alerts</code>, <code>list_events</code>, <code>mark_events_seen</code> —
+            новые outlier'ы, ускорение, смена заголовка, возвращение канала после паузы.</li>
+          <li><code>score_titles</code>, <code>review_metadata</code>, <code>save_draft</code> /
+            <code>list_drafts</code> / <code>link_draft</code>, <code>draft_outcomes</code> — проверка
+            заголовков и метаданных, черновики и сверка прогноза с итогом.</li>
+          <li><code>save_item</code>, <code>list_saved_items</code>, <code>delete_saved_item</code> —
+            swipe file.</li>
+          <li><code>request_transcript</code>, <code>list_transcript_queue</code>,
+            <code>search_transcripts</code> — ручная очередь транскриптов и гибридный поиск по ним.</li>
+        </ul>
+        <h4>LLM-функции (нужен <code>LLM_PROVIDER</code>)</h4>
+        <ul>
+          <li><code>explain_outlier</code>, <code>comment_insights</code>,
+            <code>niche_comment_insights</code> — почему видео выстрелило и что просят в комментариях.</li>
+          <li><code>suggest_titles</code>, <code>enrich_channels</code>, <code>tag_new_videos</code> —
+            генерация заголовков, AI-метки каналов и авто-теги.</li>
+        </ul>
+        <p>Полные описания, стоимость по квоте и формулы — в <code>backend/README.md</code> в папке
+          проекта.</p>
       </div>
     </div>
 
@@ -1934,7 +2017,8 @@ cp .env.example .env   # впишите YOUTUBE_API_KEY</code></pre>
 # или: docker compose run --rm mcp python cli.py doctor</code></pre>
         <p>Она по порядку проверяет формат ключа, что API реально отвечает, включён ли YouTube
           Data API v3, ограничения по IP/referrer у ключа, состояние базы и покрытие окна 24 часа —
-          и печатает список того, что чинить, а не просто «ошибка».</p>
+          и печатает список того, что чинить, а не просто «ошибка». С флагом <code>--llm</code>
+          (<code>python cli.py doctor --llm</code>) она дополнительно пингует настроенный LLM.</p>
         <p>В самом Claude Desktop, если сервер подключился, можно просто попросить обычным языком —
           например: <em>«Собери канал @Inkexplainer96 и покажи его вирусные видео за 30 дней»</em>
           или <em>«Какие категории сейчас растут быстрее всего за последнюю неделю?»</em> — модель
