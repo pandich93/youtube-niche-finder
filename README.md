@@ -149,7 +149,7 @@ NICHE_DATABASE_URL=postgresql://niches:niches@localhost:5433/niches
 ```
 
 (`NICHE_DATABASE_URL` takes precedence over `POSTGRES_*` and stays
-host-only: compose doesn't pass it into the containers, and
+host-only: compose loads `.env` into the containers but blanks this one, and
 `scripts/mcp-docker.sh` and `scripts/diag.sh` strip it explicitly). Do
 **not** replace it with `POSTGRES_PORT=5433` -- compose hands that same
 variable to the containers as the in-network port, which would break

@@ -272,7 +272,7 @@ NICHE_DATABASE_URL=postgresql://niches:niches@localhost:5433/niches
 ```
 
 It wins over `POSTGRES_*` in `_dsn()` and stays host-only on purpose --
-compose does not pass it to containers, and `scripts/mcp-docker.sh` /
+compose loads `.env` into containers but blanks this one there, and `scripts/mcp-docker.sh` /
 `scripts/diag.sh` strip it before `docker run`, since inside a container
 `localhost` is the container itself. Do **not** use `POSTGRES_PORT=5433`
 instead: compose hands that same variable to the containers as the

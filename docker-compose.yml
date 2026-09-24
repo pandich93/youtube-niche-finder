@@ -2,6 +2,11 @@
 #
 #   cp .env.example .env      # then put your YOUTUBE_API_KEY in it
 #
+# .env is loaded twice: compose reads it for the ${VAR} substitutions below,
+# and worker/web/mcp/mcp-http also get it whole via env_file, so any setting
+# documented in .env.example (LLM, Ollama, notifications, worker intervals)
+# reaches the app without being listed here.
+#
 # The API key is only needed at runtime, not to build: `docker compose build`
 # works with an empty .env. The worker exits with a clear message if the key is
 # missing, and the MCP tools that spend quota say so when you call them.
@@ -27,6 +32,11 @@ x-common: &common
     args:
       PREFETCH_MODEL: "${PREFETCH_MODEL:-0}"
   image: niche-finder:latest
+  # Every service built from this block gets the whole .env (LLM_*, OLLAMA_*,
+  # NOTIFY_*, WORKER_*...). Keys under `environment` win over env_file.
+  env_file:
+    - path: .env
+      required: false
   environment:
     YOUTUBE_API_KEY: "${YOUTUBE_API_KEY:-}"
     POSTGRES_HOST: "${POSTGRES_HOST:-postgres}"
@@ -34,6 +44,10 @@ x-common: &common
     POSTGRES_DB: "${POSTGRES_DB:-niches}"
     POSTGRES_USER: "${POSTGRES_USER:-niches}"
     POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-niches}"
+    # .env may point this at localhost:5433 for running outside Docker; it beats
+    # POSTGRES_* in _dsn(), so blank it inside containers. Repeated in every
+    # service that overrides `environment` (YAML merge doesn't deep-merge).
+    NICHE_DATABASE_URL: ""
     TZ: "${TZ:-Asia/Tashkent}"
   volumes:
     - models:/models
@@ -93,6 +107,7 @@ services:
       POSTGRES_DB: "${POSTGRES_DB:-niches}"
       POSTGRES_USER: "${POSTGRES_USER:-niches}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-niches}"
+      NICHE_DATABASE_URL: ""
       TZ: "${TZ:-Asia/Tashkent}"
       # how often to re-read counters for videos published in the last WORKER_HOT_PERIOD
       WORKER_HOT_INTERVAL_MIN: "${WORKER_HOT_INTERVAL_MIN:-180}"
@@ -140,6 +155,7 @@ services:
       POSTGRES_DB: "${POSTGRES_DB:-niches}"
       POSTGRES_USER: "${POSTGRES_USER:-niches}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-niches}"
+      NICHE_DATABASE_URL: ""
       FRONTEND_DIR: /frontend
       TZ: "${TZ:-Asia/Tashkent}"
     volumes:
@@ -180,6 +196,7 @@ services:
       POSTGRES_DB: "${POSTGRES_DB:-niches}"
       POSTGRES_USER: "${POSTGRES_USER:-niches}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-niches}"
+      NICHE_DATABASE_URL: ""
       MCP_TRANSPORT: streamable-http
       MCP_HOST: 0.0.0.0
       MCP_PORT: "8765"
