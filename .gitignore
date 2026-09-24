@@ -14,3 +14,4 @@ venv/
 *.bak
 scripts/diag-output.txt
 _to_delete/
+.plans/

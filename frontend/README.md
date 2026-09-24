@@ -1,9 +1,9 @@
 # frontend
 
-[![CI](https://img.shields.io/github/actions/workflow/status/pandich93/niche-finder/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/pandich93/niche-finder/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/pandich93/youtube-niche-finder/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/pandich93/youtube-niche-finder/actions/workflows/ci.yml)
 [![No build step](https://img.shields.io/badge/build%20step-none-informational?style=flat-square)](index.html)
 [![Vanilla JS](https://img.shields.io/badge/JS-ES%20modules-F7DF1E?style=flat-square&logo=javascript&logoColor=black)](app.js)
-[![License: MIT](https://img.shields.io/github/license/pandich93/niche-finder?style=flat-square)](../LICENSE)
+[![License: MIT](https://img.shields.io/github/license/pandich93/youtube-niche-finder?style=flat-square)](../LICENSE)
 
 The dashboard for niche-finder — the same thing NexLev shows in its own
 Niche Finder, but backed by your local database and with no subscription.

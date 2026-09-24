@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
   - name: Contributing guide
-    url: https://github.com/pandich93/niche-finder/blob/main/CONTRIBUTING.md
+    url: https://github.com/pandich93/youtube-niche-finder/blob/main/CONTRIBUTING.md
     about: How to set up a dev environment, run tests, and submit a PR.
