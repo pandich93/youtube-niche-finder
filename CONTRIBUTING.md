@@ -76,8 +76,9 @@ The backend follows a DDD-ish layering — see
 tree. In short:
 
 - `domain/` — pure formulas and parsing, no I/O, no external dependencies.
-- `infrastructure/` — adapters to Postgres, the YouTube API, and the local
-  embeddings model.
+- `infrastructure/` — adapters to Postgres, the YouTube API (plus channel
+  RSS feeds), the local embeddings model, LLM providers (OpenRouter /
+  Ollama) and notifications (Telegram / webhook).
 - `application/` — use cases that orchestrate domain + infrastructure.
 - `interfaces/` — thin entry points (MCP server, HTTP API, CLI, worker).
 

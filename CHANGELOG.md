@@ -20,6 +20,117 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   network) in `backend/tests/test_ollama_provider.py`, covering the provider
   itself and `infrastructure/llm/factory.py`'s provider selection.
 
+- **Niche video export to TSV/CSV** (`backend/application/niche_export.py`,
+  stage 18) — `GET /api/niche/{slug}/export.tsv` / `export.csv` and
+  `cli.py export-niche` dump every collected video in a niche with channel
+  and video metadata, both outlier scores and accepted `video_tags` joined
+  with `;`. Zero YouTube quota — it reads only what is already in Postgres.
+  The CSV carries a UTF-8 BOM so Excel opens it correctly; the niche page
+  header gets two download links.
+
+- **Semantic keyword merging** (stage 10) — `trending_keywords(
+  keywords_mode="semantic")` merges n-gram phrases whose embeddings are
+  near-duplicates ("cold shower" / "cold showers" / "ice bath") into one
+  canonical entry, with previous-period stats realigned so momentum still
+  lines up. The default `keywords_mode="ngram"` path is unchanged (pinned by
+  a byte-identical regression test). Exposed via the MCP tool, `GET
+  /api/keywords` (`keywords_mode`, `semantic_similarity`) and a checkbox on
+  the Keywords screen. A fastembed/DB failure degrades to plain n-grams
+  instead of failing the request.
+
+- **Title scoring and generation** (`backend/domain/title_scoring.py`,
+  stage 09) — `score_titles(candidates, niche|channel_id)` gives a
+  deterministic 0-100 score (length, digits, brackets, matched
+  `title_patterns`, near-duplicates of the niche's own titles) that works with
+  `LLM_PROVIDER=none`; with an LLM it adds strengths, risks and a rewrite per
+  title, grounded in the niche's top titles by outlier. `suggest_titles(topic)`
+  generates candidates in the niche's style and scores them the same way.
+  MCP `score_titles` / `suggest_titles`, `POST /api/titles/score` /
+  `/api/titles/suggest`, and a Titles screen in the dashboard.
+
+- **Niche clusters** (`backend/domain/niche_clusters.py`,
+  `backend/application/niche_clusters.py`, stage 08) — k-means (numpy,
+  k-means++ init, no new dependency) over per-channel embedding centroids,
+  with per-cluster median outlier score, view velocity, faceless share and a
+  competition count of channels over 100k subscribers. Clusters are named by
+  the LLM, or after their top-3 tags when it is off. The worker recomputes
+  them every `WORKER_CLUSTER_INTERVAL_MIN`; MCP `niche_map`, `GET
+  /api/niche-clusters`, `POST /api/niche-clusters/recompute`, and a niche-map
+  screen sorted by opportunity.
+
+- **Manual transcripts with hybrid search** (`backend/domain/transcripts.py`,
+  `backend/application/transcripts.py`, stage 19) — transcripts are never
+  fetched: you queue a video, paste the text copied from YouTube's own
+  transcript panel, and it is parsed into timestamped segments, chunked into
+  ~160-word overlapping windows and embedded locally. `search_transcripts`
+  ranks by Reciprocal Rank Fusion of vector similarity and Postgres full-text
+  search, and every hit links to `youtu.be/<id>?t=<sec>`. MCP
+  `request_transcript`, `list_transcript_queue`, `search_transcripts`;
+  `/api/transcripts/*`; a Transcripts screen with pending/ready/error tabs.
+
+- **Alert delivery to Telegram or a webhook** (`backend/infrastructure/notify/`,
+  stage 07) — the worker sends new alerts right after scanning for them,
+  deduplicated in `alert_deliveries`. Up to `NOTIFY_MAX_PER_CYCLE` (default
+  10) go out one by one and the rest as a single summary. Configured with
+  `NOTIFY_TELEGRAM_BOT_TOKEN` + `NOTIFY_TELEGRAM_CHAT_ID` (takes priority) or
+  `NOTIFY_WEBHOOK_URL`; with neither set, delivery is skipped entirely.
+  `cli.py notify-test` sends a test message.
+
+- **"Why it went viral" explanations** (stage 05) — `explain_outlier(video_id)`
+  asks the LLM for hooks, a title pattern, a timing factor, a replicable
+  formula and a confidence score, grounded only in numbers already in the
+  database (both outlier multipliers, channel median, VPH, sibling titles,
+  channel labels). Zero YouTube quota, cached per video. MCP tool, `GET
+  /api/video/{id}/why` (204 when the LLM is off or over budget), a button on
+  the channel page and on the extension's video panel.
+
+- **pgvector similarity search** (stage 06) — the Postgres image is now
+  `pgvector/pgvector:pg16`; `videos.embedding_v vector(384)` with an HNSW
+  index backs `similar_videos`, `similar_channels` and the SEO review's
+  near-duplicate check. Everything is best-effort: on a plain Postgres image
+  the same functions fall back to the existing in-Python cosine comparison
+  with the same response shape. See "Upgrading to pgvector" in
+  `backend/README.md`; `scripts/bench_similar.py` benchmarks both paths.
+
+- **Comment insights** (stage 04) — `comment_insights(video_id)` reads up to
+  200 comments (1 quota unit) and has the LLM extract pains, requests, video
+  ideas, sentiment and language, cached in `video_insights`.
+  `niche_comment_insights(niche)` summarises the cached per-video results
+  without fetching anything. Click-only, never run by the worker: `POST
+  /api/videos/{id}/insights`, `GET /api/niches/{slug}/insights` and buttons
+  on the dashboard. Comment text (not authors) leaves the machine only for
+  this opt-in feature — see PRIVACY.md.
+
+- **Batch idea checker** (`backend/domain/idea_verdicts.py`, stage 17) —
+  `check_ideas` takes up to 50 ideas and labels each `free`, `recent`,
+  `proven` or `flopped` by matching it against the local corpus (title
+  substring always, embedding similarity on top when vectors exist;
+  `semanticSearchAvailable` says which). MCP tool, `POST /api/ideas/check`,
+  and an Ideas screen with expandable matches and CSV export.
+
+- **Niche scatter chart** (stage 15) — `niche_videos(niche)` returns a flat
+  per-video list (`GET /api/niches/{slug}/videos`, MCP tool), drawn on the
+  niche page as a hand-written SVG scatter: publish date against views on a
+  log scale, coloured by channel, with outliers and videos under 30 days
+  marked. Filterable by channel and with a hide-Shorts toggle.
+
+- **Period-window outlier baseline** (stage 14) — alongside the rolling
+  baseline, `outlierScorePeriod` compares a video with the channel's median
+  for the same format (Shorts vs long-form) published within ±15 days,
+  falling back to the whole-channel median when that window is thin.
+  `outlierScoreRolling` is an alias of the unchanged `outlierScore`; both
+  appear wherever outlier fields already did.
+
+- **Background AI labelling** (`backend/application/enrichment.py`, stage 03)
+  — with an LLM configured, the worker classifies tracked channels (faceless,
+  format, topic) and tags new videos every `WORKER_ENRICH_INTERVAL_MIN`.
+  Tags outside a niche's taxonomy land as proposals and stay out of
+  `tag_stats` until accepted. MCP `enrich_channels`, `tag_new_videos`,
+  `list_proposed_tags`, `resolve_proposed_tag` and matching `/api/enrich/*`,
+  `/api/tags/proposed*`; faceless/format/topic filters on the tracked-channel
+  list; an AI-label badge in the extension; `scripts/eval_enrichment.py` to
+  spot-check label quality on real data.
+
 - **Chrome extension** (`extension/`, Manifest V3) — vidIQ/NexLev-style
   panels on top of YouTube, served entirely from the local backend: outlier
   score against the channel's own median, view velocity and acceleration,
@@ -123,37 +234,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   shows a hit-rate bar chart per tag group and an inline tag editor on each
   video.
 
+- **Alerts** (`backend/domain/alerts.py`, `backend/application/alerts.py`) —
+  the worker scans already-collected data every `WORKER_ALERTS_INTERVAL_MIN`
+  for outliers, acceleration, title changes and channels breaking a silence,
+  deduplicated on `(kind, ref_id)` so repeated cycles stay idempotent. MCP
+  `scan_for_alerts`, `list_events`, `mark_events_seen`, `/api/events*`, and
+  an events list with an unread badge in the extension.
+- **Swipe file** (`backend/application/library.py`) — save a video or
+  channel together with a snapshot of its metrics at save time, at zero
+  quota. MCP `save_item`, `list_saved_items`, `delete_saved_item`,
+  `/api/saved`, a Saved screen, and a save button in the extension.
+- **SEO review of a draft** (`backend/domain/metadata.py`,
+  `backend/application/metadata_review.py`) — scores a draft title,
+  description and tags against your own corpus signal by signal (deliberately
+  never as one number), and keeps draft history so outcomes can be checked
+  after publishing. MCP `review_metadata`, `save_draft`, `list_drafts`,
+  `link_draft`, `draft_outcomes`.
+- **RSS watch** (`backend/infrastructure/youtube/rss.py`) — each tracked
+  channel's Atom feed is polled every `WORKER_RSS_INTERVAL_MIN` as a free
+  novelty check between the quota-costing refreshes, falling back to the
+  uploads playlist after ~15 missed uploads.
+- **`mcp-https` compose service** — Caddy with a locally trusted certificate
+  (`infra/caddy/Caddyfile`) in front of `mcp-http`, which is no longer
+  published to the host directly.
+- **Top tags by category** — `top_tags_by_category` ranks the tags winning
+  videos in each YouTube category actually use (the literal tag, not the
+  n-grams `trending_keywords(source="tags")` builds), by frequency and
+  outlier lift. MCP tool, `GET /api/tags/top-by-category`, and its own screen.
+- **Channel-anchored niche overview** — `niche_overview_from_channel` finds
+  a channel's closest peers by embedding and runs the `niche_overview`
+  saturation/opportunity analysis over them, with no pre-collected niche
+  needed. MCP tool, `GET /api/channels/{id}/niche-overview`, and a section on
+  the channel page. The outlier-channels feed gained adjustable multiplier
+  and subscriber filters, and `trending_keywords` a relative 0-100
+  `opportunityScore`.
+- **Free local niche search in the dashboard** — a Find screen (`#/find`)
+  over the existing `search_outliers` semantic search, with NexLev-style
+  RPM, video length and Shorts filters (`min_rpm`, `max_rpm`,
+  `min_video_length`, `max_video_length`, `only_shorts`, also on the MCP tool
+  and `GET /api/search`), an `estimatedRpm` badge on every result, a list of
+  active filters when nothing matches, and a search-quota indicator in the
+  sidebar.
+- **Comments and similar channels** — MCP `video_comments` and
+  `similar_channels` (per-channel embedding centroids) with matching HTTP
+  routes, a similar-channels card on the channel page and a per-video
+  comments button that spends quota only on click. `backfill_embeddings`
+  (MCP tool and `cli.py embed-videos`) embeds videos collected before
+  `embed=True`.
+
 ### Fixed
 
-- **`scripts/mcp-docker.sh` больше не полагается на `docker run --env-file`.**
-  `docker compose` читает `.env` по правилам dotenv и снимает кавычки вокруг
-  значения, а `docker run --env-file` берёт строку буквально — из-за чего
-  `YOUTUBE_API_KEY="AIza..."` попадал в контейнер вместе с кавычками. Ломался
-  при этом только MCP-сервер (его запускает этот скрипт), а воркер и веб через
-  compose работали как ни в чём не бывало: любой инструмент, ходящий в YouTube
-  Data API, падал, а `db_stats`, `search_outliers` и эмбеддинги отвечали
-  мгновенно. Скрипт теперь разбирает `.env` сам, снимает обрамляющие кавычки
-  (одинарные и двойные), терпит CRLF, комментарии, пустые строки и префикс
-  `export`, и передаёт переменные через `-e`.
-- **`scripts/diag.sh`** — диагностика связки с YouTube API одной командой:
-  `docker ps`, curl к `videoCategories`/`search` с хоста и изнутри контейнера,
-  `cli.py doctor`, логи воркера. Пишет `scripts/diag-output.txt` с
-  замаскированным ключом.
-- **Трекинг канала по хэндлу.** `track_channel(collect=False)` (MCP) и
-  `POST /api/channels/track` (HTTP) писали в watchlist сырой `@handle`/URL
-  вместо channel_id — воркер не мог опрашивать такой канал, и история молча
-  не копилась. Новая `resolve_channel_id` сначала ищет канал в локальной базе
-  по `custom_url` (0 квоты), потом через `channels.list?forHandle=`;
-  неразрешённый канал не пишется в watchlist вовсе. `cli.py fix-tracked
-  [--apply]` чистит уже накопившийся мусор в `tracked_channels`.
-- **Ниша не создавалась при `collect_channel(niche=...)`.** Видео привязывались
-  к `video_niches`, но строка в `niches` не появлялась — экран Niches и
-  `list_niches` ничего не видели. Теперь `collect_channel` делает upsert в
-  `niches`, как и `collect_niche`.
-- **Viral прятал крупных конкурентов внутри уже выбранной ниши.** Добавлен
-  `preset="niche_all"` в `viral_videos_small_channels` (MCP, HTTP, дашборд) —
-  снимает пороги по подписчикам/просмотрам/VSR и показывает все собранные
-  видео ниши.
+- **`scripts/mcp-docker.sh` no longer relies on `docker run --env-file`.**
+  `docker compose` reads `.env` by dotenv rules and strips the quotes around
+  a value, while `docker run --env-file` takes the line literally — so
+  `YOUTUBE_API_KEY="AIza..."` reached the container with its quotes. Only the
+  MCP server broke (this script is what starts it); the worker and web
+  services under compose kept working: every tool that calls the YouTube
+  Data API failed, while `db_stats`, `search_outliers` and embeddings answered
+  instantly. The script now parses `.env` itself, strips surrounding single
+  and double quotes, tolerates CRLF, comments, blank lines and the `export`
+  prefix, and passes the variables via `-e`.
+- **`scripts/diag.sh`** — one-command diagnosis of the YouTube API
+  connection: `docker ps`, curl to `videoCategories`/`search` from the host
+  and from inside the container, `cli.py doctor`, worker logs. Writes
+  `scripts/diag-output.txt` with the key masked.
+- **Tracking a channel by handle.** `track_channel(collect=False)` (MCP) and
+  `POST /api/channels/track` (HTTP) stored the raw `@handle`/URL in the
+  watchlist instead of the channel_id, so the worker could not poll the
+  channel and its history silently never accumulated. The new
+  `resolve_channel_id` looks the channel up in the local database by
+  `custom_url` first (0 quota), then via `channels.list?forHandle=`; a
+  channel that cannot be resolved is never written to the watchlist.
+  `cli.py fix-tracked [--apply]` cleans up what had already piled up in
+  `tracked_channels`.
+- **`collect_channel(niche=...)` did not create the niche.** Videos were
+  linked in `video_niches`, but no row appeared in `niches`, so the Niches
+  screen and `list_niches` saw nothing. `collect_channel` now upserts into
+  `niches`, as `collect_niche` does.
+- **Viral hid big competitors inside an already chosen niche.** Added
+  `preset="niche_all"` to `viral_videos_small_channels` (MCP, HTTP,
+  dashboard): it drops the subscriber/view/VSR thresholds and shows every
+  collected video in the niche.
+- **`collect_niche` lost new niches on a mid-search failure.** It only
+  committed at the very end, so any exception in the `search.list` loop
+  (usually `QuotaExceeded`) discarded the new niche row and leaked a pooled
+  connection. The niche and each spent search call now commit as they go,
+  the call is refused up front once the daily limit is hit, and
+  `/api/collect/niche` answers 429 with a clear message instead of a 500.
+- **Search quota tracking and worker backoff.** `search.list` calls are
+  counted against the real Pacific-Time quota day and the remaining budget
+  shows in `db_stats` / `data_coverage`; the worker now actually reads
+  `worker_quota_blocked_until`, so `WORKER_QUERIES` stops after the quota is
+  exhausted.
+- **Running outside Docker.** A host process fell back to `localhost:5432`
+  while the compose database is published on `127.0.0.1:5433`.
+  `NICHE_DATABASE_URL` in `.env` now takes priority over `POSTGRES_*`, and
+  `scripts/mcp-docker.sh` / `scripts/diag.sh` strip it before forwarding
+  `.env` into a container.
+- **Test runs left Postgres schemas behind.** `backend/tests/schema_scope.py`
+  now drops each process's throwaway `nichetest_*` schema at exit (keep it
+  with `NICHE_KEEP_TEST_SCHEMA=1`; a schema passed in via `NICHE_DB_SCHEMA` is
+  never dropped), and `make test` drops its fixed schema before running, so
+  it is repeatable.
 
 ### Changed
 

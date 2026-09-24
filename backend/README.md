@@ -5,7 +5,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-46%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-61%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -15,7 +15,10 @@ analytics. All on the free YouTube Data API v3 and local PostgreSQL.
 Classification like "faceless / AI / on topic" isn't done by the server —
 it's done by the model calling these tools: the server returns raw titles,
 descriptions, and thumbnails, and the decision gets made in the
-conversation. No separate paid LLM key is needed.
+conversation. No separate paid LLM key is needed. An optional LLM
+(OpenRouter or a local Ollama, off by default -- `LLM_PROVIDER=none`) adds
+background labeling, comment insights, "why viral" explanations, title
+generation and cluster naming; see [Configuration](#configuration).
 
 Market research and competitor formulas (`docs/research-tools.md`) are
 internal notes, not included in this repository.
@@ -49,7 +52,7 @@ corpus, not from the chart.
 ## Running with Docker (recommended)
 
 ```bash
-cd ~/Desktop/projects/youtube/analytic
+cd youtube-niche-finder
 cp .env.example .env          # fill in YOUTUBE_API_KEY — it builds without
                               # one, but there'll be nothing to collect with
 docker compose build
@@ -123,7 +126,7 @@ Claude Desktop connection — in
       "command": "/usr/local/bin/docker",
       "args": ["run", "--rm", "-i",
                "--network", "niche-finder_default",
-               "--env-file", "/path/to/niche-finder/.env",
+               "--env-file", "/path/to/youtube-niche-finder/.env",
                "-e", "POSTGRES_HOST=postgres",
                "-v", "niche-finder-models:/models",
                "niche-finder:latest", "python", "server.py"]
@@ -202,6 +205,13 @@ make cli ARGS="categories --period 7d --rank-by channels"
 make cli ARGS="keywords --period 24h"
 make cli ARGS="channels --period 24h"             # outlier channels
 make cli ARGS="seed"                              # synthetic data, just to look around
+make cli ARGS="stats"                             # what's in the database
+make cli ARGS="export-niche brain --format csv"   # niche videos to TSV (default) / CSV
+make cli ARGS="notify-test"                       # test message to Telegram / webhook
+make cli ARGS="fix-tracked"                       # dry run: watchlist entries stored as
+                                                  # @handle/URL instead of a channel id;
+                                                  # add --apply to fix them
+make cli ARGS="doctor --llm"                      # doctor + ping the LLM provider (spends budget)
 ```
 
 Useful commands (`make help` shows all of them):
@@ -233,7 +243,7 @@ download on the first semantic search.
 ## Running without Docker
 
 ```bash
-cd ~/Desktop/projects/youtube/analytic/backend
+cd youtube-niche-finder/backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env          # fill in YOUTUBE_API_KEY
@@ -283,8 +293,8 @@ Claude Desktop config:
 {
   "mcpServers": {
     "niche-finder": {
-      "command": "/path/to/niche-finder/backend/.venv/bin/python3",
-      "args": ["/path/to/niche-finder/backend/server.py"]
+      "command": "/path/to/youtube-niche-finder/backend/.venv/bin/python3",
+      "args": ["/path/to/youtube-niche-finder/backend/server.py"]
     }
   }
 }
@@ -307,6 +317,8 @@ separately (or via cron), otherwise the velocity fields stay empty.
 | `refresh_stats` | re-read counters and append a snapshot — this is where velocity numbers come from | ~1 unit / 50 videos |
 | `refresh_channels` | a snapshot of channel subscribers/views | ~1 unit / 50 channels |
 | `refresh_categories` | an up-to-date id → category-name map | 1 unit / region |
+| `video_comments` | top-level comments for one video, live, not stored | 1 unit |
+| `backfill_embeddings` | embeddings for collected videos that don't have one yet | 0 quota, local compute |
 
 ### Sections (free, run as much as you like)
 
@@ -318,7 +330,13 @@ separately (or via cron), otherwise the velocity fields stay empty.
 | `most_popular_categories` | category ranking over a period + share shift vs. the previous window; `rank_by="views"` or `"channels"` |
 | `trending_keywords` | growing phrases with momentum and outlier-lift |
 | `search_outliers` | outlier search over the database, semantically ranked by `query` |
+| `top_tags_by_category` | literal YouTube tags, as creators set them, ranked per category by frequency and breakout correlation |
+| `check_ideas` | batch-check up to 50 content ideas against the corpus: free / recent / proven / flopped |
 | `niche_overview` | niche density: channel-size distribution, viral skew, Shorts share |
+| `niche_overview_from_channel` | the same read, anchored on a channel: finds its closest peers via `similar_channels` |
+| `niche_videos` | flat per-video list for a niche: date, views, channel, rolling and period outlier, duration |
+| `niche_map` | informal niches from k-means over channel embeddings: name, audience, median outlier, velocity, faceless share, competition |
+| `similar_channels` / `similar_videos` | semantically closest channels / videos in the local corpus (pgvector when available) |
 | `list_niches`, `db_stats` | what's been collected |
 | `data_coverage` | whether there's enough data for the requested window — call this first if a section comes back empty |
 
@@ -329,6 +347,7 @@ separately (or via cron), otherwise the velocity fields stay empty.
 | `tag_videos` | attach your own tags to videos, by group; `manual`/`claude-mcp` tags are never overwritten by `llm`-sourced ones |
 | `list_video_tags` | every tag on one video, or every tagged video in a niche |
 | `tag_stats` | per-tag videos/hits/hitRate/lift within one tag_group and niche — which angle actually breaks out |
+| `list_proposed_tags` / `resolve_proposed_tag` | LLM tags outside the niche's taxonomy, waiting for a human accept/reject |
 
 ### Channel tracking and analysis
 
@@ -342,6 +361,70 @@ separately (or via cron), otherwise the velocity fields stay empty.
 | `best_time_to_publish` | 168 weekly slots by median age-adjusted outlier |
 | `title_patterns` | which title phrases correlate with breakouts |
 | `calibrate_maturity_curve` | recompute the maturity curve from your own data |
+
+### Alerts (zero quota)
+
+| Tool | What it gives you |
+|---|---|
+| `scan_for_alerts` | run the alert scan now: new outlier, acceleration, title change, a channel posting again after silence (tracked channels only) |
+| `list_events` / `mark_events_seen` | the event feed, optionally unseen-only or one kind |
+
+Delivery to Telegram or a webhook is optional -- see [Configuration](#configuration).
+
+### Titles, metadata and drafts
+
+| Tool | What it gives you |
+|---|---|
+| `score_titles` | score title candidates 0–100 against the niche/channel's own title patterns + near-duplicate check; works without an LLM |
+| `suggest_titles` | generate up to n titles in the style of the best performers, then score them — requires an LLM |
+| `review_metadata` | check a draft title/description/tags against your corpus: signals with sample sizes, never one made-up score |
+| `save_draft` / `list_drafts` / `link_draft` | keep a draft, then link it to the real video_id after publishing |
+| `draft_outcomes` | the review snapshot next to the actual outcome, for linked drafts old enough to have views |
+
+### Swipe file
+
+| Tool | What it gives you |
+|---|---|
+| `save_item` | save a video or channel, optionally with a snapshot of its metrics at the time |
+| `list_saved_items` / `delete_saved_item` | browse (by kind / folder) or remove entries |
+
+### Transcripts (manual paste, stage 19)
+
+| Tool | What it gives you |
+|---|---|
+| `request_transcript` | queue a video; the text is pasted by hand on the dashboard's transcripts screen — subtitles are never fetched automatically |
+| `list_transcript_queue` | the queue, by status `pending` / `ready` / `error` |
+| `search_transcripts` | hybrid search (vector + Postgres full-text, RRF-merged) over saved transcript chunks, with timestamped links |
+
+### LLM features (optional, need `LLM_PROVIDER`)
+
+| Tool | What it gives you | Cost |
+|---|---|---|
+| `comment_insights` | pains / requests / video ideas mined from a video's comments; cached `LLM_INSIGHTS_TTL_DAYS` | 1 unit + LLM call on a cache miss |
+| `niche_comment_insights` | merges the cached `comment_insights` of a niche's top videos into one summary | free |
+| `explain_outlier` | why a video beat its channel's baseline: hooks, title pattern, timing, formula, confidence; cached `LLM_WHY_VIRAL_TTL_DAYS` | LLM call, 0 quota |
+| `enrich_channels` | label channels: faceless, content format, topic, language, ... (the worker also does this) | LLM budget |
+| `tag_new_videos` | auto-tag videos in niches whose taxonomy has ≥ `LLM_MIN_MANUAL_TAGS` manual tags | LLM budget |
+
+---
+
+## Configuration
+
+Everything is set in the project-root `.env`; [`.env.example`](../.env.example)
+lists every variable with its default and a comment. Only `YOUTUBE_API_KEY` is
+required. The optional groups:
+
+| Group | Variables |
+|---|---|
+| Database | `POSTGRES_*`, `NICHE_DATABASE_URL` (host-only DSN, see above), `NICHE_DB_SCHEMA` (default `public`) |
+| Worker schedule | `WORKER_RSS_INTERVAL_MIN`, `WORKER_ALERTS_INTERVAL_MIN`, `WORKER_HOT_*`, `WORKER_EMBED*`, `WORKER_DAILY_INTERVAL_MIN`, `WORKER_FULL_*`, `WORKER_REGIONS`, `WORKER_TRENDING`, `WORKER_QUERIES`, `WORKER_QUERY_*`, `WORKER_ENRICH_*`, `WORKER_CLUSTER_INTERVAL_MIN` |
+| LLM (off by default) | `LLM_PROVIDER` (`none` / `openrouter` / `ollama`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_MODEL_LONG` (long-context model for comment insights), `OPENROUTER_REFERER`, `OPENROUTER_TITLE`, `OLLAMA_URL`, `OLLAMA_MODEL`, `LLM_DAILY_BUDGET_USD`, `LLM_RELABEL_DAYS`, `LLM_MIN_MANUAL_TAGS`, `LLM_INSIGHTS_TTL_DAYS` (7), `LLM_WHY_VIRAL_TTL_DAYS` (14) |
+| Niche clusters | `NICHE_CLUSTERS_MIN_CHANNELS` (10), `NICHE_CLUSTERS_COMPETITION_SUBS` (100000) |
+| Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_DASHBOARD_URL` |
+| Servers | `WEB_PORT`, `RATE_LIMIT_PER_MINUTE`, `MCP_TRANSPORT` (`stdio`), `MCP_HOST`, `MCP_PORT` |
+
+What leaves the machine when the LLM or alert delivery is on is described in
+[PRIVACY.md](../PRIVACY.md).
 
 ---
 
@@ -458,15 +541,14 @@ were kept for a while in `backend/_legacy_flat_modules/` as a reference,
 but nothing in the code referenced them, so that directory has been removed.
 
 ```
-analytic/
-├── docker-compose.yml      worker + MCP (stdio and HTTP profile)
+youtube-niche-finder/
+├── docker-compose.yml      postgres, web, worker, MCP (stdio; HTTP + HTTPS under profile http), ollama (profile llm-local)
 ├── Makefile                make up / logs / test / seed / stats / dev
-├── .env.example            key and worker settings
+├── .env.example            key, worker, LLM and alert settings
 ├── scripts/mcp-docker.sh   MCP launcher in Docker for Claude Desktop
 ├── frontend/               dashboard: index.html, styles.css, ui.js, app.js
+├── extension/              Chrome extension: overlay on YouTube pages
 ├── docs/                   internal notes, not included in this repository
-│   ├── context.md          project decision history
-│   └── research-tools.md   market research, formulas, what's reproducible
 └── backend/
     ├── Dockerfile
     ├── server.py           shim: python server.py -> interfaces.mcp.server
@@ -480,27 +562,46 @@ analytic/
     │   ├── periods.py          parsing 24h / 7d / 30d / all
     │   ├── keywords.py         n-grams, momentum, lift
     │   ├── scoring.py          backward compatibility (see metrics.py)
-    │   └── categories_catalog.py  pure YouTube categories + offline fallback
+    │   ├── categories_catalog.py  pure YouTube categories + offline fallback
+    │   ├── tag_stats.py        outlier-hit rate per curated tag
+    │   ├── alerts.py           event detection (outlier, acceleration, ...)
+    │   ├── metadata.py         metadata-review signals
+    │   ├── title_scoring.py    deterministic title scoring
+    │   ├── idea_verdicts.py    free / recent / proven / flopped for check_ideas
+    │   ├── niche_clusters.py   plain numpy k-means
+    │   └── transcripts.py      pasted transcript -> timed chunks
     │
     ├── infrastructure/     adapters to the outside world
     │   ├── postgres/           connection.py, schema.py, repositories.py
     │   │                       (Postgres schema v2, sqlite3-compatible shim)
-    │   ├── youtube/client.py   wrapper around YouTube Data API v3 + quota model
+    │   ├── youtube/            client.py (Data API v3 + quota model), rss.py (free upload feed)
     │   ├── embeddings/fastembed_provider.py  local multilingual embeddings
-    │   └── categories/repository.py          categories, cached in Postgres + YouTube API
+    │   ├── categories/repository.py          categories, cached in Postgres + YouTube API
+    │   ├── llm/                optional LLM: openrouter.py, ollama.py, null.py, factory.py
+    │   └── notify/             alert delivery: telegram.py, webhook.py, null.py, factory.py
     │
     ├── application/        use-case orchestration
     │   ├── collecting.py       everything that spends YouTube quota (was collector.py)
     │   ├── discovery.py        the three period-based sections (was trends.py)
     │   ├── channel_tracking.py channel tracking and analysis (was tracking.py)
     │   ├── search.py           outlier search and niche overview (was query.py)
+    │   ├── inspection.py       one arbitrary video/channel (the extension's overlay)
+    │   ├── tags.py             curated tags and their stats
+    │   ├── alerts.py           alert scan + delivery
+    │   ├── library.py          swipe file
+    │   ├── metadata_review.py  SEO review, drafts and outcomes
+    │   ├── llm_gateway.py      budget + caching in front of every LLM call
+    │   ├── enrichment.py       AI labeling, comment insights, why-viral
+    │   ├── niche_clusters.py   niche map: clustering + LLM naming
+    │   ├── niche_export.py     niche videos to TSV/CSV
+    │   ├── transcripts.py      manual transcript queue and hybrid search
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 46 tools
-    │   ├── http/api.py         HTTP API for the dashboard (FastAPI)
+    │   ├── mcp/server.py       MCP server, 61 tools
+    │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
     │   └── worker/main.py      background collector's entry point
     │
-    └── tests/              smoke tests and the synthetic seed
+    └── tests/              one file per feature, smoke tests and the synthetic seed
 ```

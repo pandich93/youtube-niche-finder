@@ -10,7 +10,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](backend/interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](docker-compose.yml)
 [![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-50%20tools-8A2BE2?style=flat-square)](backend/interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-61%20tools-8A2BE2?style=flat-square)](backend/interfaces/mcp/server.py)
 [![Last commit](https://img.shields.io/github/last-commit/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/commits/main)
 [![Open issues](https://img.shields.io/github/issues/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/issues)
 [![Open PRs](https://img.shields.io/github/issues-pr/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/pulls)
@@ -26,7 +26,7 @@ topic" is done by the model calling these tools, not the server.
 
 The project has three parts that together make up the "product":
 
-- **`backend/`** — Python: an MCP server (46 tools for Claude), an HTTP API
+- **`backend/`** — Python: an MCP server (61 tools for Claude), an HTTP API
   for the dashboard, and a background worker that logs view/subscriber
   history on a schedule (without this, "growth rate over 24 hours" doesn't
   exist — the YouTube API only ever returns "right now").
@@ -50,9 +50,19 @@ database.
 - Track specific channels: view/subscriber growth rate, snapshot history
 - The exact same calculation in Claude Desktop (via MCP) and on the web
   dashboard — one shared codebase, not two implementations
+- Niche clusters (k-means over channel embeddings) and a niche map;
+  semantic similarity of channels and videos via pgvector
+- Idea checker, title scoring and title suggestions, SEO review of a
+  draft's title/description/tags, drafts linked to published videos
+- "Why viral" explanations for outlier videos and comment insights per
+  video or niche
+- Transcripts: a queue, manual paste, hybrid (keyword + semantic) search
+- Alerts (new outliers, view acceleration, title changes, a channel
+  breaking its silence), delivered to Telegram or a webhook; a swipe file for saved videos and channels
+- Export a niche's videos to TSV/CSV
 - Only the free YouTube Data API v3 and local PostgreSQL — no paid
-  subscriptions and no LLM key required. An LLM (via OpenRouter) is
-  opt-in and off by default — see [Privacy](#privacy)
+  subscriptions and no LLM key required. An LLM (via OpenRouter or a local
+  Ollama) is opt-in and off by default — see [Privacy](#privacy)
 
 ## Table of Contents
 
@@ -128,27 +138,29 @@ make dev                      # HTTP dashboard on http://localhost:8080
 make local-run                # or: MCP server on the host, for Claude Desktop
 ```
 
-Запуск на хосте (`make dev` / `make local-run`) ходит в ту же базу, но по
-другому адресу: контейнер Postgres опубликован на `127.0.0.1:5433`, а дефолт в
-коде -- `localhost:5432`, поэтому без подсказки процесс падает с
-`psycopg2.OperationalError: Connection refused`. Добавьте в `.env` строку
+Running on the host (`make dev` / `make local-run`) uses the same database,
+but at a different address: the Postgres container is published on
+`127.0.0.1:5433`, while the code defaults to `localhost:5432`, so without a
+hint the process fails with `psycopg2.OperationalError: Connection refused`.
+Add this line to `.env`:
 
 ```bash
 NICHE_DATABASE_URL=postgresql://niches:niches@localhost:5433/niches
 ```
 
-(`NICHE_DATABASE_URL` важнее `POSTGRES_*` и остаётся хостовым: в контейнеры
-compose его не передаёт, а `scripts/mcp-docker.sh` и `scripts/diag.sh`
-вырезают его явно). **Не** подменяйте это на `POSTGRES_PORT=5433` -- ту же
-переменную compose отдаёт контейнерам как внутрисетевой порт и сломает
+(`NICHE_DATABASE_URL` takes precedence over `POSTGRES_*` and stays
+host-only: compose doesn't pass it into the containers, and
+`scripts/mcp-docker.sh` and `scripts/diag.sh` strip it explicitly). Do
+**not** replace it with `POSTGRES_PORT=5433` -- compose hands that same
+variable to the containers as the in-network port, which would break
 `web`/`worker`/`mcp`.
 
-`make dev` слушает тот же `:8080`, что и контейнер `web`. Держать оба сразу
-нельзя: хостовый uvicorn перехватывает порт, и проброс у контейнера тихо
-отваливается (`docker ps` покажет `8080/tcp` без маппинга). Либо
-`docker compose stop web` перед `make dev`, либо правьте код прямо в
-контейнере -- `./backend` смонтирован внутрь, и `docker compose restart web`
-подхватывает изменения без пересборки.
+`make dev` listens on the same `:8080` as the `web` container. You can't run
+both at once: the host uvicorn grabs the port and the container's port
+mapping silently drops (`docker ps` shows `8080/tcp` with no mapping). Either
+run `docker compose stop web` before `make dev`, or edit the code inside the
+container -- `./backend` is mounted in, and `docker compose restart web`
+picks up changes without a rebuild.
 
 `make help` prints every available command with a one-line description.
 
@@ -159,7 +171,7 @@ compose его не передаёт, а `scripts/mcp-docker.sh` и `scripts/dia
 | [`backend/`](backend/README.md) | MCP server, HTTP API, worker — all the logic and data storage |
 | [`frontend/`](frontend/README.md) | dashboard: index.html, styles.css, ui.js, app.js |
 | [`extension/`](extension/README.md) | Chrome extension: panels and badges on top of YouTube |
-| `docker-compose.yml` | postgres + worker + web + mcp/mcp-http services |
+| `docker-compose.yml` | postgres + worker + web + mcp/mcp-http/mcp-https services, plus an optional `ollama` service (profile `llm-local`) |
 | `Makefile` | commands to run everything, via Docker or straight on the host |
 | `.env.example` | YouTube key and worker settings |
 | `scripts/mcp-docker.sh` | MCP server launcher in Docker for Claude Desktop |
@@ -198,7 +210,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of notable changes, in
 
 ## Read next
 
-- [backend/README.md](backend/README.md) — YouTube API quotas, all 46 tools
+- [backend/README.md](backend/README.md) — YouTube API quotas, all 61 tools
   with descriptions, how to read `period_by`, running with and without
   Docker, the DDD layer structure.
 - [frontend/README.md](frontend/README.md) — dashboard screens, where the
