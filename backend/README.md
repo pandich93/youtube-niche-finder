@@ -61,10 +61,6 @@ open http://localhost:8080        # or: make open
 docker compose logs -f worker
 ```
 
-Upgrading from the old SQLite version and want to keep your collected data?
-`python3 backend/migrate_sqlite_to_postgres.py path/to/old/niches.db` (once,
-after `docker compose up -d postgres`; safe to run again).
-
 ### Upgrading to pgvector (stage 06)
 
 The `postgres` image changed from `postgres:16-alpine` to
@@ -556,7 +552,6 @@ youtube-niche-finder/
     ├── cli.py              shim: python cli.py ...  -> interfaces.cli.cli
     ├── api.py              shim: uvicorn api:app    -> interfaces.http.api
     ├── worker.py           shim: python worker.py   -> application.worker_cycle
-    ├── migrate_sqlite_to_postgres.py   one-off migration from the old niches.db
     │
     ├── domain/             pure rules, no external dependencies
     │   ├── metrics.py          every formula (outlier, VPH, revenue, ...)

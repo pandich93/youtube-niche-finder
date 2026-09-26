@@ -366,6 +366,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   pytest process per file) instead of three hand-picked files; test scripts
   run directly exit non-zero on failure.
 
+### Removed
+
+- Removed `backend/migrate_sqlite_to_postgres.py` (one-off migration from the
+  SQLite prototype).
+
 ## [0.1.0] - 2026-09-06
 
 Initial public release.
