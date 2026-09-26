@@ -252,6 +252,10 @@ python3 tests/test_smoke.py   # should be 17/17 passed -- needs a reachable
                               # your own; see infrastructure/postgres/connection.py)
 ```
 
+`requirements.txt` pins exact versions of every transitive dependency; the version ranges live in
+`requirements.in` (edit them there). Re-pin to the newest allowed versions with
+`uv pip compile requirements.in --python-version 3.12 --universal -o requirements.txt --upgrade`.
+
 Each test process works in its own `nichetest_<random>` schema and drops it on
 exit (`tests/schema_scope.py`), so repeated runs leave nothing behind. Set
 `NICHE_KEEP_TEST_SCHEMA=1` to keep it and inspect the data after a failure; a
