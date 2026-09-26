@@ -253,13 +253,13 @@ python3 tests/test_smoke.py   # should be 17/17 passed -- needs a reachable
 ```
 
 Each test process works in its own `nichetest_<random>` schema and drops it on
-exit (`tests/schema_scope.py`), so repeated runs leave nothing behind. Set
-`NICHE_KEEP_TEST_SCHEMA=1` to keep it and inspect the data after a failure; a
-schema you pass in yourself via `NICHE_DB_SCHEMA` is never dropped. Note that
-`pytest tests/test_smoke.py tests/test_mcp_tools.py` puts both modules in one
-process and therefore one schema, where test_smoke's demo data breaks
-test_mcp_tools' cosine-similarity ranking expectation -- run them the way CI
-does, one process per file (see .github/workflows/ci.yml).
+exit (`tests/schema_scope.py`), so repeated runs leave nothing behind. Under
+pytest every test file gets a fresh schema of its own on top of that
+(`nichetest_<random>_m<N>`, dropped after the file -- see `tests/conftest.py`),
+so `pytest tests/` in one process sees the same data per file as running the
+files one by one. Set `NICHE_KEEP_TEST_SCHEMA=1` to keep the schemas and
+inspect the data after a failure; a schema you pass in yourself via
+`NICHE_DB_SCHEMA` is never dropped (and is then shared by all files).
 
 "Reachable Postgres" means a reachable *host* address, and that is not the
 default one: the compose database is published on `127.0.0.1:5433`

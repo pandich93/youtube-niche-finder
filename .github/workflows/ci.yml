@@ -37,25 +37,22 @@ jobs:
       - name: Install backend dependencies
         run: pip install -r backend/requirements.txt coverage pytest
 
-      # One process per file: several tests swap infrastructure.postgres for a
-      # sqlite double in sys.modules, so a single `pytest tests/` run would
-      # leak that double into the Postgres-backed files. The glob picks up any
-      # new test_*.py without touching this workflow; the loop runs every file
-      # and fails the step at the end if any of them failed.
+      # One pytest process for the whole suite: tests/conftest.py gives every
+      # file the world it would see running alone -- Postgres-backed files get
+      # a fresh schema each (tests/schema_scope.py), and the sqlite-double
+      # files keep their doubles in a private module world instead of
+      # sys.modules (tests/module_doubles.py). pytest picks up any new
+      # test_*.py by itself. The coverage report is printed either way; a test
+      # failure fails the step (and skips the badge data) after it.
       - name: Run tests with coverage
         working-directory: backend
         run: |
-          coverage erase
-          failed=""
-          for f in tests/test_*.py; do
-            echo "::group::$f"
-            coverage run -a --source=. --omit="tests/*" -m pytest -q -p no:cacheprovider "$f" || failed="$failed $f"
-            echo "::endgroup::"
-          done
+          status=0
+          coverage run --source=. --omit="tests/*" -m pytest -q -p no:cacheprovider tests/ || status=$?
           coverage report -m
-          if [ -n "$failed" ]; then
-            echo "::error::failed:$failed"
-            exit 1
+          if [ "$status" -ne 0 ]; then
+            echo "::error::pytest exited with status $status"
+            exit "$status"
           fi
           coverage json -o /tmp/coverage_full.json
           python3 -c "

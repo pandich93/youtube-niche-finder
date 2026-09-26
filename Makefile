@@ -92,17 +92,13 @@ local-install:  ## venv + deps, without Docker (needs Python 3.10+, auto-detecte
 # Тесты намеренно не читают .env (им не нужны ни ключ, ни сеть),
 # поэтому NICHE_DATABASE_URL достаём из .env здесь -- иначе хостовый прогон
 # уходит на localhost:5432 и падает с Connection refused.
-# Как в CI: каждый tests/test_*.py отдельным процессом pytest (часть тестов
-# подменяет infrastructure.postgres sqlite-двойником в sys.modules), в конце
-# ненулевой код, если упал хоть один файл.
-local-test:     ## run all backend tests on the host, one pytest process per file
+# Как в CI: весь tests/ одним процессом pytest. Изоляцию файлов друг от друга
+# даёт tests/conftest.py -- у Postgres-тестов своя свежая схема на файл, а
+# sqlite-двойники живут в отдельном мире модулей, не в sys.modules
+# (tests/module_doubles.py). Код выхода -- как у pytest.
+local-test:     ## run all backend tests on the host in one pytest process
 	@cd backend && export NICHE_DATABASE_URL="$${NICHE_DATABASE_URL:-$$(grep -E '^NICHE_DATABASE_URL=' ../.env 2>/dev/null | sed -E 's/^[^=]+=//; s/^"//; s/"$$//' | tr -d '\r')}"; \
-	  failed=""; \
-	  for f in tests/test_*.py; do \
-	    ./.venv/bin/python -m pytest -q -p no:cacheprovider "$$f" || failed="$$failed $$f"; \
-	  done; \
-	  if [ -n "$$failed" ]; then echo "FAILED:$$failed"; exit 1; fi; \
-	  echo "all test files passed"
+	  ./.venv/bin/python -m pytest -q -p no:cacheprovider tests/
 
 local-run:      ## run the MCP server on the host
 	cd backend && ./.venv/bin/python server.py
