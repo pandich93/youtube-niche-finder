@@ -15,6 +15,8 @@ from datetime import datetime, timedelta, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
+from module_doubles import ModuleDoubles  # noqa: E402
+
 NOW = datetime.now(timezone.utc)
 iso = lambda dt: dt.isoformat()
 
@@ -73,7 +75,6 @@ fake_db = types.ModuleType("infrastructure.postgres")
 fake_db.get_conn = lambda: _Conn()
 fake_db.now_iso = lambda: iso(datetime.now(timezone.utc))
 fake_db.pgvector_available = lambda: False  # stage 06: this sqlite double has no vector column
-sys.modules["infrastructure.postgres"] = fake_db
 
 fake_emb = types.ModuleType("infrastructure.embeddings.fastembed_provider")
 fake_emb.embed = lambda text: [1.0, 0.0, 0.0]
@@ -81,10 +82,13 @@ fake_emb.from_blob = lambda blob: [1.0, 0.0, 0.0]
 fake_emb.cosine = lambda a, b: 1.0
 fake_emb_pkg = types.ModuleType("infrastructure.embeddings")
 fake_emb_pkg.fastembed_provider = fake_emb
-sys.modules["infrastructure.embeddings"] = fake_emb_pkg
-sys.modules["infrastructure.embeddings.fastembed_provider"] = fake_emb
 
-import application.metadata_review as MR  # noqa: E402
+DOUBLES = ModuleDoubles({
+    "infrastructure.postgres": fake_db,
+    "infrastructure.embeddings": fake_emb_pkg,
+    "infrastructure.embeddings.fastembed_provider": fake_emb,
+})
+MR, = DOUBLES.load("application.metadata_review")
 
 
 def seed_channel(ch=CH, subs=50_000, videos=80, views=40_000_000):
@@ -237,4 +241,6 @@ def _run_all():
 
 
 if __name__ == "__main__":
-    sys.exit(0 if _run_all() else 1)
+    with DOUBLES.active():
+        ok = _run_all()
+    sys.exit(0 if ok else 1)
