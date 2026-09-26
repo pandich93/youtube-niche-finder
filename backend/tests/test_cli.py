@@ -116,12 +116,20 @@ def test_command_calls_the_application_and_prints_json(run, stub, argv, module, 
     assert err == ""
 
 
-def test_collect_embed_flag_cannot_be_switched_off(run, stub):
-    # --embed is store_true with default=True, so embeddings are always on
-    # for `collect`; pinned here so a fix is a deliberate, visible change
-    s = stub(collecting, "collect_niche")
-    run("collect", "q")
-    assert s.calls[0][1]["embed"] is True
+@pytest.mark.parametrize("command,func,flags,expected", [
+    ("collect", "collect_niche", [], True),               # on by default
+    ("collect", "collect_niche", ["--no-embed"], False),
+    ("collect", "collect_niche", ["--embed"], True),
+    ("collect-channel", "collect_channel", [], False),     # off by default
+    ("collect-channel", "collect_channel", ["--embed"], True),
+    ("collect-channel", "collect_channel", ["--no-embed"], False),
+])
+def test_embed_flag_can_be_switched_both_ways(run, stub, command, func, flags,
+                                              expected):
+    s = stub(collecting, func)
+    code, _, _ = run(command, "q", *flags)
+    assert code == 0
+    assert s.calls[0][1]["embed"] is expected
 
 
 def test_fix_tracked_without_a_key_passes_none(run, stub):

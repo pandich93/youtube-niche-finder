@@ -3,7 +3,7 @@
 
     python cli.py doctor                      проверка ключа, сети, базы
     python cli.py collect-channel @handle     собрать канал (дёшево)
-    python cli.py collect "ai automation" --period 24h
+    python cli.py collect "ai automation" --period 24h   [--no-embed]
     python cli.py refresh                     обновить счётчики (история)
     python cli.py embed-videos                досчитать эмбеддинги (0 quota)
     python cli.py fix-tracked [--apply]       почистить watchlist от handle/url вместо id
@@ -308,7 +308,8 @@ def main():
     p.add_argument("channel")
     p.add_argument("--max-videos", type=int, default=100)
     p.add_argument("--niche")
-    p.add_argument("--embed", action="store_true")
+    p.add_argument("--embed", action=argparse.BooleanOptionalAction, default=False,
+                   help="считать эмбеддинги сразу (по умолчанию нет)")
     p.set_defaults(fn=cmd_collect_channel)
 
     p = sub.add_parser("collect", help="собрать нишу поиском (1 из 100 поисков в сутки)")
@@ -318,7 +319,8 @@ def main():
     p.add_argument("--period")
     p.add_argument("--region")
     p.add_argument("--pages", type=int, default=1)
-    p.add_argument("--embed", action="store_true", default=True)
+    p.add_argument("--embed", action=argparse.BooleanOptionalAction, default=True,
+                   help="считать эмбеддинги сразу (по умолчанию да)")
     p.set_defaults(fn=cmd_collect)
 
     p = sub.add_parser("refresh", help="обновить счётчики и дописать историю")
