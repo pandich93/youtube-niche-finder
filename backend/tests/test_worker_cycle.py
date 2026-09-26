@@ -14,17 +14,17 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import schema_scope  # noqa: F401,E402
 
-import pytest                                        # noqa: E402
+import pytest  # noqa: E402
 
-import infrastructure.postgres as db                 # noqa: E402
-import infrastructure.youtube.client as yt            # noqa: E402
-from application import worker_cycle as worker        # noqa: E402
-from application import collecting as collector       # noqa: E402
-from application import alerts as alerts_mod           # noqa: E402
-from application import enrichment as enrich_mod       # noqa: E402
+import infrastructure.postgres as db  # noqa: E402
+import infrastructure.youtube.client as yt  # noqa: E402
+from application import alerts as alerts_mod  # noqa: E402
+from application import collecting as collector  # noqa: E402
+from application import enrichment as enrich_mod  # noqa: E402
+from application import maturity_curve as curve_mod  # noqa: E402
 from application import niche_clusters as clusters_mod  # noqa: E402
-from application import maturity_curve as curve_mod   # noqa: E402
-from domain import periods as P                        # noqa: E402
+from application import worker_cycle as worker  # noqa: E402
+from domain import periods as P  # noqa: E402
 
 SCHEDULE_KEYS = ("rss", "hot", "alerts", "embed", "enrich", "daily", "clusters",
                  "calibrate")

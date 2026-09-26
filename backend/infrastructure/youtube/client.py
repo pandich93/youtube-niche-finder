@@ -21,6 +21,7 @@ only. General-interest trends must be computed from your own corpus.
 import os
 import re
 import time
+
 import requests
 
 from domain import periods as P

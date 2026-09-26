@@ -10,10 +10,10 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import schema_scope  # noqa: F401,E402
 
-import infrastructure.postgres as db                # noqa: E402
-from application import alerts                        # noqa: E402
+import infrastructure.postgres as db  # noqa: E402
+from application import alerts  # noqa: E402
 from infrastructure.notify import factory as notify_factory  # noqa: E402
-from infrastructure.notify.null import NullNotifier    # noqa: E402
+from infrastructure.notify.null import NullNotifier  # noqa: E402
 
 
 def setup_module(_=None):

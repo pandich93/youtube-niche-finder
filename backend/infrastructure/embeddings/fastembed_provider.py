@@ -1,6 +1,7 @@
 """Local, free multilingual embeddings for semantic niche search (no external API)."""
-import numpy as np
 from functools import lru_cache
+
+import numpy as np
 from fastembed import TextEmbedding
 
 MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"

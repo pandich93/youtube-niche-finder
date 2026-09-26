@@ -11,8 +11,8 @@ import json
 
 import infrastructure.postgres as db
 from application import discovery as trends
-from domain import metadata as MD
 from domain import keywords as K
+from domain import metadata as MD
 from domain import periods as P
 
 OUTLIER_THRESHOLD_DEFAULT = 3.0

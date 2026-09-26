@@ -9,8 +9,8 @@ import json
 import os
 
 import infrastructure.postgres as db
-from application import discovery as trends
 from application import channel_tracking as T
+from application import discovery as trends
 from domain import alerts as A
 from infrastructure.notify import factory as notify_factory
 from infrastructure.notify.null import NullNotifier

@@ -12,8 +12,8 @@ sys.path.insert(0, os.path.dirname(HERE))
 import httpx  # noqa: E402
 
 import infrastructure.llm.openrouter as openrouter_mod  # noqa: E402
-from infrastructure.llm.openrouter import FREE_MODEL_FALLBACKS, OpenRouterProvider  # noqa: E402
 from infrastructure.llm.null import NullProvider  # noqa: E402
+from infrastructure.llm.openrouter import FREE_MODEL_FALLBACKS, OpenRouterProvider  # noqa: E402
 
 SCHEMA = {
     "type": "object",

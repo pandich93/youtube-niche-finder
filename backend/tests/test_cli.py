@@ -15,19 +15,21 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import schema_scope  # noqa: F401,E402
 
-import pytest                                          # noqa: E402
+import pytest  # noqa: E402
 
-import interfaces.cli.cli as cli                        # noqa: E402
-import infrastructure.youtube.client as yt              # noqa: E402
-from application import collecting                      # noqa: E402
-from application import discovery                       # noqa: E402
-from application import channel_tracking                # noqa: E402
-from application import search                          # noqa: E402
-from application import niche_export                    # noqa: E402
-from application import llm_gateway                     # noqa: E402
-from infrastructure.llm import factory as llm_factory   # noqa: E402
+import infrastructure.youtube.client as yt  # noqa: E402
+import interfaces.cli.cli as cli  # noqa: E402
+from application import (  # noqa: E402
+    channel_tracking,
+    collecting,
+    discovery,
+    llm_gateway,
+    niche_export,
+    search,
+)
+from infrastructure.llm import factory as llm_factory  # noqa: E402
 from infrastructure.notify import factory as notify_factory  # noqa: E402
-from infrastructure.notify.null import NullNotifier      # noqa: E402
+from infrastructure.notify.null import NullNotifier  # noqa: E402
 
 GOOD_KEY = "AIza" + "x" * 35
 

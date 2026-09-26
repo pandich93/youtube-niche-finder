@@ -21,9 +21,9 @@ from datetime import datetime, timezone
 import infrastructure.postgres as db
 from application import collecting
 from application import maturity_curve as MC
+from domain import keywords as K
 from domain import metrics as M
 from domain import periods as P
-from domain import keywords as K
 from infrastructure.categories import repository as C
 
 

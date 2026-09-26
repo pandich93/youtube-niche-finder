@@ -7,7 +7,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-import numpy as np              # noqa: E402
+import numpy as np  # noqa: E402
+
 import domain.niche_clusters as NC  # noqa: E402
 
 

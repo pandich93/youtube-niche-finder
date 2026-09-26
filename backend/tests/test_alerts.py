@@ -5,8 +5,8 @@ runs unmodified against it), no YouTube key, no network.
 Run: python3 tests/test_alerts.py (or pytest tests/test_alerts.py)
 """
 import os
-import sys
 import sqlite3
+import sys
 import types
 from datetime import datetime, timedelta, timezone
 

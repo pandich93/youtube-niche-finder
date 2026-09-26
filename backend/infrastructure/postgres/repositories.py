@@ -75,7 +75,7 @@ def sync_embedding_v(conn, video_id: str, embedding_blob: bytes):
     from infrastructure.postgres.schema import pgvector_available
     if not pgvector_available():
         return
-    from infrastructure.embeddings.fastembed_provider import to_pgvector_literal, from_blob
+    from infrastructure.embeddings.fastembed_provider import from_blob, to_pgvector_literal
     literal = to_pgvector_literal(from_blob(embedding_blob))
     conn.execute("UPDATE videos SET embedding_v = ?::vector WHERE video_id = ?",
                 (literal, video_id))

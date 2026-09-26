@@ -16,10 +16,10 @@ sys.path.insert(0, os.path.dirname(HERE))
 # удаление на atexit -- импорт нужен именно ради этого побочного эффекта.
 import schema_scope  # noqa: F401,E402
 
-import infrastructure.postgres as db             # noqa: E402
-from application import worker_cycle as worker   # noqa: E402
+import infrastructure.postgres as db  # noqa: E402
+from application import alerts as alerts_mod  # noqa: E402
 from application import collecting as collector  # noqa: E402
-from application import alerts as alerts_mod      # noqa: E402
+from application import worker_cycle as worker  # noqa: E402
 
 
 def setup_module(_=None):

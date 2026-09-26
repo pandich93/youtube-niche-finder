@@ -128,8 +128,8 @@ def test_conftest_resets_process_wide_caches_between_files():
     """Separate processes used to reset these for free; one process must reset
     them after each file, or a maturity curve read from one file's schema is
     still in force (for up to CACHE_TTL_SEC) in the next file."""
-    import conftest
     import application.maturity_curve as MC
+    import conftest
     from domain import metrics as M
 
     try:

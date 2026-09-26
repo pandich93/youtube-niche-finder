@@ -5,8 +5,8 @@ unmodified), no YouTube key.
 Run: python3 tests/test_top_tags.py (or pytest tests/test_top_tags.py)
 """
 import os
-import sys
 import sqlite3
+import sys
 import types
 from datetime import datetime, timedelta, timezone
 

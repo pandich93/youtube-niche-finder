@@ -15,20 +15,21 @@ niche") are left to whichever Claude session calls these tools: the server
 returns raw titles, descriptions and thumbnails and never calls a paid LLM API.
 """
 import os
+
 from dotenv import load_dotenv
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ToolAnnotations
 
 import infrastructure.postgres as db
-from infrastructure.categories import repository as C
-from application import collecting as collector
-from application import search as q
-from application import discovery as trends
 from application import channel_tracking as T
-from application import tags as tags_uc
+from application import collecting as collector
+from application import discovery as trends
 from application import enrichment as enrich_uc
-from application import transcripts as transcripts_uc
 from application import niche_clusters as clusters_uc
+from application import search as q
+from application import tags as tags_uc
+from application import transcripts as transcripts_uc
+from infrastructure.categories import repository as C
 
 load_dotenv()
 API_KEY = os.environ.get("YOUTUBE_API_KEY")

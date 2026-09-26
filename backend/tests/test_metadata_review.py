@@ -5,10 +5,9 @@ fake embeddings provider (no fastembed/torch download in CI), no YouTube key.
 
 Run: python3 tests/test_metadata_review.py (or pytest tests/test_metadata_review.py)
 """
-import json
 import os
-import sys
 import sqlite3
+import sys
 import types
 from datetime import datetime, timedelta, timezone
 

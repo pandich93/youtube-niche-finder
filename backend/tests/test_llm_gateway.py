@@ -13,11 +13,11 @@ sys.path.insert(0, os.path.dirname(HERE))
 # удаление на atexit -- импорт нужен именно ради этого побочного эффекта.
 import schema_scope  # noqa: F401,E402
 
-import infrastructure.postgres as db               # noqa: E402
-from application import llm_gateway                # noqa: E402
-from application import search as query             # noqa: E402
-from infrastructure.llm import factory               # noqa: E402
-from infrastructure.llm.base import LLMResult        # noqa: E402
+import infrastructure.postgres as db  # noqa: E402
+from application import llm_gateway  # noqa: E402
+from application import search as query  # noqa: E402
+from infrastructure.llm import factory  # noqa: E402
+from infrastructure.llm.base import LLMResult  # noqa: E402
 
 SCHEMA = {"type": "object", "properties": {"ok": {"type": "boolean"}}, "required": ["ok"]}
 

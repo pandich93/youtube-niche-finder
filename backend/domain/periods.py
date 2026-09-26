@@ -1,7 +1,7 @@
 """Time-window parsing shared by every 'за последние 24 часа / 7 дней' feature."""
+import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
-import re
 
 _PACIFIC = ZoneInfo("America/Los_Angeles")
 
