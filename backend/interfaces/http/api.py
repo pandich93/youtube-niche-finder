@@ -175,7 +175,7 @@ async def local_only_guard(request, call_next):
     if _host_name(host) not in ALLOWED_HOSTS:
         return JSONResponse(
             status_code=400,
-            content={"detail": f"Недопустимый заголовок Host: {(host or "")[:100]!r}. API отвечает "
+            content={"detail": f"Недопустимый заголовок Host: {(host or '')[:100]!r}. API отвечает "
                                f"только на 127.0.0.1, localhost и [::1]; другое имя "
                                f"добавьте в NF_ALLOWED_HOSTS в .env."})
     if (request.method in _UNSAFE_METHODS
