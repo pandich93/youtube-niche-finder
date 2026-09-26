@@ -565,7 +565,7 @@ youtube-niche-finder/
 ├── Makefile                make up / logs / test / seed / stats / dev
 ├── .env.example            key, worker, LLM and alert settings
 ├── scripts/mcp-docker.sh   MCP launcher in Docker for Claude Desktop
-├── frontend/               dashboard: index.html, styles.css, ui.js, app.js
+├── frontend/               dashboard: index.html, styles.css, ui.js, app.js, router.js, shared.js, screens/
 ├── extension/              Chrome extension: overlay on YouTube pages
 ├── docs/                   internal notes, not included in this repository
 └── backend/

@@ -12,12 +12,14 @@
     make frontend-test
 """
 import os
+import re
 import socket
 import subprocess
 import sys
 import time
 import urllib.request
 import uuid
+import warnings
 from pathlib import Path
 
 import pytest
@@ -60,7 +62,14 @@ def _drop_schema(env, schema):
             f"c.execute('DROP SCHEMA IF EXISTS \"{schema}\" CASCADE')\n"
             "c.commit()\n"
             "c.close()\n")
-    subprocess.run([sys.executable, "-c", code], cwd=BACKEND, env=env, check=False)
+    result = subprocess.run([sys.executable, "-c", code], cwd=BACKEND, env=env,
+                             check=False, capture_output=True, text=True)
+    if result.returncode != 0:
+        # Не роняем иначе зелёный прогон -- но не молчим: без этого предупреждения
+        # схема nf_smoke_* тихо остаётся в базе.
+        warnings.warn(
+            f"failed to drop schema {schema!r} (exit {result.returncode}):\n{result.stderr}",
+            stacklevel=2)
 
 
 def _wait_healthy(url, proc, log_path, timeout=90):
@@ -82,23 +91,25 @@ def _wait_healthy(url, proc, log_path, timeout=90):
 def base_url(tmp_path_factory):
     schema = f"nf_smoke_{uuid.uuid4().hex[:8]}"
     env = _env(schema)
-    subprocess.run([sys.executable, "tests/seed_demo.py"], cwd=BACKEND, env=env, check=True)
-    port = _free_port()
-    log_path = tmp_path_factory.mktemp("uvicorn") / "server.log"
-    with open(log_path, "w") as log:
-        proc = subprocess.Popen(
-            [sys.executable, "-m", "uvicorn", "api:app", "--host", "127.0.0.1", "--port", str(port)],
-            cwd=BACKEND, env=env, stdout=log, stderr=subprocess.STDOUT)
-    url = f"http://127.0.0.1:{port}"
+    proc = None
     try:
+        subprocess.run([sys.executable, "tests/seed_demo.py"], cwd=BACKEND, env=env, check=True)
+        port = _free_port()
+        log_path = tmp_path_factory.mktemp("uvicorn") / "server.log"
+        with open(log_path, "w") as log:
+            proc = subprocess.Popen(
+                [sys.executable, "-m", "uvicorn", "api:app", "--host", "127.0.0.1", "--port", str(port)],
+                cwd=BACKEND, env=env, stdout=log, stderr=subprocess.STDOUT)
+        url = f"http://127.0.0.1:{port}"
         _wait_healthy(url, proc, log_path)
         yield url
     finally:
-        proc.terminate()
-        try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        if proc is not None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
         _drop_schema(env, schema)
 
 
@@ -115,6 +126,26 @@ def _is_benign_console(text):
     # 4xx для экранов -- штатно (например, 428 без ключа YouTube), а 5xx
     # ловится отдельно по ответам.
     return text.startswith("Failed to load resource")
+
+
+def _router_js_route_keys():
+    """Ключи объекта ROUTES из frontend/router.js (без глубоких ссылок)."""
+    text = (ROOT / "frontend" / "router.js").read_text(encoding="utf-8")
+    block = re.search(r"const\s+ROUTES\s*=\s*\{(.*?)\n\};", text, re.S)
+    assert block, "router.js: не нашли блок `const ROUTES = { ... };`"
+    return re.findall(r"^\s*([A-Za-z_$][\w$]*)\s*:\s*\{", block.group(1), re.M)
+
+
+def test_routes_list_matches_router_js():
+    # Экран, добавленный в router.js, но не в ROUTES здесь, тестировался бы
+    # молча никогда -- эта проверка ловит рассинхронизацию без браузера/сервера.
+    expected = {r for r in ROUTES if "/" not in r}
+    actual = set(_router_js_route_keys())
+    assert actual == expected, (
+        f"ROUTES в test_smoke.py разошёлся с router.js: "
+        f"отсутствуют в тесте {sorted(actual - expected)}, "
+        f"лишние в тесте {sorted(expected - actual)}"
+    )
 
 
 @pytest.mark.parametrize("route", ROUTES)
