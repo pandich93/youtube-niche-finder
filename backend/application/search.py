@@ -5,18 +5,15 @@ not break, but every row now carries the richer metric set from metrics.py:
 median-baseline outlier, age-adjusted outlier, views-per-subscriber, velocity
 from our own snapshots, and NexLev's own score for comparison.
 """
-import statistics as st
-
 import os
+import statistics as st
 
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
-from domain import metrics as M
-from domain import idea_verdicts as IV
-from application import collecting
+from application import collecting, llm_gateway, maturity_curve
 from application import discovery as trends
-from application import llm_gateway
-from application import maturity_curve
+from domain import idea_verdicts as IV
+from domain import metrics as M
 from infrastructure.categories import repository as C
 from infrastructure.llm import factory as llm_factory
 

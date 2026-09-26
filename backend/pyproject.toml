@@ -1,0 +1,39 @@
+# Lint configuration only -- the backend is not an installable package, so
+# there is deliberately no [project] or [build-system] table here.
+# Run: make lint  (or: uvx ruff@0.16.9 check backend)
+
+[tool.ruff]
+# Makefile's local-install accepts Python 3.10+.
+target-version = "py310"
+# Almost all existing code stays within ~100 columns; 110 keeps the current
+# lines as they are instead of forcing a reformat (the formatter is not used).
+line-length = 110
+# ruff already skips .venv by default; listed explicitly because backend/.venv
+# is where `make local-install` puts the virtualenv.
+extend-exclude = [".venv"]
+# Test files put tests/ on sys.path too (seed_demo, conftest, ...): count those
+# modules as first-party instead of third-party when sorting imports.
+src = [".", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests keep their compact style: one-line `a = ...; b = ...` setup rows (E702),
+# short lambda helpers such as `iso = lambda dt: ...` (E731) and the module
+# aliases I / L the application code is imported under (E741).
+"tests/*" = ["E702", "E731", "E741"]
+# `l` comprehension variables (E741) and three long lines (E501) sit inside
+# _lang_ok/_enrich, which GitNexus rates HIGH-risk to touch; left as they are.
+"application/discovery.py" = ["E501", "E741"]
+
+[tool.ruff.lint.isort]
+# tests/schema_scope.py and tests/module_doubles.py must be imported BEFORE any
+# application.* / infrastructure.* module: schema_scope sets NICHE_DB_SCHEMA and
+# NF_ALLOWED_HOSTS that those modules read once at import time (see the
+# docstrings of tests/schema_scope.py, tests/conftest.py and
+# tests/module_doubles.py). Ruff would otherwise file them under third-party
+# and sort them alphabetically, so they get a section of their own that always
+# comes first in its import block.
+sections = { "test-bootstrap" = ["schema_scope", "module_doubles"] }
+section-order = ["future", "test-bootstrap", "standard-library", "third-party", "first-party", "local-folder"]

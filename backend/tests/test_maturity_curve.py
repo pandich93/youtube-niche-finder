@@ -14,15 +14,15 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import schema_scope  # noqa: F401,E402
 
-import pytest                                        # noqa: E402
-from fastapi.testclient import TestClient            # noqa: E402
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
-import infrastructure.postgres as db                 # noqa: E402
-from application import maturity_curve as MC          # noqa: E402
-from application import channel_tracking as T         # noqa: E402
-from application import search as query               # noqa: E402
-from domain import metrics as M                       # noqa: E402
-import interfaces.http.api as api                     # noqa: E402
+import infrastructure.postgres as db  # noqa: E402
+import interfaces.http.api as api  # noqa: E402
+from application import channel_tracking as T  # noqa: E402
+from application import maturity_curve as MC  # noqa: E402
+from application import search as query  # noqa: E402
+from domain import metrics as M  # noqa: E402
 
 client = TestClient(api.app)
 

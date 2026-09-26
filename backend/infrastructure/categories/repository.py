@@ -8,16 +8,16 @@ domain.categories_catalog so existing call sites that do
 `C.rpm_niche(...)` keep working unchanged after switching to
 `from infrastructure.categories import repository as C`.
 """
-from domain.categories_catalog import (  # noqa: F401  (re-exported for callers)
-    FALLBACK,
-    CHARTED_CATEGORY_IDS,
-    CATEGORY_RPM_NICHE,
-    is_assignable,
-    rpm_niche,
-    fallback_title,
-)
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
+from domain.categories_catalog import (  # noqa: F401  (re-exported for callers)
+    CATEGORY_RPM_NICHE,
+    CHARTED_CATEGORY_IDS,
+    FALLBACK,
+    fallback_title,
+    is_assignable,
+    rpm_niche,
+)
 
 
 def title_for(category_id, region: str = "US") -> str:

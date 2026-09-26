@@ -14,15 +14,15 @@ sys.path.insert(0, os.path.dirname(HERE))
 # удаление на atexit -- импорт нужен именно ради этого побочного эффекта.
 import schema_scope  # noqa: F401,E402
 
-import infrastructure.postgres as db              # noqa: E402
-import infrastructure.youtube.client as yt         # noqa: E402
-from domain import periods as P                    # noqa: E402
+import infrastructure.postgres as db  # noqa: E402
+import infrastructure.youtube.client as yt  # noqa: E402
+import interfaces.mcp.server as srv  # noqa: E402
+from application import collecting as collector  # noqa: E402
+from application import discovery as trends  # noqa: E402
+from application import search as query  # noqa: E402
+from application import worker_cycle as worker  # noqa: E402
+from domain import periods as P  # noqa: E402
 from infrastructure.categories import repository as C  # noqa: E402
-from application import collecting as collector    # noqa: E402
-from application import discovery as trends        # noqa: E402
-from application import search as query            # noqa: E402
-from application import worker_cycle as worker     # noqa: E402
-import interfaces.mcp.server as srv                # noqa: E402
 
 
 def setup_module(_=None):

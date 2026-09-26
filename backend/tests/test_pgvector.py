@@ -23,13 +23,13 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import schema_scope  # noqa: F401,E402
 
-import numpy as np                                     # noqa: E402
-import pytest                                          # noqa: E402
-import infrastructure.postgres as db                    # noqa: E402
-from application import search as Q                     # noqa: E402
-from application import metadata_review as MR            # noqa: E402
-import infrastructure.embeddings.fastembed_provider as emb  # noqa: E402
+import numpy as np  # noqa: E402
+import pytest  # noqa: E402
 
+import infrastructure.embeddings.fastembed_provider as emb  # noqa: E402
+import infrastructure.postgres as db  # noqa: E402
+from application import metadata_review as MR  # noqa: E402
+from application import search as Q  # noqa: E402
 
 
 def _require_pgvector():
@@ -112,7 +112,7 @@ def test_similar_videos_fallback_path_ranks_by_cosine_similarity():
 
 
 def test_similar_channels_fallback_path_returns_centroid_ranked_channels():
-    ids = _seed_corpus("fbc", n=6)
+    _seed_corpus("fbc", n=6)
     import application.search as search_mod
     orig = db.pgvector_available
     search_mod.db.pgvector_available = lambda: False

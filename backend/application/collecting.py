@@ -12,13 +12,15 @@ Every collector returns a `quota` dict so the caller can see what it spent.
 """
 import json
 import re
+
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from domain import metrics as M
 from domain import periods as P
 
 try:
-    from langdetect import detect as _detect_lang, LangDetectException
+    from langdetect import LangDetectException
+    from langdetect import detect as _detect_lang
 except Exception:  # pragma: no cover
     _detect_lang = None
     LangDetectException = Exception

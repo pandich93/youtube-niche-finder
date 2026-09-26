@@ -10,9 +10,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import schema_scope  # noqa: F401,E402
 
-from fastapi.testclient import TestClient      # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
-import interfaces.http.api as api              # noqa: E402
+import interfaces.http.api as api  # noqa: E402
 
 client = TestClient(api.app)
 

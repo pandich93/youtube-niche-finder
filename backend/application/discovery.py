@@ -19,11 +19,10 @@ import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import collecting as collector
 from application import maturity_curve as MC
+from domain import keywords as K
 from domain import metrics as M
 from domain import periods as P
-from domain import keywords as K
 from infrastructure.categories import repository as C
-
 
 # ------------------------------------------------------------------ loading
 

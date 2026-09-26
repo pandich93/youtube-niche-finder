@@ -59,8 +59,8 @@ def _ping_llm(problems):
 
 def cmd_doctor(args):
     """Всё, что может пойти не так, по порядку -- и что именно делать."""
-    from application import search as query
     from application import discovery as trends
+    from application import search as query
     problems = []
     key = _key()
 

@@ -10,11 +10,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 import schema_scope  # noqa: F401,E402
 
-import infrastructure.postgres as db               # noqa: E402
-from application import enrichment as EN             # noqa: E402
-from infrastructure.llm import factory                # noqa: E402
-from infrastructure.llm.base import LLMResult           # noqa: E402
-from infrastructure.llm.null import NullProvider         # noqa: E402
+import infrastructure.postgres as db  # noqa: E402
+from application import enrichment as EN  # noqa: E402
+from infrastructure.llm import factory  # noqa: E402
+from infrastructure.llm.base import LLMResult  # noqa: E402
+from infrastructure.llm.null import NullProvider  # noqa: E402
 
 
 def setup_module(_=None):

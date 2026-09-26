@@ -371,7 +371,7 @@ def _backfill_embedding_v(conn, batch_size: int = 1000) -> int:
     have a vector counterpart yet, batched so a large corpus doesn't hold one
     huge transaction. Safe to call on every init_db() -- a no-op once caught
     up. Returns rows migrated."""
-    from infrastructure.embeddings.fastembed_provider import to_pgvector_literal, from_blob
+    from infrastructure.embeddings.fastembed_provider import from_blob, to_pgvector_literal
     migrated = 0
     while True:
         rows = conn.execute(

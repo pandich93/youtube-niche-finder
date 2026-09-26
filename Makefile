@@ -12,7 +12,10 @@ IMAGE   ?= niche-finder:latest
 PYTHON  ?= $(shell command -v python3.13 || command -v python3.12 || \
              command -v python3.11 || command -v python3.10 || command -v python3)
 
-.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test local-run dev cli
+RUFF_VERSION ?= 0.16.9
+RUFF    ?= uvx ruff@$(RUFF_VERSION)
+
+.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint local-run dev cli
 
 doctor: ## проверить ключ, сеть и базу (начните отсюда)
 	$(COMPOSE) run --rm mcp python cli.py doctor
@@ -99,6 +102,12 @@ local-install:  ## venv + deps, without Docker (needs Python 3.10+, auto-detecte
 local-test:     ## run all backend tests on the host in one pytest process
 	@cd backend && export NICHE_DATABASE_URL="$${NICHE_DATABASE_URL:-$$(grep -E '^NICHE_DATABASE_URL=' ../.env 2>/dev/null | sed -E 's/^[^=]+=//; s/^"//; s/"$$//' | tr -d '\r')}"; \
 	  ./.venv/bin/python -m pytest -q -p no:cacheprovider tests/
+
+# Та же версия ruff, что в CI (.github/workflows/ci.yml); конфиг -- в
+# backend/pyproject.toml. uvx (из uv) скачивает ruff сам, в .venv он не нужен;
+# без uv:  make lint RUFF=ruff  (ruff==$(RUFF_VERSION) из pip).
+lint:           ## lint the backend with ruff (same pinned version as CI)
+	$(RUFF) check backend
 
 local-run:      ## run the MCP server on the host
 	cd backend && ./.venv/bin/python server.py

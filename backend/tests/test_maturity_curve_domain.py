@@ -8,9 +8,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-import pytest                       # noqa: E402
+import pytest  # noqa: E402
 
-from domain import metrics as M      # noqa: E402
+from domain import metrics as M  # noqa: E402
 
 DAILY = [0.5] + list(range(1, 32))   # a snapshot a day from ~12h after publication
 

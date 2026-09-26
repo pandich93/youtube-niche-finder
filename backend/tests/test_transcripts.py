@@ -12,9 +12,9 @@ import schema_scope  # noqa: F401,E402
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-import infrastructure.postgres as db            # noqa: E402
-from application import transcripts as TR         # noqa: E402
-import interfaces.http.api as api                   # noqa: E402
+import infrastructure.postgres as db  # noqa: E402
+import interfaces.http.api as api  # noqa: E402
+from application import transcripts as TR  # noqa: E402
 
 client = TestClient(api.app)
 
@@ -173,7 +173,7 @@ def test_http_endpoints_roundtrip():
     assert r.status_code == 200
     assert any(q["videoId"] == "vtr8" for q in r.json()["queue"])
 
-    r = client.post(f"/api/transcripts/vtr8/save", json={"text": TIMED_TRANSCRIPT})
+    r = client.post("/api/transcripts/vtr8/save", json={"text": TIMED_TRANSCRIPT})
     assert r.status_code == 200
     assert r.json()["status"] == "ready"
 

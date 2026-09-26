@@ -23,13 +23,13 @@ import traceback
 from datetime import datetime, timezone
 
 import infrastructure.postgres as db
-from application import collecting as collector
-from application import alerts as alerts_mod
-from application import enrichment as enrich_mod
-from application import niche_clusters as clusters_mod
-from application import maturity_curve as curve_mod
-from domain import periods as P
 import infrastructure.youtube.client as yt
+from application import alerts as alerts_mod
+from application import collecting as collector
+from application import enrichment as enrich_mod
+from application import maturity_curve as curve_mod
+from application import niche_clusters as clusters_mod
+from domain import periods as P
 from infrastructure.llm import factory as llm_factory
 from infrastructure.llm.null import NullProvider
 

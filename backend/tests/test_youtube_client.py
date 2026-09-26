@@ -12,9 +12,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
-import pytest                                   # noqa: E402
+import pytest  # noqa: E402
 
-import infrastructure.youtube.client as yt       # noqa: E402
+import infrastructure.youtube.client as yt  # noqa: E402
 
 
 class _Resp:

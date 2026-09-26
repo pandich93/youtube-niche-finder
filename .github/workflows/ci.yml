@@ -6,7 +6,25 @@ on:
   pull_request:
 
 jobs:
+  # Fast, no database: runs first so a lint error fails the build before the
+  # test job spins up Postgres. Same pinned ruff as `make lint`; the config is
+  # backend/pyproject.toml, which ruff finds on its own for files under backend/.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Lint backend with ruff
+        run: |
+          pip install ruff==0.16.9
+          ruff check backend
+
   smoke-test:
+    needs: lint
     runs-on: ubuntu-latest
     permissions:
       contents: write

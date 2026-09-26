@@ -4,8 +4,8 @@ sqlite double, no key, no Postgres -- same pattern as test_inspection.py.
 Run: python3 tests/test_library.py (or pytest tests/test_library.py)
 """
 import os
-import sys
 import sqlite3
+import sys
 import types
 from datetime import datetime, timezone
 

@@ -15,7 +15,7 @@ import time
 from collections import defaultdict, deque
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Body, Response
+from fastapi import Body, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,21 +28,21 @@ except Exception:  # pragma: no cover
 
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
-from infrastructure.categories import repository as C
-from application import collecting as collector
-from application import search as Q
-from application import discovery as trends
+from application import alerts as AL
 from application import channel_tracking as T
+from application import collecting as collector
+from application import discovery as trends
+from application import enrichment as EN
 from application import inspection as I
 from application import library as L
+from application import maturity_curve
 from application import metadata_review as MR
-from application import alerts as AL
-from application import tags as TG
-from application import enrichment as EN
-from application import transcripts as TR
 from application import niche_clusters as NCL
 from application import niche_export as NE
-from application import maturity_curve
+from application import search as Q
+from application import tags as TG
+from application import transcripts as TR
+from infrastructure.categories import repository as C
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR")
