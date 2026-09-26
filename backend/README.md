@@ -112,6 +112,10 @@ add your own names with `NF_ALLOWED_HOSTS` (comma-separated). Every `POST`,
 a CORS preflight, which only `chrome-extension://` origins pass. The dashboard
 sends `Content-Type: application/json` on every request; a script needs one too:
 `curl -X POST -H 'X-NF-Client: script' http://127.0.0.1:8080/api/events/scan`.
+The built-in Swagger UI at `/api/docs` sends neither header on routes without
+a body (`events/scan`, `enrich/*`, `reindex`, `recompute`, `DELETE
+/api/channels/tracked/...`), so "Try it out" gets `403` there; call those with
+curl as above. Routes with a JSON body work from Swagger as usual.
 
 The key is only needed at runtime, not at build time: `docker compose build`
 works fine with an empty `.env`. If there's no key, the worker says so and
