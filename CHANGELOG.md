@@ -370,7 +370,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `assets/coverage.json` to `main`, so pushes to `main` no longer get
   rejected by the bot's commit and need a `pull --rebase`. The branch is
   created on the first push-to-`main` run; unchanged numbers commit
-  nothing. `assets/coverage.json` is gone from `main`, and the coverage
+  nothing, and a run that finishes after a newer push to `main` leaves the
+  badge to that newer run. `assets/coverage.json` is gone from `main`, and the coverage
   badges in `README.md` and `backend/README.md` read the `badges` branch and
   link to the CI workflow runs.
 

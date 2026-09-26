@@ -84,6 +84,13 @@ jobs:
           git -C "$work" config user.email "github-actions[bot]@users.noreply.github.com"
           git -C "$work" remote add origin "$remote"
           for attempt in 1 2 3; do
+            # Runs for close pushes can finish out of order; a run whose
+            # commit is no longer main's tip leaves the badge to the newer one.
+            main_tip="$(git -C "$work" ls-remote origin refs/heads/main | cut -f1)"
+            if [ -n "$main_tip" ] && [ "$main_tip" != "$GITHUB_SHA" ]; then
+              echo "main moved on to $main_tip; skipping stale coverage from $GITHUB_SHA."
+              exit 0
+            fi
             rc=0
             git -C "$work" ls-remote --exit-code --heads origin "$branch" >/dev/null || rc=$?
             if [ "$rc" -eq 0 ]; then
