@@ -3,7 +3,7 @@ runs and is tested unconditionally (regression coverage for the refactor
 that added the pgvector branch alongside it); the pgvector branch itself
 only runs -- and is only meaningful -- against a Postgres that actually has
 the extension (pgvector/pgvector:pg16), so those tests check
-db.pgvector_available() and skip with a printed note otherwise rather than
+db.pgvector_available() and show up as pytest skips otherwise rather than
 failing a plain postgres:16 setup.
 
 Run with pytest, or directly: python3 tests/test_pgvector.py
@@ -24,12 +24,20 @@ sys.path.insert(0, os.path.dirname(HERE))
 import schema_scope  # noqa: F401,E402
 
 import numpy as np                                     # noqa: E402
+import pytest                                          # noqa: E402
 import infrastructure.postgres as db                    # noqa: E402
 from application import search as Q                     # noqa: E402
 from application import metadata_review as MR            # noqa: E402
 import infrastructure.embeddings.fastembed_provider as emb  # noqa: E402
 
-SKIPPED = []
+
+
+def _require_pgvector():
+    """pgvector-path tests need the vector extension (init_db decides, so
+    this runs inside the test, not at import). A visible skip, never a
+    silent pass: CI once ran without pgvector and hid a crash that way."""
+    if not db.pgvector_available():
+        pytest.skip("this Postgres has no vector extension")
 
 
 def setup_module(_=None):
@@ -134,9 +142,7 @@ def test_near_duplicates_fallback_path_respects_min_similarity():
 # --------------------------------------------------------- pgvector path
 
 def test_similar_videos_pgvector_path_matches_fallback_ranking():
-    if not db.pgvector_available():
-        SKIPPED.append("test_similar_videos_pgvector_path_matches_fallback_ranking")
-        return
+    _require_pgvector()
     ids = _seed_corpus("pgv", n=5)
 
     out_pg = Q.similar_videos(ids[0], limit=10)
@@ -157,9 +163,7 @@ def test_similar_videos_pgvector_path_matches_fallback_ranking():
 
 
 def test_similar_channels_pgvector_path_matches_fallback_ranking():
-    if not db.pgvector_available():
-        SKIPPED.append("test_similar_channels_pgvector_path_matches_fallback_ranking")
-        return
+    _require_pgvector()
     _seed_corpus("pgc", n=6)
     target_channel = "UCpgcchan0"
 
@@ -181,9 +185,7 @@ def test_similar_channels_pgvector_path_matches_fallback_ranking():
 
 
 def test_backfill_migrates_existing_blob_only_rows_into_embedding_v():
-    if not db.pgvector_available():
-        SKIPPED.append("test_backfill_migrates_existing_blob_only_rows_into_embedding_v")
-        return
+    _require_pgvector()
     conn = db.get_conn()
     db.upsert_channel(conn, _channel("UCbackfillchan"))
     # write BLOB directly, bypassing upsert_video's dual-write, to simulate a
@@ -207,21 +209,4 @@ def test_backfill_migrates_existing_blob_only_rows_into_embedding_v():
 
 
 if __name__ == "__main__":
-    setup_module()
-
-    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
-    failed = 0
-    for fn in fns:
-        try:
-            fn()
-            tag = "SKIP" if fn.__name__ in SKIPPED else "PASS"
-            print(f"  {tag}  {fn.__name__}")
-        except Exception as e:
-            failed += 1
-            import traceback
-            print(f"  FAIL  {fn.__name__}: {e}")
-            traceback.print_exc()
-    if not db.pgvector_available():
-        print("\n(pgvector-path tests skipped: this Postgres has no vector extension)")
-    print(f"\n{len(fns) - failed}/{len(fns)} passed")
-    sys.exit(1 if failed else 0)
+    sys.exit(pytest.main([__file__, "-q", "-rs", "-p", "no:cacheprovider"]))
