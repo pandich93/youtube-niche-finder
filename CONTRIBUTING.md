@@ -96,8 +96,10 @@ framework — keep it that way. New screens follow the existing pattern in
 
 ## Style
 
-- No linter is enforced yet; match the style of the surrounding code
-  (naming, docstrings, formatting).
+- `make lint` runs [ruff](https://docs.astral.sh/ruff/) over `backend/`
+  (config in `backend/pyproject.toml`, same pinned version as CI, where it
+  must pass). There is no auto-formatter; match the style of the surrounding
+  code (naming, docstrings, formatting).
 - Keep entry-point shims thin — real logic belongs in `domain/`,
   `infrastructure/`, or `application/`.
 - Prefer a test against the throwaway Postgres schema over a mock of our own
@@ -108,11 +110,11 @@ framework — keep it that way. New screens follow the existing pattern in
 1. Fork the repo and create a branch off `main`.
 2. Make your change, keeping it focused — unrelated cleanup makes review
    harder.
-3. Run `make local-test` and confirm `docker compose build`
+3. Run `make lint` and `make local-test`, and confirm `docker compose build`
    still works if you touched `backend/requirements.txt` or the Dockerfile.
 4. Open a PR describing what changed and why. Link the issue it addresses,
    if any.
-5. CI must pass (all backend tests + Docker build) before merge.
+5. CI must pass (ruff lint, all backend tests + Docker build) before merge.
 
 By contributing, you agree your contribution is licensed under this
 project's [MIT License](LICENSE).
