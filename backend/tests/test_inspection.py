@@ -18,6 +18,8 @@ from datetime import datetime, timedelta, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
+from module_doubles import ModuleDoubles  # noqa: E402
+
 NOW = datetime.now(timezone.utc)
 iso = lambda dt: dt.isoformat()
 
@@ -154,19 +156,17 @@ fake_collector.store_videos = _store_videos
 fake_collector.store_channels = _store_channels
 fake_collector.resolve_channel = _resolve_channel
 
-infra_pkg.postgres = fake_db
-infra_pkg.youtube = yt_pkg
-yt_pkg.client = fake_yt
-sys.modules["infrastructure"] = infra_pkg
-sys.modules["infrastructure.postgres"] = fake_db
-sys.modules["infrastructure.youtube"] = yt_pkg
-sys.modules["infrastructure.youtube.client"] = fake_yt
-sys.modules["application.collecting"] = fake_collector
-
-import application  # noqa: E402  (пустой __init__, реальный пакет)
-application.collecting = fake_collector
-
-from application import inspection as I  # noqa: E402
+# Двойники живут в отдельном «мире модулей» (tests/module_doubles.py): в
+# sys.modules они видны только пока идут тесты этого файла, поэтому не
+# протекают в Postgres-тесты, которые pytest гоняет в том же процессе.
+DOUBLES = ModuleDoubles({
+    "infrastructure": infra_pkg,
+    "infrastructure.postgres": fake_db,
+    "infrastructure.youtube": yt_pkg,
+    "infrastructure.youtube.client": fake_yt,
+    "application.collecting": fake_collector,
+})
+I, = DOUBLES.load("application.inspection")
 
 # ----------------------------------------------------------- наполнение
 
@@ -406,12 +406,13 @@ if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
     failed = 0
-    for name, fn in tests:
-        try:
-            fn()
-            print(f"  ok  {name}")
-        except Exception as e:  # noqa: BLE001
-            failed += 1
-            print(f"FAIL  {name}: {type(e).__name__}: {e}")
+    with DOUBLES.active():
+        for name, fn in tests:
+            try:
+                fn()
+                print(f"  ok  {name}")
+            except Exception as e:  # noqa: BLE001
+                failed += 1
+                print(f"FAIL  {name}: {type(e).__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} прошло")
     sys.exit(1 if failed else 0)

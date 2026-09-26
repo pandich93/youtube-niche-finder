@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
+from module_doubles import ModuleDoubles  # noqa: E402
+
 SCHEMA = """
 CREATE TABLE saved_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,10 +47,9 @@ reset()
 fake_db = types.ModuleType("infrastructure.postgres")
 fake_db.get_conn = lambda: _Conn()
 fake_db.now_iso = lambda: datetime.now(timezone.utc).isoformat()
-sys.modules["infrastructure.postgres"] = fake_db
-sys.modules.setdefault("infrastructure", types.ModuleType("infrastructure"))
 
-import application.library as L  # noqa: E402
+DOUBLES = ModuleDoubles({"infrastructure.postgres": fake_db})
+L, = DOUBLES.load("application.library")
 
 
 def test_save_and_list_roundtrip():
@@ -133,4 +134,6 @@ def _run_all():
 
 
 if __name__ == "__main__":
-    sys.exit(0 if _run_all() else 1)
+    with DOUBLES.active():
+        ok = _run_all()
+    sys.exit(0 if ok else 1)

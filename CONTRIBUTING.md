@@ -38,18 +38,19 @@ make local-install
 make local-test   # every backend/tests/test_*.py, no YouTube key or network needed
 ```
 
-`make local-test` runs each `backend/tests/test_*.py` in its own pytest
-process and ends with `all test files passed` (or `FAILED: <files>` and a
-non-zero exit). CI runs exactly the same loop under `coverage` (see
-`.github/workflows/ci.yml`) plus a `docker compose build` check on every
-push and pull request — both must be green before a PR is merged.
+`make local-test` runs the whole `backend/tests/` directory in one pytest
+process and exits non-zero if anything fails. CI runs exactly the same
+command under `coverage` (see `.github/workflows/ci.yml`) plus a
+`docker compose build` check on every push and pull request — both must be
+green before a PR is merged.
 
-Why one process per file: several tests (`test_alerts.py`,
+Every file still sees the world it would see running alone
+(`backend/tests/conftest.py`): Postgres-backed files get a fresh schema each
+(`tests/schema_scope.py`), and the sqlite-double files (`test_alerts.py`,
 `test_inspection.py`, `test_library.py`, `test_metadata_review.py`,
-`test_top_tags.py`) replace `infrastructure.postgres` with an in-memory
-sqlite double in `sys.modules`. In a single `pytest tests/` run that double
-leaks into the files that need the real, throwaway-schema Postgres
-(`tests/schema_scope.py`), so don't run the whole directory at once.
+`test_top_tags.py`) keep `infrastructure.postgres` & co. in a private module
+world (`tests/module_doubles.py`) instead of writing them into `sys.modules`
+— `tests/test_module_doubles.py` fails if a file does the latter.
 
 To run one file, from `backend/`:
 
@@ -65,7 +66,8 @@ A new `backend/tests/test_*.py` is picked up by CI and `make local-test`
 automatically — no workflow edit needed. Postgres-backed tests import
 `schema_scope` first (see `test_smoke.py`, `test_mcp_tools.py`); pure logic
 and sqlite-double tests follow `test_metadata_domain.py` /
-`test_metadata_review.py`. External calls (YouTube, OpenRouter, Telegram)
+`test_metadata_review.py` (doubles via `ModuleDoubles`, never
+`sys.modules[...] = ...`). External calls (YouTube, OpenRouter, Telegram)
 must be mocked. If you give a file its own `__main__` runner, make it exit
 non-zero when a test fails.
 

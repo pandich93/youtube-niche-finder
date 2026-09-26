@@ -13,6 +13,8 @@ from datetime import datetime, timedelta, timezone
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
 
+from module_doubles import ModuleDoubles  # noqa: E402
+
 NOW = datetime.now(timezone.utc)
 iso = lambda dt: dt.isoformat()
 
@@ -76,13 +78,15 @@ reset()
 
 # Real `infrastructure` package imports fine on its own -- only the leaf
 # `infrastructure.postgres` submodule is replaced, exactly like
-# tests/test_inspection.py and tests/test_metadata_review.py do.
+# tests/test_inspection.py and tests/test_metadata_review.py do. The double
+# lives in a private module world (tests/module_doubles.py), so it never
+# leaks into the Postgres-backed files that share this pytest process.
 fake_db = types.ModuleType("infrastructure.postgres")
 fake_db.get_conn = lambda: _Conn()
 fake_db.now_iso = lambda: iso(datetime.now(timezone.utc))
-sys.modules["infrastructure.postgres"] = fake_db
 
-import application.alerts as AL  # noqa: E402
+DOUBLES = ModuleDoubles({"infrastructure.postgres": fake_db})
+AL, = DOUBLES.load("application.alerts")
 
 
 def _channel(ch, subs=50_000, videos=80, views=40_000_000):
@@ -205,4 +209,6 @@ def _run_all():
 
 
 if __name__ == "__main__":
-    sys.exit(0 if _run_all() else 1)
+    with DOUBLES.active():
+        ok = _run_all()
+    sys.exit(0 if ok else 1)
