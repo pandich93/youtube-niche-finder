@@ -35,8 +35,12 @@ from application import search as Q  # noqa: E402
 def _require_pgvector():
     """pgvector-path tests need the vector extension (init_db decides, so
     this runs inside the test, not at import). A visible skip, never a
-    silent pass: CI once ran without pgvector and hid a crash that way."""
+    silent pass: CI once ran without pgvector and hid a crash that way.
+    CI sets NICHE_REQUIRE_PGVECTOR=1, which turns the skip into a failure --
+    its Postgres has the extension, so a skip there means a broken setup."""
     if not db.pgvector_available():
+        if os.environ.get("NICHE_REQUIRE_PGVECTOR") == "1":
+            pytest.fail("NICHE_REQUIRE_PGVECTOR=1, but the vector extension is not usable")
         pytest.skip("this Postgres has no vector extension")
 
 

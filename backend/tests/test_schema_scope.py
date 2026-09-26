@@ -55,6 +55,59 @@ def test_module_schema_is_fresh_then_dropped_and_env_restored():
     assert not _schema_exists(inner)
 
 
+def _table_in_schema(schema, table):
+    conn = db.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema = ? AND table_name = ?",
+            (schema, table)).fetchone()
+        return row is not None
+    finally:
+        conn.close()
+
+
+@own_schema_only
+def test_file_schema_has_its_own_tables_without_calling_init_db():
+    """A file that never calls init_db itself (test_http_rate_limit only hits
+    /api/health) still needs the tables: api.py ran init_db at import time, in
+    whatever schema was active then. With them missing, search_path's `public`
+    fallback silently serves the developer's real data -- or, on an empty CI
+    database, fails with `relation "meta" does not exist`."""
+    assert _table_in_schema(os.environ["NICHE_DB_SCHEMA"], "meta")
+
+
+def _vector_extension_schema():
+    conn = db.get_conn()
+    try:
+        row = conn.execute(
+            "SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace "
+            "WHERE e.extname = 'vector'").fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
+
+def _vector_installable():
+    conn = db.get_conn()
+    try:
+        return conn.execute(
+            "SELECT 1 FROM pg_available_extensions WHERE name = 'vector'").fetchone() is not None
+    finally:
+        conn.close()
+
+
+@own_schema_only
+def test_vector_extension_lives_in_public_and_survives_a_file_schema_drop():
+    """Created inside a file's schema, the extension goes with DROP SCHEMA ...
+    CASCADE, and the `vector` type is invisible from every other file's
+    search_path -- the pgvector tests then skip instead of running."""
+    if not _vector_installable():
+        pytest.skip("this Postgres has no vector extension")
+    with schema_scope.module_schema():
+        pass
+    assert _vector_extension_schema() == "public"
+
+
 # conftest finds a Postgres-backed file by its module attribute `schema_scope`.
 # `from schema_scope import SCHEMA`, `import schema_scope as ss` or getting it
 # through a helper module leaves no such attribute, and the file would quietly

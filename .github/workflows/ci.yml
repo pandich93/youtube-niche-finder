@@ -64,6 +64,9 @@ jobs:
       # failure fails the step (and skips the badge data) after it.
       - name: Run tests with coverage
         working-directory: backend
+        env:
+          # The service image ships pgvector: its tests must run, never skip.
+          NICHE_REQUIRE_PGVECTOR: "1"
         run: |
           status=0
           coverage run --source=. --omit="tests/*" -m pytest -q -p no:cacheprovider tests/ || status=$?
