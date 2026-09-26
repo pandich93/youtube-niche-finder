@@ -28,9 +28,9 @@ def parse_transcript(raw_text: str) -> dict:
     "wordCount": int}. A line that isn't part of any recognized timestamp
     block before the first timestamp (a YouTube UI header, stray junk) is
     dropped rather than merged into the first segment."""
-    lines = [l.strip() for l in (raw_text or "").splitlines()]
-    lines = [l for l in lines if l]
-    has_timestamps = any(_TS_RE.match(l) for l in lines)
+    lines = [l.strip() for l in (raw_text or "").splitlines()]  # noqa: E741 -- l is a line
+    lines = [l for l in lines if l]  # noqa: E741
+    has_timestamps = any(_TS_RE.match(l) for l in lines)  # noqa: E741
 
     segments = []
     if has_timestamps:

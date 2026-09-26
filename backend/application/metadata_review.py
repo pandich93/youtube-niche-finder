@@ -148,7 +148,7 @@ def review_metadata(title: str, description: str = "", tags=None, niche: str = N
             "explanation": (f"{feat['label']}: lift ×{feat['lift']} у выбросов "
                             f"(выборка {feat['sample']}); в черновике "
                             f"{'есть' if present else 'нет'}, "
-                            f"{'и это соответствует паттерну' if present == wants_it else 'а паттерн ниши другой'}"),
+                            f"{'и это соответствует паттерну' if present == wants_it else 'а паттерн ниши другой'}"),  # noqa: E501
         })
 
     trending_phrases = []

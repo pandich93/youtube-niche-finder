@@ -112,7 +112,7 @@ def test_similar_videos_fallback_path_ranks_by_cosine_similarity():
 
 
 def test_similar_channels_fallback_path_returns_centroid_ranked_channels():
-    ids = _seed_corpus("fbc", n=6)
+    _seed_corpus("fbc", n=6)
     import application.search as search_mod
     orig = db.pgvector_available
     search_mod.db.pgvector_available = lambda: False
