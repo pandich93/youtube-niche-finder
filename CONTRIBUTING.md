@@ -92,7 +92,8 @@ with `application/`, `domain/`, and `infrastructure/` anymore.
 
 The frontend (`frontend/`) is plain ES modules with no build step and no
 framework — keep it that way. New screens follow the existing pattern in
-`app.js` (hash routing) and `ui.js` (shared components/formatters).
+`screens/*.js` (one file per screen), `router.js` (hash routing), `shared.js`
+(pieces several screens use) and `ui.js` (shared components/formatters).
 
 ## Style
 

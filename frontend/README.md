@@ -37,7 +37,11 @@ container read-only, no image rebuild needed.
 | `index.html` | shell: sidebar, header with global filters, screen container |
 | `styles.css` | dark and light themes, components |
 | `ui.js` | formatters, tooltips, toasts, and components (cards, tables, bars, chart) |
-| `app.js` | screens and hash routing |
+| `app.js` | entry point: theme, global filters, footer, first render |
+| `router.js` | hash routing: route table, active menu item, loading/error state |
+| `shared.js` | shared by screens: `#view`, period labels, the collect form, the quota footer, the niche overview block |
+| `screens/*.js` | one file per screen (`overview.js`, `find.js`, …, `channel.js`, `niche.js`) |
+| `tests/test_smoke.py` | opens every screen in headless Chromium against a seeded backend (`make frontend-test`) |
 
 Data comes from `backend/api.py` (a shim over `interfaces/http/api.py`,
 FastAPI), which calls exactly the same use cases as the MCP server. There's

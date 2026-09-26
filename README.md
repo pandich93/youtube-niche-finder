@@ -169,7 +169,7 @@ picks up changes without a rebuild.
 | Path | What's inside |
 |---|---|
 | [`backend/`](backend/README.md) | MCP server, HTTP API, worker — all the logic and data storage |
-| [`frontend/`](frontend/README.md) | dashboard: index.html, styles.css, ui.js, app.js |
+| [`frontend/`](frontend/README.md) | dashboard: index.html, styles.css, ui.js, app.js, router.js, shared.js, screens/ |
 | [`extension/`](extension/README.md) | Chrome extension: panels and badges on top of YouTube |
 | `docker-compose.yml` | postgres + worker + web + mcp/mcp-http/mcp-https services, plus an optional `ollama` service (profile `llm-local`) |
 | `Makefile` | commands to run everything, via Docker or straight on the host |

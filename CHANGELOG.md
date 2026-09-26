@@ -374,6 +374,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   badge to that newer run. `assets/coverage.json` is gone from `main`, and the coverage
   badges in `README.md` and `backend/README.md` read the `badges` branch and
   link to the CI workflow runs.
+- Split `frontend/app.js` into `router.js`, `shared.js` and one module per
+  screen under `frontend/screens/`; no behavior change. Added a
+  headless-Chromium smoke test of every dashboard screen (`make
+  frontend-test`, CI job `frontend-smoke`).
 
 ### Removed
 
