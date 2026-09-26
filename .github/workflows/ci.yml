@@ -54,24 +54,65 @@ jobs:
             echo "::error::pytest exited with status $status"
             exit "$status"
           fi
-          coverage json -o /tmp/coverage_full.json
+          coverage json -o "$RUNNER_TEMP/coverage_full.json"
           python3 -c "
-          import json
-          d = json.load(open('/tmp/coverage_full.json'))
-          json.dump({'totals': d['totals']}, open('../assets/coverage.json', 'w'), indent=2)
+          import json, os
+          tmp = os.environ['RUNNER_TEMP']
+          d = json.load(open(os.path.join(tmp, 'coverage_full.json')))
+          json.dump({'totals': d['totals']}, open(os.path.join(tmp, 'coverage.json'), 'w'), indent=2)
           "
 
-      - name: Commit coverage badge data
-        if: github.event_name == 'push'
+      # The badge data lives on its own orphan branch, `badges`, holding just
+      # coverage.json -- never on main, so a push to main never races a bot
+      # commit. The README badges read it from raw.githubusercontent.com. The
+      # branch is created on the first run; a run whose numbers did not change
+      # commits nothing; a push that loses a race with a concurrent run is
+      # retried on top of the new tip (never forced).
+      - name: Publish coverage badge data to the badges branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          BADGE_SOURCE: ${{ runner.temp }}/coverage.json
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add assets/coverage.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Update coverage badge data [skip ci]"
-            git pull --rebase origin main
-            git push
-          fi
+          set -euo pipefail
+          branch=badges
+          remote="${BADGE_REMOTE:-https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git}"
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          git init -q "$work"
+          git -C "$work" config user.name "github-actions[bot]"
+          git -C "$work" config user.email "github-actions[bot]@users.noreply.github.com"
+          git -C "$work" remote add origin "$remote"
+          for attempt in 1 2 3; do
+            rc=0
+            git -C "$work" ls-remote --exit-code --heads origin "$branch" >/dev/null || rc=$?
+            if [ "$rc" -eq 0 ]; then
+              git -C "$work" fetch -q --depth=1 origin "refs/heads/$branch"
+              git -C "$work" checkout -q -f -B "$branch" FETCH_HEAD
+            elif [ "$rc" -eq 2 ]; then
+              echo "Branch $branch does not exist yet; creating it as an orphan."
+              git -C "$work" symbolic-ref HEAD "refs/heads/$branch"
+              git -C "$work" update-ref -d "refs/heads/$branch"
+              git -C "$work" read-tree --empty
+            else
+              echo "::error::git ls-remote failed with status $rc"
+              exit "$rc"
+            fi
+            cp "$BADGE_SOURCE" "$work/coverage.json"
+            git -C "$work" add coverage.json
+            if git -C "$work" diff --cached --quiet; then
+              echo "Coverage badge data unchanged; nothing to commit."
+              exit 0
+            fi
+            git -C "$work" commit -q -m "Update coverage badge data [skip ci]"
+            if git -C "$work" push -q origin "HEAD:refs/heads/$branch"; then
+              echo "Published coverage badge data to $branch."
+              exit 0
+            fi
+            echo "Push to $branch rejected (attempt $attempt); retrying on the new tip."
+          done
+          echo "::error::could not push coverage badge data to $branch"
+          exit 1
 
   docker-build:
     runs-on: ubuntu-latest
