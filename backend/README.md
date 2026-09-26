@@ -248,6 +248,13 @@ python3 tests/test_smoke.py   # should be 17/17 passed -- needs a reachable
                               # your own; see infrastructure/postgres/connection.py)
 ```
 
+`requirements.txt` pins exact versions of every transitive dependency; the version ranges live in
+`requirements.in` (edit them there). Re-pin to the newest allowed versions with
+`uv pip compile requirements.in --python-version 3.10 --universal -o requirements.txt --upgrade`
+(3.10 is the oldest Python `make local-install` accepts; per-version markers let the same file serve
+3.10, 3.11 and the 3.12 used by Docker and CI). Local installs need Linux or an Apple Silicon Mac: the pinned
+`onnxruntime` ships no Intel-Mac wheels for Python 3.11+, so use Docker there.
+
 Each test process works in its own `nichetest_<random>` schema and drops it on
 exit (`tests/schema_scope.py`), so repeated runs leave nothing behind. Set
 `NICHE_KEEP_TEST_SCHEMA=1` to keep it and inspect the data after a failure; a

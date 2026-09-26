@@ -1,0 +1,17 @@
+# MCP SDK v2 -- server.py uses mcp.server.mcpserver.MCPServer
+mcp[cli]>=2.0,<3
+requests>=2.31
+python-dotenv>=1.0
+numpy>=1.26
+langdetect>=1.0.9
+# PostgreSQL storage layer (db.py) -- binary build bundles libpq, no apt package needed
+psycopg2-binary>=2.9
+# local multilingual embeddings for semantic niche search (no external API)
+fastembed>=0.3.6
+
+# HTTP API + дашборд (backend/api.py, frontend/)
+fastapi>=0.115
+uvicorn[standard]>=0.30
+# OpenRouter LLM provider (infrastructure/llm/openrouter.py) -- already pulled in
+# transitively by fastapi/starlette, pinned here since we call it directly
+httpx>=0.27
