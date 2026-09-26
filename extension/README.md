@@ -117,6 +117,12 @@ over https, and a request to `http://127.0.0.1` from the page context is
 treated by the browser as mixed content. The extension has its own origin,
 and with `host_permissions` that request goes through normally.
 
+Every request carries an `X-NF-Client: extension` header. The backend rejects
+POST/PUT/PATCH/DELETE that have neither this header nor a JSON body (403), so
+an arbitrary website open in the same browser can't trigger quota- or
+LLM-spending actions on your local backend. If you call the API from your own
+scripts, send the same header (any non-empty value).
+
 Permissions: `storage` (settings, synced via `chrome.storage.sync`),
 `alarms` (periodic health/alert checks for the icon badge), and host access
 to `127.0.0.1` / `localhost` only.
