@@ -517,9 +517,13 @@ def similar_channels(channel_id: str, niche: str = None, limit: int = 10,
             joins = " JOIN video_niches vn ON vn.video_id = v.video_id"
             where.append("vn.niche_slug = ?")
             params.append(niche)
+        where_sql = " AND ".join(where)
+        candidates = conn.execute(
+            f"SELECT COUNT(DISTINCT v.channel_id) AS n FROM videos v{joins} WHERE {where_sql}",
+            params).fetchone()["n"]
         sql = (f"SELECT v.channel_id, AVG(v.embedding_v) AS centroid, COUNT(*) AS n, "
               f"(1 - (AVG(v.embedding_v) <=> ?::vector)) AS similarity "
-              f"FROM videos v{joins} WHERE {' AND '.join(where)} "
+              f"FROM videos v{joins} WHERE {where_sql} "
               f"GROUP BY v.channel_id HAVING COUNT(*) >= ? "
               f"ORDER BY AVG(v.embedding_v) <=> ?::vector LIMIT ?")
         rows = conn.execute(
@@ -548,6 +552,7 @@ def similar_channels(channel_id: str, niche: str = None, limit: int = 10,
             centroid = sum(vecs) / len(vecs)
             scored.append((cid, emb.cosine(target, centroid), len(vecs)))
         scored.sort(key=lambda t: t[1], reverse=True)
+        candidates = len(by_channel)
         scored = scored[:limit]
 
     out = []
@@ -563,4 +568,4 @@ def similar_channels(channel_id: str, niche: str = None, limit: int = 10,
         })
     conn.close()
     return {"channel_id": channel_id, "videosEmbedded": len(target_rows),
-            "candidatesConsidered": len(by_channel), "similar": out}
+            "candidatesConsidered": candidates, "similar": out}

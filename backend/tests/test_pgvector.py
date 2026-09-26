@@ -17,6 +17,7 @@ To exercise the pgvector-path tests for real:
 """
 import os
 import sys
+import zlib
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.dirname(HERE))
@@ -71,7 +72,11 @@ def _seed_corpus(prefix, n=6):
         cid = f"UC{prefix}chan{i % 2}"
         vid = f"v{prefix}{i}"
         db.upsert_channel(conn, _channel(cid))
-        db.upsert_video(conn, _video(vid, cid, f"{prefix} video {i}", seed=i))
+        # seed on prefix too: every test seeds into the same schema, and equal
+        # seeds across corpora give identical vectors -- exact similarity ties
+        # whose order pgvector and the Python fallback break differently
+        seed = zlib.crc32(prefix.encode()) * 100 + i
+        db.upsert_video(conn, _video(vid, cid, f"{prefix} video {i}", seed=seed))
     conn.commit()
     conn.close()
     return [f"v{prefix}{i}" for i in range(n)]
@@ -170,6 +175,9 @@ def test_similar_channels_pgvector_path_matches_fallback_ranking():
 
     assert [s["channelId"] for s in out_pg["similar"]] == \
         [s["channelId"] for s in out_py["similar"]]
+    # both branches count every embedded channel other than the target, before
+    # the min_videos_embedded filter and the limit
+    assert out_pg["candidatesConsidered"] == out_py["candidatesConsidered"]
 
 
 def test_backfill_migrates_existing_blob_only_rows_into_embedding_v():
