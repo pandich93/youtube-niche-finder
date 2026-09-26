@@ -149,6 +149,7 @@ def health():
     conn = db.get_conn()
     try:
         calls_today = collector.search_calls_today(conn)
+        units_today = collector.units_today(conn)
     finally:
         conn.close()
     return {
@@ -160,6 +161,11 @@ def health():
             "callsToday": calls_today,
             "dailyLimit": yt.SEARCH_DAILY_CALL_LIMIT,
             "callsLeft": max(0, yt.SEARCH_DAILY_CALL_LIMIT - calls_today),
+        },
+        "unitQuota": {
+            "unitsToday": units_today,
+            "dailyLimit": yt.DAILY_UNIT_LIMIT,
+            "unitsLeft": max(0, yt.DAILY_UNIT_LIMIT - units_today),
         },
     }
 

@@ -352,6 +352,7 @@ def db_stats() -> dict:
     def one(sql):
         return conn.execute(sql).fetchone()[0]
     calls_today = collecting.search_calls_today(conn)
+    units_today = collecting.units_today(conn)
     blocked_until = db.get_meta(conn, "worker_quota_blocked_until")
     out = {
         "channels": one("SELECT COUNT(*) FROM channels"),
@@ -370,6 +371,12 @@ def db_stats() -> dict:
         "search_quota": {
             "search_calls_today": calls_today,
             "search_calls_left_today": max(0, yt.SEARCH_DAILY_CALL_LIMIT - calls_today),
+            "resets_at": "midnight Pacific Time",
+        },
+        "unit_quota": {
+            "units_today": units_today,
+            "daily_limit": yt.DAILY_UNIT_LIMIT,
+            "units_left_today": max(0, yt.DAILY_UNIT_LIMIT - units_today),
             "resets_at": "midnight Pacific Time",
         },
         "worker_quota_blocked_until": blocked_until,

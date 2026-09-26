@@ -267,6 +267,12 @@ def search_calls_today(conn) -> int:
     return int(db.get_meta(conn, key) or 0)
 
 
+def units_today(conn) -> int:
+    """Units spent today (Pacific Time) from the shared 10,000/day pool, as
+    counted by the YouTube client on every request it sends."""
+    return int(db.get_meta(conn, yt.units_meta_key()) or 0)
+
+
 def _quota(search_calls, n_videos, n_channels, playlist_calls=0, other=0, calls_today=None):
     units = (n_videos + 49) // 50 + (n_channels + 49) // 50 + playlist_calls + other
     calls_today = search_calls if calls_today is None else calls_today

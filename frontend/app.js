@@ -2092,10 +2092,12 @@ async function loadFootStat() {
   try {
     const h = await api('/api/health');
     const sq = h.searchQuota;
+    const uq = h.unitQuota;
     $('#footStat').innerHTML =
       `${num(h.db.channels)} каналов · ${num(h.db.videos)} видео<br>` +
       (h.historyAvailable ? 'история пишется' : 'истории нет — запустите воркер') +
-      (sq ? `<br>Поиск: ${sq.callsLeft}/${sq.dailyLimit} осталось сегодня` : '');
+      (sq ? `<br>Поиск: ${sq.callsLeft}/${sq.dailyLimit} осталось сегодня` : '') +
+      (uq ? `<br>Квота API: ${num(uq.unitsLeft)}/${num(uq.dailyLimit)} units осталось` : '');
     $('#brandTag').textContent = h.hasApiKey ? 'local' : 'без ключа';
   } catch { $('#footStat').textContent = 'сервис недоступен'; }
 }

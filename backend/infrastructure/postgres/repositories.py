@@ -186,6 +186,17 @@ def set_meta(conn, key: str, value):
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
 
 
+def incr_meta(conn, key: str, n: int):
+    """Add n to an integer counter in meta, creating it if missing. One
+    statement, so concurrent web/worker/MCP processes never lose an update
+    the way get_meta + set_meta would."""
+    conn.execute(
+        "INSERT INTO meta (key, value) VALUES (?,?) "
+        "ON CONFLICT(key) DO UPDATE SET value=CAST("
+        "CAST(meta.value AS INTEGER) + CAST(excluded.value AS INTEGER) AS TEXT)",
+        (key, str(int(n))))
+
+
 def record_channel_llm_labels(conn, channel_id: str, labels: dict, model: str,
                               labeled_at: str = None):
     """Stage 03: write the background classifier's verdict for one channel

@@ -18,9 +18,12 @@ ALSO NOTE: since 21 July 2025 chart=mostPopular no longer mirrors the retired
 "Trending Now" tab -- it returns the Trending Music / Movies / Gaming charts
 only. General-interest trends must be computed from your own corpus.
 """
+import os
 import re
 import time
 import requests
+
+from domain import periods as P
 
 BASE = "https://www.googleapis.com/youtube/v3"
 
@@ -34,6 +37,31 @@ COST = {
     "videoCategories": 1, "commentThreads": 1, "videos:batchGetStats": 1,
 }
 SEARCH_DAILY_CALL_LIMIT = 100
+DAILY_UNIT_LIMIT = int(os.environ.get("YOUTUBE_DAILY_UNIT_LIMIT") or 10000)
+
+
+def units_meta_key() -> str:
+    """meta key of today's shared-pool counter -- per Pacific-Time day, when
+    Google resets the 10,000 units."""
+    return f"yt_units_{P.pacific_date_key()}"
+
+
+def _record_units(path: str):
+    """Add one sent request's cost to today's counter. Google charges every
+    request, failed ones included, so this runs after each requests.get.
+    Accounting must never break collection: any DB error is swallowed."""
+    try:
+        # resolved at call time, so tests that swap infrastructure.postgres
+        # for a double in sys.modules are honoured
+        import infrastructure.postgres as db
+        conn = db.get_conn()
+        try:
+            db.incr_meta(conn, units_meta_key(), COST.get(path, 1))
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass
 
 
 class QuotaExceeded(RuntimeError):
@@ -57,6 +85,7 @@ def _get(path: str, api_key: str, retries: int = 3, **params):
     last = None
     for attempt in range(retries):
         resp = requests.get(f"{BASE}/{path}", params=params, timeout=30)
+        _record_units(path)
         if resp.status_code == 200:
             return resp.json()
         last = resp
