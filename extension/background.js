@@ -56,7 +56,11 @@ async function api(path, { method = 'GET', body = null } = {}) {
   try {
     res = await fetch(base + path, {
       method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      // X-NF-Client на каждом запросе: бэкенд принимает POST/DELETE только с ним
+      // или с JSON-телом, иначе 403 (защита от чужих сайтов, api.py local_only_guard)
+      headers: body
+        ? { 'Content-Type': 'application/json', 'X-NF-Client': 'extension' }
+        : { 'X-NF-Client': 'extension' },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(s.timeoutMs),
     });
