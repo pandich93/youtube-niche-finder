@@ -17,3 +17,4 @@ _to_delete/
 .plans/
 backups/
 .claude/worktrees/
+frontend/tests/screenshots/

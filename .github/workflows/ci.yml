@@ -23,6 +23,59 @@ jobs:
           pip install ruff==0.16.9
           ruff check backend
 
+  # Every dashboard screen in headless Chromium against a seeded backend
+  # (frontend/tests/test_smoke.py). No button clicks: POSTs spend quota.
+  frontend-smoke:
+    needs: lint
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: niches
+          POSTGRES_USER: niches
+          POSTGRES_PASSWORD: niches
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U niches -d niches"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: |
+            backend/requirements.txt
+            frontend/tests/requirements.txt
+
+      - name: Install backend and smoke-test dependencies
+        run: pip install -r backend/requirements.txt -r frontend/tests/requirements.txt
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('frontend/tests/requirements.txt') }}
+
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+
+      - name: Smoke-test every dashboard screen
+        working-directory: backend
+        run: python -m pytest -q -p no:cacheprovider ../frontend/tests
+
+      - name: Upload screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-screenshots
+          path: frontend/tests/screenshots/
+
   smoke-test:
     needs: lint
     runs-on: ubuntu-latest

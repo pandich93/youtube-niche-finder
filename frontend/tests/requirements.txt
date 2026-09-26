@@ -1,0 +1,3 @@
+# Только для смоук-теста дашборда (frontend/tests/test_smoke.py), в образ не идёт.
+pytest
+playwright==1.63.0

@@ -15,7 +15,7 @@ PYTHON  ?= $(shell command -v python3.13 || command -v python3.12 || \
 RUFF_VERSION ?= 0.16.9
 RUFF    ?= uvx ruff@$(RUFF_VERSION)
 
-.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint local-run dev cli
+.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli
 
 doctor: ## проверить ключ, сеть и базу (начните отсюда)
 	$(COMPOSE) run --rm mcp python cli.py doctor
@@ -108,6 +108,14 @@ local-test:     ## run all backend tests on the host in one pytest process
 # без uv:  make lint RUFF=ruff  (ruff==$(RUFF_VERSION) из pip).
 lint:           ## lint the backend with ruff (same pinned version as CI)
 	$(RUFF) check backend
+
+# Смоук-тест дашборда в headless Chromium (frontend/tests/test_smoke.py): свой
+# uvicorn на свободном порту + своя схема с демо-данными, рабочую базу не трогает.
+# Один раз: ./backend/.venv/bin/pip install -r frontend/tests/requirements.txt
+#           ./backend/.venv/bin/python -m playwright install chromium
+frontend-test:  ## browser smoke test of every dashboard screen (needs: make up-db)
+	@cd backend && export NICHE_DATABASE_URL="$${NICHE_DATABASE_URL:-$$(grep -E '^NICHE_DATABASE_URL=' ../.env 2>/dev/null | sed -E 's/^[^=]+=//; s/^"//; s/"$$//' | tr -d '\r')}"; \
+	  ./.venv/bin/python -m pytest -q -p no:cacheprovider ../frontend/tests
 
 local-run:      ## run the MCP server on the host
 	cd backend && ./.venv/bin/python server.py
