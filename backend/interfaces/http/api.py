@@ -40,6 +40,7 @@ from application import enrichment as EN
 from application import transcripts as TR
 from application import niche_clusters as NCL
 from application import niche_export as NE
+from application import maturity_curve
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR")
@@ -150,6 +151,7 @@ def health():
     try:
         calls_today = collector.search_calls_today(conn)
         units_today = collector.units_today(conn)
+        curve = maturity_curve.status(conn)
     finally:
         conn.close()
     return {
@@ -167,6 +169,7 @@ def health():
             "dailyLimit": yt.DAILY_UNIT_LIMIT,
             "unitsLeft": max(0, yt.DAILY_UNIT_LIMIT - units_today),
         },
+        "maturityCurve": curve,
     }
 
 

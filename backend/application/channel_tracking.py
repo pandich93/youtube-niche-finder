@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 
 import infrastructure.postgres as db
 from application import collecting
+from application import maturity_curve as MC
 from domain import metrics as M
 from domain import periods as P
 from domain import keywords as K
@@ -212,6 +213,7 @@ def _growth_block(history, now_row, field, days):
 def channel_analytics(channel_id: str, period: str = "30d",
                       baseline_n: int = M.DEFAULT_BASELINE_N) -> dict:
     conn = db.get_conn()
+    MC.ensure_loaded(conn)
     ch = conn.execute("SELECT * FROM channels WHERE channel_id = ?", (channel_id,)).fetchone()
     if not ch:
         conn.close()
@@ -541,47 +543,20 @@ def title_patterns(niche: str = None, channel_id: str = None, period: str = "90d
 # ------------------------------------------------------ curve calibration
 
 def calibrate_maturity_curve(min_videos: int = 30) -> dict:
-    """Replace the hand-written MATURITY_CURVE with one measured from our own
-    snapshots: for videos we have watched from birth, what share of their
-    30-day views had they accumulated at each age?"""
-    conn = db.get_conn()
-    rows = conn.execute(
-        "SELECT h.video_id, h.captured_at, h.view_count, v.published_at "
-        "FROM video_stats_history h JOIN videos v ON v.video_id = h.video_id "
-        "ORDER BY h.video_id, h.captured_at"
-    ).fetchall()
-    conn.close()
-
-    per_video = defaultdict(list)
-    for r in rows:
-        pub, cap = _dt(r["published_at"]), _dt(r["captured_at"])
-        if pub and cap:
-            per_video[r["video_id"]].append(((cap - pub).total_seconds() / 86400,
-                                             r["view_count"] or 0))
-
-    samples = defaultdict(list)
-    used = 0
-    for vid, points in per_video.items():
-        mature = [v for age, v in points if age >= 25]
-        if not mature:
-            continue
-        final = max(mature)
-        if final <= 0:
-            continue
-        used += 1
-        for age, v in points:
-            if age <= 30:
-                samples[round(age)].append(v / final)
-
-    if used < min_videos:
-        return {"calibrated": False, "videosWithFullHistory": used,
+    """Measure the maturity curve from our own snapshots (see
+    metrics.fit_maturity_curve for the method and the checks). Read-only:
+    the worker stores a passing curve and every process then uses it
+    automatically (application/maturity_curve.py)."""
+    fit = MC.calibrate(min_videos=min_videos)
+    if not fit["calibrated"]:
+        return {**fit, "videosWithFullHistory": fit["videosUsed"],
                 "needed": min_videos,
-                "hint": "keep the worker running for at least 30 days on a set of "
-                        "videos tracked from publication"}
-    curve = {age: round(st.median(v), 3) for age, v in sorted(samples.items())
-             if len(v) >= 5}
-    return {"calibrated": True, "videosUsed": used, "curve": curve,
-            "howToApply": "paste this into metrics.MATURITY_CURVE"}
+                "hint": f"{fit['reason']}; keep the worker running -- it re-checks "
+                        "daily and switches over by itself once the checks pass"}
+    return {**fit,
+            "howToApply": "nothing to do: the worker stores a passing curve and "
+                          "every process switches to it (MATURITY_CURVE_AUTO=0 "
+                          "turns that off)"}
 
 
 # ------------------------------------------------- channel-level discovery

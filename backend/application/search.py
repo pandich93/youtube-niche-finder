@@ -16,6 +16,7 @@ from domain import idea_verdicts as IV
 from application import collecting
 from application import discovery as trends
 from application import llm_gateway
+from application import maturity_curve
 from infrastructure.categories import repository as C
 from infrastructure.llm import factory as llm_factory
 
@@ -353,6 +354,7 @@ def db_stats() -> dict:
         return conn.execute(sql).fetchone()[0]
     calls_today = collecting.search_calls_today(conn)
     units_today = collecting.units_today(conn)
+    curve = maturity_curve.status(conn)
     blocked_until = db.get_meta(conn, "worker_quota_blocked_until")
     out = {
         "channels": one("SELECT COUNT(*) FROM channels"),
@@ -378,6 +380,11 @@ def db_stats() -> dict:
             "daily_limit": yt.DAILY_UNIT_LIMIT,
             "units_left_today": max(0, yt.DAILY_UNIT_LIMIT - units_today),
             "resets_at": "midnight Pacific Time",
+        },
+        "maturity_curve": {
+            "source": curve["source"], "calibrated_at": curve["calibratedAt"],
+            "videos_used": curve["videosUsed"], "checked_at": curve["checkedAt"],
+            "reason": curve["reason"],
         },
         "worker_quota_blocked_until": blocked_until,
         "llm": {

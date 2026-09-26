@@ -468,8 +468,9 @@ niche_overview(niche="brain")
 
 **Ongoing — keep the worker running.** After a day, `vph24h` and
 `viewsGained24h` show up; after a week, channel growth and `momentum`;
-after a month, `calibrate_maturity_curve()` recomputes the curve for your
-niches.
+after about a month, the worker switches age-adjusted scores over to a
+maturity curve measured on your own niches (`calibrate_maturity_curve()`
+shows how close it is; `db_stats` shows which curve is in use).
 
 To have topics refresh themselves, set in `.env`:
 

@@ -119,15 +119,115 @@ def outlier_band(score) -> str | None:
 # ------------------------------------------------------- age normalisation
 
 # Share of a video's 30-day views typically accumulated by day t (long-form).
-# Calibrate this on your own snapshots once a few weeks of history exist:
-# see tracking.calibrate_maturity_curve().
+# This is the shipped default; once enough history exists the worker fits a
+# curve from our own snapshots (fit_maturity_curve) and application code
+# switches to it with set_maturity_curve().
 MATURITY_CURVE = {0: 0.20, 1: 0.35, 2: 0.45, 3: 0.52, 5: 0.61,
                   7: 0.68, 10: 0.75, 14: 0.82, 21: 0.91, 30: 1.00}
+
+# A fitted curve is only trusted if it has a point at each of these ages --
+# they are where the curve bends and where most "is it early?" questions land.
+# Day 0 is never observed (no snapshot at the moment of publication), so the
+# fitted curve keeps the shipped day-0 floor, capped at the fitted day 1.
+REQUIRED_CURVE_AGES = (1, 2, 3, 5, 7, 14, 21)
+# Views are interpolated to whole days only between snapshots at most this
+# many days apart; a longer gap (worker down) leaves those days unmeasured.
+MAX_SNAPSHOT_GAP_DAYS = 3
+
+_active_curve = None
+
+
+def set_maturity_curve(curve):
+    """Make `curve` ({age_days: share}) what maturity() uses by default;
+    None goes back to the shipped MATURITY_CURVE."""
+    global _active_curve
+    _active_curve = dict(curve) if curve else None
+
+
+def active_maturity_curve() -> dict:
+    return _active_curve or MATURITY_CURVE
+
+
+def _views_at_day_30(points):
+    """30-day views of one video: interpolated between the snapshots either
+    side of day 30 when one lies past it, else the latest snapshot at 28+
+    days (a slight underestimate, but never an extrapolation)."""
+    after = [p for p in points if p[0] >= 30]
+    before = [p for p in points if p[0] < 30]
+    if after and before:
+        (a0, v0), (a1, v1) = before[-1], after[0]
+        return v0 + (30 - a0) / (a1 - a0) * (v1 - v0) if a1 > a0 else v1
+    if after:
+        return after[0][1]
+    return before[-1][1] if before and before[-1][0] >= 28 else None
+
+
+def fit_maturity_curve(histories: dict, min_videos: int = 30,
+                       min_samples_per_age: int = 20,
+                       required_ages=REQUIRED_CURVE_AGES) -> dict:
+    """Fit MATURITY_CURVE from snapshot histories {video_id: [(age_days,
+    views), ...]}.
+
+    Only videos watched from publication count: first snapshot at <=1 day and
+    one at >=28 days, so every video contributes its own early days rather
+    than an old video's plateau. Each video's views are interpolated to whole
+    days 1..29 (only between snapshots <= MAX_SNAPSHOT_GAP_DAYS apart) and
+    divided by its day-30 views; a day's point is the median share and needs
+    `min_samples_per_age` videos. The result is made non-decreasing and
+    capped at 1.0 (noise can dip it), with 30 -> 1.0 and day 0 taken from the
+    shipped curve, capped at day 1.
+    `calibrated` is True only with >= `min_videos` videos and a point at every
+    age in `required_ages`; otherwise `reason` says what is missing and
+    no `curve` is returned."""
+    samples = {}
+    used = 0
+    for points in histories.values():
+        points = sorted(points)
+        if not points or points[0][0] > 1 or points[-1][0] < 28:
+            continue
+        base = _views_at_day_30(points)
+        if not base or base <= 0:
+            continue
+        used += 1
+        per_day = {}
+        for (a0, v0), (a1, v1) in zip(points, points[1:]):
+            if a1 <= a0 or a1 - a0 > MAX_SNAPSHOT_GAP_DAYS:
+                continue
+            for day in range(max(1, math.ceil(a0)), min(math.floor(a1), 29) + 1):
+                per_day.setdefault(day, v0 + (day - a0) / (a1 - a0) * (v1 - v0))
+        for day, views in per_day.items():
+            samples.setdefault(day, []).append(views / base)
+
+    counts = {day: len(v) for day, v in sorted(samples.items())}
+    curve, running = {}, 0.0
+    for day in sorted(samples):
+        if counts[day] < min_samples_per_age:
+            continue
+        running = min(1.0, max(running, st.median(samples[day])))
+        curve[day] = round(running, 3)
+    curve[30] = 1.0
+    curve[0] = min(MATURITY_CURVE[0], curve.get(1, MATURITY_CURVE[0]))
+    curve = dict(sorted(curve.items()))
+
+    missing = [a for a in required_ages if a not in curve]
+    out = {"calibrated": False, "videosUsed": used, "samplesPerAge": counts,
+           "missingAges": missing, "minVideos": min_videos,
+           "minSamplesPerAge": min_samples_per_age}
+    if used < min_videos:
+        out["reason"] = (f"needs {min_videos} videos tracked from publication "
+                         f"to 28+ days, has {used}")
+    elif missing:
+        out["reason"] = (f"fewer than {min_samples_per_age} videos at ages "
+                         f"{missing}")
+    else:
+        out["calibrated"] = True
+        out["curve"] = curve
+    return out
 
 
 def maturity(age_days: float, curve: dict = None) -> float:
     """Fraction of 30-day views a video of this age is expected to have."""
-    curve = curve or MATURITY_CURVE
+    curve = curve or active_maturity_curve()
     if age_days is None:
         return 1.0
     if age_days >= 30:

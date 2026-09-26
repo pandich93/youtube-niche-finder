@@ -761,9 +761,11 @@ def title_patterns(niche: str = None, channel_id: str = None, period: str = "90d
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
 def calibrate_maturity_curve(min_videos: int = 30) -> dict:
-    """Measure the real view-accumulation curve from our own snapshots and print
-    a replacement for metrics.MATURITY_CURVE, so age-adjusted outlier scores stop
-    relying on the shipped default. Needs ~30 videos watched from publication."""
+    """Measure the real view-accumulation curve from our own snapshots, with
+    the per-age sample counts and what is still missing. Read-only: the worker
+    re-checks daily and switches every age-adjusted score over to the measured
+    curve by itself once it passes (30+ videos watched from publication to
+    28+ days); db_stats shows which curve is in use."""
     return T.calibrate_maturity_curve(min_videos=min_videos)
 
 

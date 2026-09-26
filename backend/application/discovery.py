@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import collecting as collector
+from application import maturity_curve as MC
 from domain import metrics as M
 from domain import periods as P
 from domain import keywords as K
@@ -187,6 +188,7 @@ def _history_map(conn, video_ids):
 
 
 def _enrich(conn, rows, ref=None):
+    MC.ensure_loaded(conn)
     baselines, period_baselines = _channel_baselines(conn, {r["channel_id"] for r in rows})
     history = _history_map(conn, [r["video_id"] for r in rows])
     for r in rows:

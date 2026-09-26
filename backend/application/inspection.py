@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import collecting as collector
+from application import maturity_curve as MC
 from domain import metrics as M
 from domain import periods as P
 
@@ -165,6 +166,7 @@ def inspect_video(api_key: str, video_id: str, refresh: bool = False,
                   fetch: bool = True, stale_hours: float = VIDEO_STALE_HOURS) -> dict:
     conn = db.get_conn()
     try:
+        MC.ensure_loaded(conn)
         quota = 0
         fetched = False
         v = _video_row(conn, video_id)

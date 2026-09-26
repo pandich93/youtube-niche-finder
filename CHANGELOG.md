@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Self-calibrating maturity curve** (`backend/application/maturity_curve.py`,
+  `metrics.fit_maturity_curve`) — the worker re-fits the "share of 30-day
+  views by age" curve from `video_stats_history` every
+  `WORKER_CALIBRATE_INTERVAL_MIN` (1440) and, once 30+ videos have been
+  watched from publication to 28+ days with a point at days 1-21, stores it
+  in `meta`; web, MCP and worker then use it for every age-adjusted outlier
+  score and `projected30dViews` instead of the shipped curve. Views are
+  interpolated to whole days between snapshots at most 3 days apart, the
+  curve is forced non-decreasing and capped at 1.0. A later failing check
+  never drops a stored curve; `MATURITY_CURVE_AUTO=0` turns it off.
+  `/api/health` (`maturityCurve`) and MCP `db_stats` (`maturity_curve`) say
+  which curve is in use and why; `calibrate_maturity_curve` now reports
+  per-age sample counts and missing ages, and only counts videos that
+  actually contributed points.
+
+- **Shared YouTube quota counter** — every request the YouTube client sends
+  (retries and failures included) is added to a per-Pacific-day counter;
+  `/api/health` (`unitQuota`), MCP `db_stats` (`unit_quota`) and the
+  dashboard footer show units left out of `YOUTUBE_DAILY_UNIT_LIMIT`
+  (10,000).
+
 - **Local Ollama LLM provider** (`backend/infrastructure/llm/ollama.py`,
   stage 11) — `LLM_PROVIDER=ollama` routes every `llm_gateway.run()` call to
   a local [Ollama](https://ollama.com) install (`OLLAMA_URL`, `OLLAMA_MODEL`)
