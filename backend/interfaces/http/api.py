@@ -7,6 +7,8 @@
 Разделение по методам осмысленное, а не косметическое: GET ничего не стоит и
 читает локальную базу, POST тратит квоту YouTube. Сервис слушает только
 127.0.0.1 -- внутри лежит ваш API-ключ, наружу его выставлять незачем.
+От чужих сайтов в браузере прикрывает local_only_guard: проверка Host и
+обязательный JSON или X-NF-Client у POST/PUT/PATCH/DELETE.
 """
 import os
 import time
@@ -102,10 +104,97 @@ async def rate_limit(request, call_next):
     return await call_next(request)
 
 
-# Лимитер объявлен ВЫШЕ CORS намеренно: последний добавленный middleware в
-# Starlette оказывается внешним, поэтому так CORS оборачивает лимитер и ответ
-# 429 тоже уезжает с нужными заголовками -- иначе расширение увидело бы вместо
-# честного 429 непрозрачную ошибку CORS.
+# ------------------------------------------------ защита от чужих сайтов
+#
+# Аутентификации нет, а 127.0.0.1 доступен любой открытой в браузере вкладке.
+# Две дыры, которые это открывает, и чем они закрыты:
+#
+# 1. DNS rebinding: чужой домен начинает резолвиться в 127.0.0.1, и его
+#    страница читает /api/* как свой origin. Браузер при этом шлёт Host с
+#    чужим именем -- отвечаем 400 на всё, чего нет в ALLOWED_HOSTS.
+# 2. "Простой" cross-origin POST (form/fetch без своих заголовков, text/plain)
+#    уходит без CORS-preflight. Тела с JSON FastAPI и так отсекает по
+#    content-type, но маршруты, которые берут параметры только из query
+#    (enrich, events/scan, reindex, recompute), выполнились бы. Поэтому любой
+#    изменяющий запрос обязан нести Content-Type JSON или X-NF-Client: оба
+#    заставляют браузер сначала спросить preflight, а его CORS пропускает
+#    только для chrome-extension://.
+#
+# Своё middleware, а не starlette TrustedHostMiddleware: тот режет Host по
+# первому ":" и ломает [::1]:8080, отвечает plain text вместо нашего JSON с
+# detail и фиксирует список при создании (тесты не могут его подменить).
+
+_LOCAL_HOSTS = ("127.0.0.1", "localhost", "[::1]",
+                # имя сервиса и container_name из docker-compose.yml -- так web
+                # видят другие контейнеры в сети niche-finder_default
+                "web", "niche-finder-web")
+
+
+def _host_name(value):
+    """Имя из заголовка Host без порта, в нижнем регистре; "" -- если заголовок
+    кривой (порт не число, незакрытая скобка IPv6)."""
+    value = (value or "").strip().lower()
+    if value.startswith("["):
+        end = value.find("]")
+        if end == -1:
+            return ""
+        name, rest = value[:end + 1], value[end + 1:]
+        if rest and not (rest.startswith(":") and rest[1:].isdigit()):
+            return ""
+        return name
+    name, sep, port = value.partition(":")
+    if sep and not port.isdigit():
+        return ""
+    return name
+
+
+def _allowed_hosts(extra):
+    """Локальные имена плюс NF_ALLOWED_HOSTS (через запятую, порт можно
+    указывать -- он отбрасывается)."""
+    hosts = set(_LOCAL_HOSTS)
+    for item in (extra or "").split(","):
+        name = _host_name(item)
+        if name:
+            hosts.add(name)
+    return hosts
+
+
+ALLOWED_HOSTS = _allowed_hosts(os.environ.get("NF_ALLOWED_HOSTS"))
+_UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def _is_json(content_type):
+    media = (content_type or "").split(";", 1)[0].strip().lower()
+    return media == "application/json" or (
+        media.startswith("application/") and media.endswith("+json"))
+
+
+@app.middleware("http")
+async def local_only_guard(request, call_next):
+    host = request.headers.get("host")
+    if _host_name(host) not in ALLOWED_HOSTS:
+        return JSONResponse(
+            status_code=400,
+            content={"detail": f"Недопустимый заголовок Host: {(host or "")[:100]!r}. API отвечает "
+                               f"только на 127.0.0.1, localhost и [::1]; другое имя "
+                               f"добавьте в NF_ALLOWED_HOSTS в .env."})
+    if (request.method in _UNSAFE_METHODS
+            and not _is_json(request.headers.get("content-type"))
+            and not request.headers.get("x-nf-client", "").strip()):
+        return JSONResponse(
+            status_code=403,
+            content={"detail": "Изменяющий запрос без Content-Type: application/json "
+                               "и без заголовка X-NF-Client отклонён -- так выглядит "
+                               "запрос с чужого сайта. Добавьте заголовок "
+                               "X-NF-Client: <имя клиента>."})
+    return await call_next(request)
+
+
+# Лимитер и защита объявлены ВЫШЕ CORS намеренно: последний добавленный
+# middleware в Starlette оказывается внешним, поэтому так CORS оборачивает их
+# обоих и ответы 429/403/400 тоже уезжают с нужными заголовками -- иначе
+# расширение увидело бы вместо честной ошибки непрозрачную ошибку CORS. По той
+# же причине preflight (OPTIONS) CORS отвечает сам и до защиты он не доходит.
 # Расширение для Chrome ходит сюда со своего origin (chrome-extension://...).
 # Service worker с host_permissions обошёлся бы и без CORS, но с заголовками
 # запросы можно отлаживать прямо из консоли страницы. Сервис слушает только

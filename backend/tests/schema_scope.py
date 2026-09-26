@@ -35,6 +35,13 @@ SCHEMA = os.environ["NICHE_DB_SCHEMA"]
 
 _module_seq = itertools.count(1)
 
+# TestClient шлёт Host: testserver, а HTTP API отвечает только локальным именам
+# (interfaces/http/api.py, local_only_guard). Разрешаем его явно через ту же
+# настройку, что и у пользователя, -- до импорта api, который читает её один раз.
+_extra_hosts = os.environ.get("NF_ALLOWED_HOSTS", "")
+if "testserver" not in _extra_hosts.split(","):
+    os.environ["NF_ALLOWED_HOSTS"] = ",".join(filter(None, [_extra_hosts, "testserver"]))
+
 
 def _drop(schema):
     if os.environ.get("NICHE_KEEP_TEST_SCHEMA"):

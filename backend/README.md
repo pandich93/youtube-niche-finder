@@ -102,6 +102,17 @@ lost, since every read path already has that Python fallback).
 The dashboard is `frontend/`, see [frontend/README.md](../frontend/README.md).
 It shows the same sections as the MCP tools, and only listens on localhost.
 
+The HTTP API (`interfaces/http/api.py`) has no login, so it guards itself
+against other websites open in the same browser. It answers only when the
+`Host` header is `127.0.0.1`, `localhost`, `[::1]` or the compose service
+name `web` (any port) -- anything else gets `400`, which stops DNS rebinding;
+add your own names with `NF_ALLOWED_HOSTS` (comma-separated). Every `POST`,
+`PUT`, `PATCH` and `DELETE` must carry `Content-Type: application/json` or an
+`X-NF-Client` header (any value), otherwise `403`: both force the browser into
+a CORS preflight, which only `chrome-extension://` origins pass. The dashboard
+sends `Content-Type: application/json` on every request; a script needs one too:
+`curl -X POST -H 'X-NF-Client: script' http://127.0.0.1:8080/api/events/scan`.
+
 The key is only needed at runtime, not at build time: `docker compose build`
 works fine with an empty `.env`. If there's no key, the worker says so and
 exits, while the read tools keep working off whatever's already collected.
@@ -424,7 +435,7 @@ required. The optional groups:
 | LLM (off by default) | `LLM_PROVIDER` (`none` / `openrouter` / `ollama`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_MODEL_LONG` (long-context model for comment insights), `OPENROUTER_REFERER`, `OPENROUTER_TITLE`, `OLLAMA_URL`, `OLLAMA_MODEL`, `LLM_DAILY_BUDGET_USD`, `LLM_RELABEL_DAYS`, `LLM_MIN_MANUAL_TAGS`, `LLM_INSIGHTS_TTL_DAYS` (7), `LLM_WHY_VIRAL_TTL_DAYS` (14) |
 | Niche clusters | `NICHE_CLUSTERS_MIN_CHANNELS` (10), `NICHE_CLUSTERS_COMPETITION_SUBS` (100000) |
 | Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_DASHBOARD_URL` |
-| Servers | `WEB_PORT`, `RATE_LIMIT_PER_MINUTE`, `MCP_TRANSPORT` (`stdio`), `MCP_HOST`, `MCP_PORT` |
+| Servers | `WEB_PORT`, `RATE_LIMIT_PER_MINUTE`, `NF_ALLOWED_HOSTS` (extra `Host` names for the HTTP API), `MCP_TRANSPORT` (`stdio`), `MCP_HOST`, `MCP_PORT` |
 
 What leaves the machine when the LLM or alert delivery is on is described in
 [PRIVACY.md](../PRIVACY.md).
