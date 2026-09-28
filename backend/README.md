@@ -384,7 +384,7 @@ separately (or via cron), otherwise the velocity fields stay empty.
 
 | Tool | What it gives you |
 |---|---|
-| `scan_for_alerts` | run the alert scan now: new outlier, acceleration, title change, a channel posting again after silence (tracked channels only) |
+| `scan_for_alerts` | run the alert scan now: new outlier, acceleration, title change, a channel posting again after silence, a channel or an alerted outlier video that the API stopped returning (tracked channels only; "gone" needs two misses at least 6h apart, and a failed or over-quota API call never counts as a miss) |
 | `list_events` / `mark_events_seen` | the event feed, optionally unseen-only or one kind |
 
 Delivery to Telegram or a webhook is optional -- see [Configuration](#configuration).

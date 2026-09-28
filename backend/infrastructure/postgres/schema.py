@@ -234,6 +234,21 @@ CREATE TABLE IF NOT EXISTS alert_deliveries (
     sent_at TEXT
 );
 
+-- ---------- channels/videos the API stopped returning (plan 04) ----------
+-- Written by refresh_channels/refresh_stats only after a successful API call;
+-- a row is "gone" once confirmed_at is set (domain/alerts.py gone_transition),
+-- and is deleted as soon as the item shows up again.
+
+CREATE TABLE IF NOT EXISTS gone_items (
+    kind TEXT,               -- 'channel' | 'video'
+    ref_id TEXT,
+    first_missing_at TEXT,
+    last_missing_at TEXT,
+    miss_count INTEGER,
+    confirmed_at TEXT,
+    PRIMARY KEY (kind, ref_id)
+);
+
 -- ---------- v9: manually-pasted transcripts + hybrid search (stage 19) ----------
 -- Never fetched automatically -- the user copies a transcript off YouTube's
 -- own UI and pastes it in; see PRIVACY.md.

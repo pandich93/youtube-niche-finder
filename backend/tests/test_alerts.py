@@ -22,7 +22,7 @@ SCHEMA = """
 CREATE TABLE channels (
   channel_id TEXT PRIMARY KEY, title TEXT, custom_url TEXT, country TEXT,
   subscriber_count INTEGER, video_count INTEGER, view_count INTEGER,
-  llm_labels TEXT, llm_labeled_at TEXT
+  llm_labels TEXT, llm_labeled_at TEXT, updated_at TEXT
 );
 CREATE TABLE videos (
   video_id TEXT PRIMARY KEY, channel_id TEXT, title TEXT, tags TEXT,
@@ -45,6 +45,10 @@ CREATE TABLE video_changes (
 CREATE TABLE events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, ref_id TEXT, payload TEXT,
   created_at TEXT, seen_at TEXT
+);
+CREATE TABLE gone_items (
+  kind TEXT, ref_id TEXT, first_missing_at TEXT, last_missing_at TEXT,
+  miss_count INTEGER, confirmed_at TEXT, PRIMARY KEY (kind, ref_id)
 );
 """
 
@@ -144,17 +148,22 @@ def seed():
     RAW.commit()
 
 
+NONE_EMITTED = {"outlier": 0, "acceleration": 0, "title_change": 0, "silence_break": 0,
+                "channel_gone": 0, "video_gone": 0}
+
+
 def test_scan_emits_exactly_one_event_of_each_kind():
     reset(); seed()
     res = AL.scan(period="180d")
-    assert res["emitted"] == {"outlier": 1, "acceleration": 1, "title_change": 1, "silence_break": 1}, res
+    assert res["emitted"] == {**NONE_EMITTED, "outlier": 1, "acceleration": 1,
+                              "title_change": 1, "silence_break": 1}, res
 
 
 def test_scan_again_produces_no_duplicates():
     reset(); seed()
     AL.scan(period="180d")
     res2 = AL.scan(period="180d")
-    assert res2["emitted"] == {"outlier": 0, "acceleration": 0, "title_change": 0, "silence_break": 0}, res2
+    assert res2["emitted"] == NONE_EMITTED, res2
     # exactly 4 rows total in the events table, not 8
     events = AL.list_events(limit=100)
     assert len(events) == 4
@@ -163,7 +172,7 @@ def test_scan_again_produces_no_duplicates():
 def test_scan_with_no_tracked_channels_is_a_noop():
     reset()
     res = AL.scan(period="180d")
-    assert res["emitted"] == {"outlier": 0, "acceleration": 0, "title_change": 0, "silence_break": 0}
+    assert res["emitted"] == NONE_EMITTED
     assert "hint" in res
 
 
@@ -189,6 +198,72 @@ def test_events_carry_readable_payload():
     assert by_kind["title_change"]["payload"]["oldTitle"] == "Старое название"
     assert by_kind["silence_break"]["payload"]["videoId"] == "vsilence_new"
     assert by_kind["silence_break"]["payload"]["gapDays"] >= 14
+
+
+# ------------------------------------------------------------ gone (plan 04)
+
+CH_GONE = "UCgonechannel0000000001"
+
+
+def _gone(kind, ref_id, confirmed=True):
+    first = iso(NOW - timedelta(days=2))
+    RAW.execute(
+        "INSERT INTO gone_items (kind, ref_id, first_missing_at, last_missing_at,"
+        " miss_count, confirmed_at) VALUES (?,?,?,?,?,?)",
+        (kind, ref_id, first, iso(NOW), 2, iso(NOW) if confirmed else None))
+    return first
+
+
+def test_confirmed_gone_tracked_channel_emits_channel_gone_with_last_known_numbers():
+    reset()
+    _channel(CH_GONE, subs=12_000, videos=40, views=3_000_000)
+    RAW.execute("UPDATE channels SET updated_at=? WHERE channel_id=?",
+                (iso(NOW - timedelta(days=3)), CH_GONE))
+    _track(CH_GONE)
+    first = _gone("channel", CH_GONE)
+    RAW.commit()
+    res = AL.scan(period="180d")
+    assert res["emitted"]["channel_gone"] == 1, res
+    ev = [e for e in AL.list_events(limit=100) if e["kind"] == "channel_gone"][0]
+    assert ev["refId"] == f"{CH_GONE}:{first}"
+    assert ev["payload"]["subscribers"] == 12_000
+    assert ev["payload"]["title"] == CH_GONE
+    assert ev["payload"]["lastSeenAt"] == iso(NOW - timedelta(days=3))
+
+
+def test_unconfirmed_or_untracked_gone_channel_emits_nothing():
+    reset()
+    _channel(CH_GONE); _track(CH_GONE)
+    _gone("channel", CH_GONE, confirmed=False)
+    _channel("UCuntrackedgone00000001")
+    _gone("channel", "UCuntrackedgone00000001")
+    RAW.commit()
+    res = AL.scan(period="180d")
+    assert res["emitted"]["channel_gone"] == 0, res
+
+
+def test_gone_channel_alerts_once_across_repeated_scans():
+    reset()
+    _channel(CH_GONE); _track(CH_GONE); _gone("channel", CH_GONE)
+    RAW.commit()
+    AL.scan(period="180d")
+    res2 = AL.scan(period="180d")
+    assert res2["emitted"]["channel_gone"] == 0
+    assert len([e for e in AL.list_events(limit=100) if e["kind"] == "channel_gone"]) == 1
+
+
+def test_video_gone_only_for_videos_that_were_alerted_as_outliers():
+    reset(); seed()
+    AL.scan(period="180d")                      # emits the outlier event for voutlier1
+    _gone("video", "voutlier1")                 # an alerted outlier disappears
+    _gone("video", "vtitle1")                   # an ordinary video disappears -- noise
+    RAW.commit()
+    res = AL.scan(period="180d")
+    assert res["emitted"]["video_gone"] == 1, res
+    ev = [e for e in AL.list_events(limit=100) if e["kind"] == "video_gone"][0]
+    assert ev["payload"]["videoId"] == "voutlier1"
+    assert ev["payload"]["channelId"] == CH_OUTLIER
+    assert ev["payload"]["outlierScore"] >= 3.0
 
 
 def _run_all():

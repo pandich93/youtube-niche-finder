@@ -140,7 +140,7 @@ cp .env.example .env   # впишите YOUTUBE_API_KEY</code></pre>
         <h4>Алерты, заголовки, избранное, транскрипты</h4>
         <ul>
           <li><code>scan_for_alerts</code>, <code>list_events</code>, <code>mark_events_seen</code> —
-            новые outlier'ы, ускорение, смена заголовка, возвращение канала после паузы.</li>
+            новые outlier'ы, ускорение, смена заголовка, возвращение канала после паузы, пропавший канал или видео.</li>
           <li><code>score_titles</code>, <code>review_metadata</code>, <code>save_draft</code> /
             <code>list_drafts</code> / <code>link_draft</code>, <code>draft_outcomes</code> — проверка
             заголовков и метаданных, черновики и сверка прогноза с итогом.</li>

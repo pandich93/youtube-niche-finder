@@ -72,6 +72,77 @@ def test_silence_break_first_upload_ever_is_not_an_event():
     assert out == []
 
 
+T0 = "2026-09-01T00:00:00+00:00"
+T_PLUS_2H = "2026-09-01T02:00:00+00:00"
+T_PLUS_7H = "2026-09-01T07:00:00+00:00"
+
+
+def test_gone_first_miss_is_only_a_candidate():
+    st = A.gone_transition(None, missing=True, now_iso=T0)
+    assert st == {"first_missing_at": T0, "last_missing_at": T0,
+                  "miss_count": 1, "confirmed_at": None}
+
+
+def test_gone_second_miss_too_soon_is_not_confirmed():
+    st = A.gone_transition(None, missing=True, now_iso=T0)
+    st = A.gone_transition(st, missing=True, now_iso=T_PLUS_2H)
+    assert st["miss_count"] == 2
+    assert st["confirmed_at"] is None
+
+
+def test_gone_second_miss_after_min_hours_is_confirmed():
+    st = A.gone_transition(None, missing=True, now_iso=T0)
+    st = A.gone_transition(st, missing=True, now_iso=T_PLUS_7H)
+    assert st["confirmed_at"] == T_PLUS_7H
+    assert st["first_missing_at"] == T0
+
+
+def test_gone_long_wait_after_a_single_miss_still_needs_a_second_miss():
+    # One miss, however old, is one observation -- a flaky call a week ago
+    # must not confirm anything on its own.
+    st = A.gone_transition(None, missing=True, now_iso=T0)
+    assert st["confirmed_at"] is None
+
+
+def test_gone_confirmation_is_sticky_on_later_misses():
+    st = A.gone_transition(None, missing=True, now_iso=T0)
+    st = A.gone_transition(st, missing=True, now_iso=T_PLUS_7H)
+    st = A.gone_transition(st, missing=True, now_iso="2026-09-02T00:00:00+00:00")
+    assert st["confirmed_at"] == T_PLUS_7H
+    assert st["miss_count"] == 3
+
+
+def test_gone_reappearing_clears_the_state():
+    st = A.gone_transition(None, missing=True, now_iso=T0)
+    assert A.gone_transition(st, missing=False, now_iso=T_PLUS_2H) is None
+    assert A.gone_transition(None, missing=False, now_iso=T0) is None
+
+
+def test_detect_gone_ref_folds_in_first_missing_at_so_a_second_disappearance_alerts_again():
+    rows = [
+        {"kind": "channel", "ref_id": "UCgone", "first_missing_at": T0,
+         "confirmed_at": T_PLUS_7H, "title": "Gone Channel", "subscriber_count": 12000,
+         "view_count": 3_000_000, "video_count": 40, "last_seen_at": "2026-08-31T00:00:00+00:00"},
+        {"kind": "video", "ref_id": "vgone", "first_missing_at": T0,
+         "confirmed_at": T_PLUS_7H, "title": "Gone Video", "channel_id": "UCx",
+         "view_count": 90_000, "outlier_score": 5.5},
+    ]
+    out = A.detect_gone(rows)
+    assert [(e["kind"], e["refId"]) for e in out] == [
+        ("channel_gone", f"UCgone:{T0}"), ("video_gone", f"vgone:{T0}")]
+    ch, vid = out[0]["payload"], out[1]["payload"]
+    assert ch["channelId"] == "UCgone" and ch["subscribers"] == 12000
+    assert ch["goneSince"] == T0 and ch["lastSeenAt"] == "2026-08-31T00:00:00+00:00"
+    assert vid["videoId"] == "vgone" and vid["channelId"] == "UCx"
+    assert vid["outlierScore"] == 5.5 and vid["views"] == 90_000
+
+
+def test_detect_gone_skips_unconfirmed_rows():
+    rows = [{"kind": "channel", "ref_id": "UCmaybe", "first_missing_at": T0,
+             "confirmed_at": None}]
+    assert A.detect_gone(rows) == []
+
+
 def _run_all():
     ns = dict(globals())
     tests = [(name, fn) for name, fn in ns.items() if name.startswith("test_")]

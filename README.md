@@ -58,7 +58,8 @@ database.
   video or niche
 - Transcripts: a queue, manual paste, hybrid (keyword + semantic) search
 - Alerts (new outliers, view acceleration, title changes, a channel
-  breaking its silence), delivered to Telegram or a webhook; a swipe file for saved videos and channels
+  breaking its silence, a tracked channel or an alerted outlier video that
+  disappeared from YouTube), delivered to Telegram or a webhook; a swipe file for saved videos and channels
 - Export a niche's videos to TSV/CSV
 - Only the free YouTube Data API v3 and local PostgreSQL — no paid
   subscriptions and no LLM key required. An LLM (via OpenRouter or a local

@@ -158,6 +158,26 @@ def test_message_format_includes_youtube_and_dashboard_links():
     assert "<script>" not in text
 
 
+def test_channel_gone_message_names_the_channel_and_its_last_numbers():
+    ev = {"kind": "channel_gone", "payload": {
+        "channelId": "UCgone", "title": "<b>Gone</b>", "subscribers": 12000,
+        "views": 3000000, "videoCount": 40, "goneSince": "2026-09-01T00:00:00+00:00"}}
+    text = alerts._format_message(ev)
+    assert "Канал больше не доступен" in text
+    assert "&lt;b&gt;Gone&lt;/b&gt;" in text
+    assert "12000" in text and "2026-09-01" in text
+    assert "UCgone" in text  # dashboard link
+
+
+def test_video_gone_message_mentions_it_was_an_outlier():
+    ev = {"kind": "video_gone", "payload": {
+        "videoId": "vgone", "channelId": "UCx", "title": "Gone Video",
+        "views": 90000, "outlierScore": 5.5, "goneSince": "2026-09-01T00:00:00+00:00"}}
+    text = alerts._format_message(ev)
+    assert "Видео больше не доступно" in text
+    assert "×5.5" in text and "Gone Video" in text
+
+
 if __name__ == "__main__":
     setup_module()
 

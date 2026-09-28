@@ -50,7 +50,8 @@ saved items are listed on the dashboard's "Saved" screen (`#/saved`).
 Besides the settings below, the popup has:
 
 * **Alerts** — events from the backend's alert scan: new outlier videos,
-  view acceleration, title changes, and channels breaking a long silence. "Check now" triggers a scan
+  view acceleration, title changes, channels breaking a long silence, and
+  channels or outlier videos that disappeared from YouTube. "Check now" triggers a scan
   (`POST /api/events/scan`) without waiting for the worker; "Mark as read"
   clears the unseen counter.
 * **Draft metadata review** — the same check as the dashboard's "Metadata

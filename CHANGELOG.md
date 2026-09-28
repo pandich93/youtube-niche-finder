@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **"Gone" alerts** (plan 04) — `refresh_channels` / `refresh_stats` now
+  record ids the YouTube API stopped returning in a new `gone_items` table
+  (`gone` in their results). An item counts as gone only after two misses
+  at least 6 hours apart; a failed or over-quota API call is never counted
+  as a miss, and an item that shows up again is cleared. The alert scan
+  emits `channel_gone` for tracked channels and `video_gone` for their
+  videos that were already alerted as outliers, with the last known
+  subscribers/views in the Telegram/webhook message and the extension popup.
+
 - **Self-calibrating maturity curve** (`backend/application/maturity_curve.py`,
   `metrics.fit_maturity_curve`) — the worker re-fits the "share of 30-day
   views by age" curve from `video_stats_history` every

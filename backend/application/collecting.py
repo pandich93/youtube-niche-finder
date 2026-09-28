@@ -15,6 +15,7 @@ import re
 
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
+from domain import alerts as A
 from domain import metrics as M
 from domain import periods as P
 
@@ -524,13 +525,56 @@ def refresh_stats(api_key: str, scope: str = "recent", period: str = "30d",
         ).fetchone()[0]
         changes += after - before
         updated += 1
+    gone = _track_gone(conn, "video", ids, [it["id"] for it in items], now)
     conn.commit()
     conn.close()
     return {
         "scope": scope, "period": period, "requested": len(ids), "refreshed": updated,
         "failed": len(failed), "title_or_thumbnail_changes_detected": changes,
+        "gone": gone,
         "quota": {"units_from_shared_pool": (len(ids) + 49) // 50, "search_calls": 0},
     }
+
+
+def _track_gone(conn, kind: str, requested, returned, now: str) -> dict:
+    """Plan 04: record which requested ids a SUCCESSFUL API call did not
+    return. Callers invoke this only after the YouTube call came back without
+    raising -- QuotaExceeded or a network error propagates before we get
+    here, so an exhausted quota can never look like every channel vanished.
+    Deliberately a set difference and not the client's `failed` list:
+    videos_batch_get_stats falls back to videos.list on error and then
+    reports failed=[] even though gone videos are simply absent."""
+    requested = set(requested)
+    returned = set(returned) & requested
+    missing = requested - returned
+    existing = {}
+    ids = list(requested)
+    for i in range(0, len(ids), 400):
+        chunk = ids[i:i + 400]
+        q = ("SELECT ref_id, first_missing_at, last_missing_at, miss_count, confirmed_at "
+             "FROM gone_items WHERE kind=? AND ref_id IN (%s)" % ",".join("?" * len(chunk)))
+        for r in conn.execute(q, [kind, *chunk]).fetchall():
+            existing[r["ref_id"]] = dict(r)
+    for ref_id in returned & existing.keys():
+        conn.execute("DELETE FROM gone_items WHERE kind=? AND ref_id=?", (kind, ref_id))
+    confirmed = 0
+    for ref_id in missing:
+        before = existing.get(ref_id)
+        if before:
+            before = {k: before[k] for k in
+                      ("first_missing_at", "last_missing_at", "miss_count", "confirmed_at")}
+        st = A.gone_transition(before, True, now)
+        conn.execute(
+            "INSERT INTO gone_items (kind, ref_id, first_missing_at, last_missing_at, "
+            "miss_count, confirmed_at) VALUES (?,?,?,?,?,?) "
+            "ON CONFLICT (kind, ref_id) DO UPDATE SET "
+            "last_missing_at=excluded.last_missing_at, miss_count=excluded.miss_count, "
+            "confirmed_at=excluded.confirmed_at",
+            (kind, ref_id, st["first_missing_at"], st["last_missing_at"],
+             st["miss_count"], st["confirmed_at"]))
+        if st["confirmed_at"] and not (before or {}).get("confirmed_at"):
+            confirmed += 1
+    return {"missing": len(missing), "confirmed": confirmed}
 
 
 def refresh_channels(api_key: str, channel_ids=None, only_tracked=True) -> dict:
@@ -555,9 +599,13 @@ def refresh_channels(api_key: str, channel_ids=None, only_tracked=True) -> dict:
     store_channels(conn, items, now)
     conn.execute(
         "UPDATE tracked_channels SET last_refreshed_at=? WHERE active=1", (now,))
+    # Only real channel ids can be "gone": a handle or a typo passed in
+    # channel_ids was never going to come back from channels.list by id.
+    requested = [i for i in ids if CHANNEL_ID_RE.fullmatch(i or "")]
+    gone = _track_gone(conn, "channel", requested, [it["id"] for it in items], now)
     conn.commit()
     conn.close()
-    return {"refreshed": len(items),
+    return {"refreshed": len(items), "gone": gone,
             "quota": {"units_from_shared_pool": (len(ids) + 49) // 50, "search_calls": 0}}
 
 

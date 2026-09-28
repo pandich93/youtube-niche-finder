@@ -16,6 +16,11 @@ from datetime import datetime, timezone
 OUTLIER_THRESHOLD_DEFAULT = 3.0
 ACCELERATION_THRESHOLD_DEFAULT = 2.0
 SILENCE_DAYS_DEFAULT = 14
+# A channel/video the API stops returning is only "gone" after this many
+# misses spread over at least this many hours -- one flaky response (or a
+# partial batch) must never page anyone.
+GONE_MIN_MISSES = 2
+GONE_MIN_HOURS = 6.0
 
 
 def _dt(iso):
@@ -112,4 +117,66 @@ def detect_silence_breaks(channel_uploads: dict, silence_days: float = SILENCE_D
                                 "channelId": channel_id,
                                 "gapDays": round(gap_days, 1)},
                 })
+    return out
+
+
+def gone_transition(state, missing: bool, now_iso: str,
+                    min_misses: int = GONE_MIN_MISSES,
+                    min_hours: float = GONE_MIN_HOURS):
+    """One step of the "is it gone?" state for a single channel/video.
+
+    state: None (not a candidate) or {"first_missing_at", "last_missing_at",
+    "miss_count", "confirmed_at"}; returns the next state, or None when the
+    item was returned by the API again (a transient miss, drop it). Only ever
+    called after a SUCCESSFUL API call -- a failed call (quota, network) is
+    not evidence of anything, see application/collecting.py::_track_gone.
+    Confirmation needs both enough misses and enough time between the first
+    and the latest one, and sticks once reached."""
+    if not missing:
+        return None
+    if state is None:
+        state = {"first_missing_at": now_iso, "last_missing_at": now_iso,
+                 "miss_count": 1, "confirmed_at": None}
+    else:
+        state = dict(state, last_missing_at=now_iso,
+                     miss_count=(state.get("miss_count") or 0) + 1)
+    if not state.get("confirmed_at") and state["miss_count"] >= min_misses:
+        first, cur = _dt(state["first_missing_at"]), _dt(now_iso)
+        if first and cur and (cur - first).total_seconds() / 3600 >= min_hours:
+            state["confirmed_at"] = now_iso
+    return state
+
+
+def detect_gone(rows) -> list:
+    """rows: gone_items joined with the last known numbers --
+    channel: {"kind": "channel", "ref_id", "first_missing_at", "confirmed_at",
+              "title", "subscriber_count", "view_count", "video_count", "last_seen_at"}
+    video:   {"kind": "video", "ref_id", "first_missing_at", "confirmed_at",
+              "title", "channel_id", "view_count", "outlier_score"}.
+    Unconfirmed rows are skipped. refId folds in first_missing_at, so a
+    channel that comes back and later disappears again alerts a second time."""
+    out = []
+    for r in rows:
+        if not r.get("confirmed_at"):
+            continue
+        ref = f"{r['ref_id']}:{r.get('first_missing_at') or ''}"
+        if r["kind"] == "channel":
+            out.append({
+                "kind": "channel_gone", "refId": ref,
+                "payload": {"channelId": r["ref_id"], "title": r.get("title"),
+                            "subscribers": r.get("subscriber_count"),
+                            "views": r.get("view_count"),
+                            "videoCount": r.get("video_count"),
+                            "lastSeenAt": r.get("last_seen_at"),
+                            "goneSince": r.get("first_missing_at")},
+            })
+        elif r["kind"] == "video":
+            out.append({
+                "kind": "video_gone", "refId": ref,
+                "payload": {"videoId": r["ref_id"], "title": r.get("title"),
+                            "channelId": r.get("channel_id"),
+                            "views": r.get("view_count"),
+                            "outlierScore": r.get("outlier_score"),
+                            "goneSince": r.get("first_missing_at")},
+            })
     return out

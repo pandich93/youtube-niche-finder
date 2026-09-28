@@ -122,6 +122,8 @@ def refresh_stats(scope: str = "recent", period: str = "30d", limit: int = 1000,
     This is what turns a snapshot API into a time series: vph24h, viewsGained24h,
     acceleration and title/thumbnail-change detection all come from these rows.
     Run it at least daily (the Docker worker does it for you).
+    Videos the API no longer returns are recorded as "gone" candidates
+    (`gone` in the result) for the video_gone alert.
     scope: recent | tracked | niche | all. Cost ~1 unit per 50 videos.
     """
     _require_key()
@@ -135,7 +137,9 @@ def refresh_stats(scope: str = "recent", period: str = "30d", limit: int = 1000,
 def refresh_channels(channel_ids: list = None, only_tracked: bool = True) -> dict:
     """Snapshot subscriber/view/video counts for channels, for growth tracking.
     1 unit per 50 channels. Note the API rounds subscriberCount to 3 significant
-    figures, so subscriber deltas are only meaningful below ~100k subs."""
+    figures, so subscriber deltas are only meaningful below ~100k subs.
+    Channels the API no longer returns are recorded as "gone" candidates
+    (`gone` in the result) for the channel_gone alert."""
     _require_key()
     return collector.refresh_channels(API_KEY, channel_ids=channel_ids,
                                       only_tracked=only_tracked)
@@ -963,9 +967,11 @@ def draft_outcomes(min_age_days: float = 7.0) -> list:
 def scan_for_alerts() -> dict:
     """Run the alert scan right now instead of waiting for the worker's own
     schedule: new outlier (x>=3) on a tracked channel, a video accelerating
-    (x>=2), a title changed, or a channel posting again after a silent
-    stretch. Zero quota -- reads only what's already collected. Idempotent:
-    re-running never creates duplicate events for the same occurrence."""
+    (x>=2), a title changed, a channel posting again after a silent
+    stretch, or a tracked channel / already-alerted outlier video that the
+    API stopped returning (confirmed after two misses 6h+ apart). Zero
+    quota -- reads only what's already collected. Idempotent: re-running
+    never creates duplicate events for the same occurrence."""
     from application import alerts as alerts_mod
     return alerts_mod.scan()
 
@@ -975,7 +981,8 @@ def scan_for_alerts() -> dict:
     idempotent_hint=True, open_world_hint=False))
 def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100) -> list:
     """List alert events, optionally filtered to unseen ones or one kind
-    ('outlier'/'acceleration'/'title_change'/'silence_break')."""
+    ('outlier'/'acceleration'/'title_change'/'silence_break'/'channel_gone'/
+    'video_gone')."""
     from application import alerts as alerts_mod
     return alerts_mod.list_events(unseen_only=unseen_only, kind=kind, limit=limit)
 

@@ -57,6 +57,36 @@ def _latest_snapshot_at(conn, video_ids: list) -> dict:
     return out
 
 
+def _gone_rows(conn, channel_ids: list) -> list:
+    """Confirmed gone_items (plan 04) scoped like every other detector: only
+    tracked channels, and only those tracked channels' videos that were
+    already alerted as outliers -- ordinary videos get hidden or deleted all
+    the time, a vanished outlier is the signal worth a message. Joined with
+    the last numbers we stored before the item disappeared."""
+    placeholders = ",".join("?" * len(channel_ids))
+    rows = [dict(r, kind="channel") for r in conn.execute(
+        "SELECT g.ref_id, g.first_missing_at, g.confirmed_at, c.title, "
+        "c.subscriber_count, c.view_count, c.video_count, c.updated_at AS last_seen_at "
+        "FROM gone_items g LEFT JOIN channels c ON c.channel_id = g.ref_id "
+        "WHERE g.kind='channel' AND g.confirmed_at IS NOT NULL "
+        f"AND g.ref_id IN ({placeholders})", channel_ids).fetchall()]
+
+    outlier_scores = {}
+    for r in conn.execute("SELECT ref_id, payload FROM events WHERE kind='outlier'").fetchall():
+        try:
+            outlier_scores[r["ref_id"]] = (json.loads(r["payload"]) or {}).get("outlierScore")
+        except (TypeError, ValueError):
+            outlier_scores[r["ref_id"]] = None
+    for r in conn.execute(
+            "SELECT g.ref_id, g.first_missing_at, g.confirmed_at, v.title, v.channel_id, "
+            "v.view_count FROM gone_items g JOIN videos v ON v.video_id = g.ref_id "
+            "WHERE g.kind='video' AND g.confirmed_at IS NOT NULL "
+            f"AND v.channel_id IN ({placeholders})", channel_ids).fetchall():
+        if r["ref_id"] in outlier_scores:
+            rows.append(dict(r, kind="video", outlier_score=outlier_scores[r["ref_id"]]))
+    return rows
+
+
 def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
         acceleration_threshold: float = A.ACCELERATION_THRESHOLD_DEFAULT,
         silence_days: float = DEFAULT_SILENCE_DAYS, period: str = DEFAULT_PERIOD) -> dict:
@@ -65,7 +95,8 @@ def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
     worker cycle: see _emit for why repeats never duplicate."""
     tracked = T.list_tracked()
     channel_ids = [c["channel_id"] for c in tracked]
-    empty_counts = {"outlier": 0, "acceleration": 0, "title_change": 0, "silence_break": 0}
+    empty_counts = {"outlier": 0, "acceleration": 0, "title_change": 0, "silence_break": 0,
+                    "channel_gone": 0, "video_gone": 0}
     if not channel_ids:
         return {"channelsScanned": 0, "videosScanned": 0, "emitted": empty_counts,
                 "hint": "no tracked channels -- track_channel first"}
@@ -105,7 +136,11 @@ def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
         "acceleration": A.detect_acceleration(accel_rows, threshold=acceleration_threshold),
         "title_change": A.detect_title_changes(tc_rows),
         "silence_break": A.detect_silence_breaks(channel_uploads, silence_days=silence_days),
+        "channel_gone": [],
+        "video_gone": [],
     }
+    for ev in A.detect_gone(_gone_rows(conn, channel_ids)):
+        candidates[ev["kind"]].append(ev)
     emitted = dict(empty_counts)
     for kind, evs in candidates.items():
         for ev in evs:
@@ -184,6 +219,14 @@ def _format_message(ev: dict) -> str:
     elif kind == "silence_break":
         text = (f"\U0001F514 <b>Вернулись после паузы</b>: {_html_escape(p.get('title'))}\n"
                f"молчали {p.get('gapDays')} дней")
+    elif kind == "channel_gone":
+        text = (f"\U0001F6AB <b>Канал больше не доступен</b>: {_html_escape(p.get('title'))}\n"
+               f"было {p.get('subscribers')} подписчиков · {p.get('views')} просмотров · "
+               f"{p.get('videoCount')} видео\n"
+               f"не отвечает API с {(p.get('goneSince') or '')[:10]}")
+    elif kind == "video_gone":
+        text = (f"\U0001F6AB <b>Видео больше не доступно</b>: {_html_escape(p.get('title'))}\n"
+               f"было outlier ×{p.get('outlierScore')} · {p.get('views')} просмотров")
     else:
         text = f"{_html_escape(kind)}: {_html_escape(json.dumps(p, ensure_ascii=False))}"
 
