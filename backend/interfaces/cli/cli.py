@@ -13,6 +13,7 @@
     python cli.py channels --period 24h       outlier-каналы
     python cli.py stats
     python cli.py notify-test                 тестовое сообщение в Telegram/webhook
+    python cli.py digest-send                 отправить дайджест за сутки прямо сейчас
     python cli.py export-niche my-niche --format csv --out out.csv
     python cli.py seed                        синтетические данные для примера
 
@@ -238,6 +239,11 @@ def cmd_fix_tracked(args):
     out(tracking.fix_tracked(_key() or None, apply=args.apply))
 
 
+def cmd_digest_send(args):
+    from application import digest as digest_mod
+    out(digest_mod.send_digest(force=True))
+
+
 def cmd_notify_test(args):
     from infrastructure.notify import factory as notify_factory
     from infrastructure.notify.null import NullNotifier
@@ -287,6 +293,8 @@ def main():
     sub.add_parser("stats", help="что в базе").set_defaults(fn=cmd_stats)
     sub.add_parser("notify-test", help="тестовое сообщение в Telegram/webhook").set_defaults(
         fn=cmd_notify_test)
+    sub.add_parser("digest-send", help="отправить дайджест за сутки прямо сейчас").set_defaults(
+        fn=cmd_digest_send)
     sub.add_parser("seed", help="залить синтетические данные").set_defaults(fn=cmd_seed)
 
     p = sub.add_parser("embed-videos", help="досчитать эмбеддинги для уже собранных видео (0 quota)")

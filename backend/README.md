@@ -5,7 +5,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-62%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-63%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -219,6 +219,7 @@ make cli ARGS="seed"                              # synthetic data, just to look
 make cli ARGS="stats"                             # what's in the database
 make cli ARGS="export-niche brain --format csv"   # niche videos to TSV (default) / CSV
 make cli ARGS="notify-test"                       # test message to Telegram / webhook
+make cli ARGS="digest-send"                       # send the daily digest right now
 make cli ARGS="fix-tracked"                       # dry run: watchlist entries stored as
                                                   # @handle/URL instead of a channel id;
                                                   # add --apply to fix them
@@ -387,6 +388,7 @@ separately (or via cron), otherwise the velocity fields stay empty.
 |---|---|
 | `scan_for_alerts` | run the alert scan now: new outlier, acceleration, title change, a channel posting again after silence, a channel or an alerted outlier video that the API stopped returning (tracked channels only; "gone" needs two misses at least 6h apart, and a failed or over-quota API call never counts as a miss) |
 | `list_events` / `mark_events_seen` | the event feed, optionally unseen-only or one kind |
+| `daily_digest` | the last 24h in one summary -- new outliers, accelerating videos, rising channels, title/thumbnail swaps, disappeared channels/videos -- without sending it |
 
 Delivery to Telegram or a webhook is optional -- see [Configuration](#configuration).
 
@@ -439,7 +441,7 @@ required. The optional groups:
 | Worker schedule | `WORKER_RSS_INTERVAL_MIN`, `WORKER_ALERTS_INTERVAL_MIN`, `WORKER_HOT_*`, `WORKER_EMBED*`, `WORKER_DAILY_INTERVAL_MIN`, `WORKER_FULL_*`, `WORKER_REGIONS`, `WORKER_TRENDING`, `WORKER_QUERIES`, `WORKER_QUERY_*`, `WORKER_ENRICH_*`, `WORKER_CLUSTER_INTERVAL_MIN`, `WORKER_THUMBS` (1), `WORKER_THUMBS_INTERVAL_MIN` (360), `WORKER_THUMBS_LIMIT` (500) |
 | LLM (off by default) | `LLM_PROVIDER` (`none` / `openrouter` / `ollama`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_MODEL_LONG` (long-context model for comment insights), `OPENROUTER_REFERER`, `OPENROUTER_TITLE`, `OLLAMA_URL`, `OLLAMA_MODEL`, `LLM_DAILY_BUDGET_USD`, `LLM_RELABEL_DAYS`, `LLM_MIN_MANUAL_TAGS`, `LLM_INSIGHTS_TTL_DAYS` (7), `LLM_WHY_VIRAL_TTL_DAYS` (14) |
 | Niche clusters | `NICHE_CLUSTERS_MIN_CHANNELS` (10), `NICHE_CLUSTERS_COMPETITION_SUBS` (100000) |
-| Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_DASHBOARD_URL` |
+| Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_DASHBOARD_URL`, `NOTIFY_MODE` (`instant` / `digest` / `both`), `DIGEST_HOUR` (8, container time zone), `DIGEST_SKIP_EMPTY` (1), `WORKER_DIGEST_CHECK_INTERVAL_MIN` (10) |
 | Servers | `WEB_PORT`, `RATE_LIMIT_PER_MINUTE`, `NF_ALLOWED_HOSTS` (extra `Host` names for the HTTP API), `MCP_TRANSPORT` (`stdio`), `MCP_HOST`, `MCP_PORT` |
 
 What leaves the machine when the LLM or alert delivery is on is described in
@@ -610,6 +612,7 @@ youtube-niche-finder/
     │   ├── inspection.py       one arbitrary video/channel (the extension's overlay)
     │   ├── tags.py             curated tags and their stats
     │   ├── alerts.py           alert scan + delivery
+    │   ├── digest.py           once-a-day summary to Telegram/webhook
     │   ├── library.py          swipe file
     │   ├── metadata_review.py  SEO review, drafts and outcomes
     │   ├── llm_gateway.py      budget + caching in front of every LLM call
@@ -621,7 +624,7 @@ youtube-niche-finder/
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 62 tools
+    │   ├── mcp/server.py       MCP server, 63 tools
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
     │   └── worker/main.py      background collector's entry point

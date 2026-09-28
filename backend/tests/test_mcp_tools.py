@@ -414,6 +414,19 @@ def test_packaging_changes_routes_to_feed_or_one_video_history(monkeypatch):
     assert calls[-1] == ("history", "v1")
 
 
+# --------------------------------------------------- daily_digest
+
+def test_daily_digest_reads_the_summary_without_sending(monkeypatch):
+    from application import digest as digest_mod
+    calls = []
+    monkeypatch.setattr(digest_mod, "build_digest",
+                        lambda **kw: calls.append(kw) or {"empty": True})
+    monkeypatch.setattr(digest_mod, "send_digest",
+                        lambda **kw: (_ for _ in ()).throw(AssertionError("must not send")))
+    assert srv.daily_digest(period="48h") == {"empty": True}
+    assert calls == [{"period": "48h", "top_n": 5}]
+
+
 # --------------------------------------------------- refresh_channels
 
 def test_refresh_channels_appends_a_growth_snapshot_each_call(monkeypatch):

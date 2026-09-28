@@ -211,6 +211,16 @@ def test_notify_test_sends_through_the_configured_channel(run, monkeypatch):
     assert len(sent) == 1 and "niche-finder" in sent[0]
 
 
+def test_digest_send_forces_todays_digest_out(run, monkeypatch):
+    from application import digest as digest_mod
+    calls = []
+    monkeypatch.setattr(digest_mod, "send_digest",
+                        lambda **kw: calls.append(kw) or {"sent": True, "events": 3})
+    code, out, _ = run("digest-send")
+    assert json.loads(out) == {"sent": True, "events": 3}
+    assert calls == [{"force": True}]
+
+
 def test_seed_runs_the_demo_seeder(run, monkeypatch):
     fake = types.ModuleType("seed_demo")
     fake.seed = lambda: {"seeded": 3}

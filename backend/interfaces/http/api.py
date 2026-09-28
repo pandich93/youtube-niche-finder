@@ -31,6 +31,7 @@ import infrastructure.youtube.client as yt
 from application import alerts as AL
 from application import channel_tracking as T
 from application import collecting as collector
+from application import digest as DG
 from application import discovery as trends
 from application import enrichment as EN
 from application import inspection as I
@@ -623,6 +624,19 @@ def packaging_feed(period: str = "30d", channel_id: str = None, field: str = Non
                                   limit=limit)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/digest")
+def digest_preview(period: str = "24h", top_n: int = 5):
+    """What the daily digest (plan 07) would contain right now -- read-only."""
+    return DG.build_digest(period=period, top_n=top_n)
+
+
+@app.post("/api/digest/send")
+def digest_send():
+    """Send the digest now, ignoring DIGEST_HOUR and "already sent today" --
+    for checking the Telegram/webhook setup."""
+    return DG.send_digest(force=True)
 
 
 @app.get("/api/videos/{video_id}/packaging")

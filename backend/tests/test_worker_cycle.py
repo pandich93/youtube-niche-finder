@@ -20,6 +20,7 @@ import infrastructure.postgres as db  # noqa: E402
 import infrastructure.youtube.client as yt  # noqa: E402
 from application import alerts as alerts_mod  # noqa: E402
 from application import collecting as collector  # noqa: E402
+from application import digest as digest_mod  # noqa: E402
 from application import enrichment as enrich_mod  # noqa: E402
 from application import maturity_curve as curve_mod  # noqa: E402
 from application import niche_clusters as clusters_mod  # noqa: E402
@@ -28,7 +29,7 @@ from application import worker_cycle as worker  # noqa: E402
 from domain import periods as P  # noqa: E402
 
 SCHEDULE_KEYS = ("rss", "hot", "alerts", "embed", "enrich", "daily", "clusters",
-                 "calibrate", "thumbs")
+                 "calibrate", "thumbs", "digest")
 
 
 def setup_module(_=None):
@@ -68,6 +69,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(worker, "DO_TRENDING", True)
     monkeypatch.setattr(worker, "DO_EMBED", True)
     monkeypatch.setattr(worker, "DO_THUMBS", True)
+    monkeypatch.setattr(alerts_mod, "NOTIFY_MODE", "digest")
     monkeypatch.setattr(worker, "_llm_enrichment_enabled", lambda: True)
     monkeypatch.setattr(collector, "discover_new_videos_via_rss", rec("rss"))
     monkeypatch.setattr(collector, "refresh_stats", refresh_stats)
@@ -78,6 +80,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(collector, "backfill_embeddings", rec("embed"))
     monkeypatch.setattr(alerts_mod, "scan", rec("alerts_scan"))
     monkeypatch.setattr(alerts_mod, "deliver", rec("alerts_deliver"))
+    monkeypatch.setattr(digest_mod, "send_digest", rec("digest", {"sent": False}))
     monkeypatch.setattr(enrich_mod, "classify_channels", rec("enrich_channels"))
     monkeypatch.setattr(enrich_mod, "tag_new_videos", rec("enrich_videos"))
     monkeypatch.setattr(clusters_mod, "compute_clusters", rec("clusters"))
@@ -90,6 +93,7 @@ ALL_STEPS = [
     "rss",
     f"refresh_stats:{worker.HOT_PERIOD}",
     "alerts_scan", "alerts_deliver",
+    "digest",
     "embed",
     "enrich_channels", "enrich_videos",
     f"refresh_stats:{worker.FULL_PERIOD}", "refresh_channels", "collect_trending",
@@ -127,12 +131,13 @@ def test_only_the_step_that_fell_due_runs(calls):
 def test_optional_steps_are_skipped_when_switched_off(calls, monkeypatch):
     monkeypatch.setattr(worker, "DO_EMBED", False)
     monkeypatch.setattr(worker, "DO_THUMBS", False)
+    monkeypatch.setattr(alerts_mod, "NOTIFY_MODE", "instant")
     monkeypatch.setattr(worker, "DO_TRENDING", False)
     monkeypatch.setattr(worker, "QUERIES", [])
     monkeypatch.setattr(worker, "_llm_enrichment_enabled", lambda: False)
     worker.cycle()
     for step in ("embed", "enrich_channels", "enrich_videos", "collect_trending",
-                 "collect:q1", "collect:q2", "thumbs"):
+                 "collect:q1", "collect:q2", "thumbs", "digest"):
         assert step not in calls, step
     # enrich is still marked, so it does not re-check the provider every cycle
     assert worker._get_meta("worker_last_enrich")

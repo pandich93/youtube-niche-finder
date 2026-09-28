@@ -139,7 +139,7 @@ set `NOTIFY_TELEGRAM_BOT_TOKEN` + `NOTIFY_TELEGRAM_CHAT_ID`, or
 
 | Host | Why | Sends your bot token? |
 |---|---|---|
-| `api.telegram.org` | `sendMessage` for each new alert (or a batched summary) | Yes, as part of the URL path -- masked in any logged error |
+| `api.telegram.org` | `sendMessage` for each new alert (or a batched summary), and/or one daily digest when `NOTIFY_MODE` is `digest`/`both` | Yes, as part of the URL path -- masked in any logged error |
 | your `NOTIFY_WEBHOOK_URL` | Same, as a POST body `{"text": ...}` | No |
 
 What goes out is only the alert's own numbers and a video/channel title --

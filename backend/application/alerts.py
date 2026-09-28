@@ -19,6 +19,9 @@ DEFAULT_SILENCE_DAYS = A.SILENCE_DAYS_DEFAULT
 DEFAULT_PERIOD = "30d"
 NOTIFY_MAX_PER_CYCLE = int(os.environ.get("NOTIFY_MAX_PER_CYCLE", "10"))
 DASHBOARD_URL = os.environ.get("NOTIFY_DASHBOARD_URL", "http://127.0.0.1:8080").rstrip("/")
+# instant (one message per event, default) | digest (only the daily summary,
+# application/digest.py) | both
+NOTIFY_MODE = os.environ.get("NOTIFY_MODE", "instant").strip().lower() or "instant"
 
 
 def _already_emitted(conn, kind, ref_id) -> bool:
@@ -249,6 +252,10 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE) -> dict:
     undelivered for the next cycle to retry; it never raises, so a bad
     token/URL cannot take the worker down (mirrors _safe() in
     worker_cycle.py, which also wraps this call)."""
+    if NOTIFY_MODE == "digest":
+        return {"skipped": True,
+               "hint": "NOTIFY_MODE=digest -- events go out in the daily digest "
+                       "(application/digest.py), not one by one"}
     notifier = notify_factory.get_notifier()
     if isinstance(notifier, NullNotifier):
         return {"skipped": True,

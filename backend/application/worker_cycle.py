@@ -27,6 +27,7 @@ import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import alerts as alerts_mod
 from application import collecting as collector
+from application import digest as digest_mod
 from application import enrichment as enrich_mod
 from application import maturity_curve as curve_mod
 from application import niche_clusters as clusters_mod
@@ -71,6 +72,9 @@ CALIBRATE_INTERVAL_MIN = int(os.environ.get("WORKER_CALIBRATE_INTERVAL_MIN", "14
 DO_THUMBS = os.environ.get("WORKER_THUMBS", "1") not in ("0", "false", "no")
 THUMBS_INTERVAL_MIN = int(os.environ.get("WORKER_THUMBS_INTERVAL_MIN", "360"))
 THUMBS_LIMIT = int(os.environ.get("WORKER_THUMBS_LIMIT", "500"))
+# Daily digest (plan 07): only when NOTIFY_MODE is digest/both. Checked this
+# often; application/digest.py itself decides whether today's is due.
+DIGEST_CHECK_INTERVAL_MIN = int(os.environ.get("WORKER_DIGEST_CHECK_INTERVAL_MIN", "10"))
 
 _stop = False
 
@@ -155,6 +159,17 @@ def cycle():
         _safe("alerts scan", lambda: alerts_mod.scan())
         _safe("alerts deliver", lambda: alerts_mod.deliver())
         _mark("alerts")
+
+    if alerts_mod.NOTIFY_MODE in ("digest", "both") and _due("digest", DIGEST_CHECK_INTERVAL_MIN):
+        # Not _safe(): "too early" / "already sent today" every 10 minutes
+        # would drown the log -- only a real outcome is worth a line.
+        try:
+            res = digest_mod.send_digest()
+            if res.get("sent") or res.get("reason") in ("send failed", "empty"):
+                log(f"daily digest: {res}")
+        except Exception:
+            log(f"daily digest: FAILED\n{traceback.format_exc()}")
+        _mark("digest")
 
     if DO_EMBED and _due("embed", EMBED_INTERVAL_MIN):
         _safe("embed backfill", lambda: collector.backfill_embeddings(limit=EMBED_BATCH))

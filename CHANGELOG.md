@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Morning digest** (plan 07) — `NOTIFY_MODE=digest` (or `both`) sends one
+  Telegram/webhook message a day instead of one per alert: new outliers and
+  accelerating videos on tracked channels, rising channels, title/thumbnail
+  swaps and disappeared channels/videos, top 5 each, always under Telegram's
+  4096-character limit. Sent once per local day, not before `DIGEST_HOUR`
+  (8), remembered in `meta` so a restart never sends twice; an empty day is
+  skipped (`DIGEST_SKIP_EMPTY`). Events the digest covered are marked
+  delivered, so switching back to `instant` does not replay them. Default
+  stays `instant` — nothing changes unless you opt in. Also: MCP
+  `daily_digest`, `GET /api/digest`, `POST /api/digest/send` and
+  `cli.py digest-send` (send now), and a "За сутки" block on the Overview.
+
 - **RPM as a range** (plan 06) — every RPM estimate now also comes as
   `low / mid / high` (`estimatedRpmRange` on videos and categories,
   `rpm_range` and `monthly_usd_low/high` in a channel's `nicheModel`): the

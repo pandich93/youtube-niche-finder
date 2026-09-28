@@ -1002,6 +1002,20 @@ def scan_for_alerts() -> dict:
 @mcp.tool(annotations=ToolAnnotations(
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
+def daily_digest(period: str = "24h", top_n: int = 5) -> dict:
+    """The daily digest's content, without sending it: new outliers and
+    accelerating videos on tracked channels, channels that just entered the
+    database already outperforming, title/thumbnail swaps, and channels or
+    videos that disappeared -- each section's total plus its top_n strongest
+    items. The worker sends the same summary to Telegram/webhook once a day
+    when NOTIFY_MODE is digest or both. Zero quota."""
+    from application import digest as digest_mod
+    return digest_mod.build_digest(period=period, top_n=top_n)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
 def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100) -> list:
     """List alert events, optionally filtered to unseen ones or one kind
     ('outlier'/'acceleration'/'title_change'/'silence_break'/'channel_gone'/

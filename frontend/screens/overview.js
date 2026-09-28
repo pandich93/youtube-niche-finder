@@ -4,8 +4,33 @@ import { view, plabel, base } from '../shared.js';
 
 /* --------------------------------------------------------------- Обзор */
 
+/* «За сутки» -- то же, что уходит в Telegram утренним дайджестом (plan 07). */
+const DIGEST_SECTIONS = [
+  ['outliers', 'Новые outlier-видео', (e) => `×${e.payload.outlierScore} · ${e.payload.title || e.payload.videoId}`],
+  ['acceleration', 'Ускоряются', (e) => `×${e.payload.acceleration} · ${e.payload.title || e.payload.videoId}`],
+  ['risingChannels', 'Растущие каналы', (c) => `${c.channelTitle || c.channelId} · ×${c.multiplier}`],
+  ['repackaging', 'Перепаковки', (s) => s.field === 'title' ? `заголовок: ${s.new}` : `обложка: ${s.title || s.videoId}`],
+  ['gone', 'Пропали', (e) => `${e.kind === 'channel_gone' ? 'канал' : 'видео'} ${e.payload.title || ''}`],
+];
+
+function digestBlock(g) {
+  if (!g) return '';
+  const secs = DIGEST_SECTIONS.filter(([key]) => g[key] && g[key].total);
+  return `<section class="card">
+    ${sectionHead('За сутки', 'то же, что уходит утренним дайджестом в Telegram при NOTIFY_MODE=digest')}
+    ${g.empty ? empty('за последние 24 часа ничего заметного') : `<div class="grid-2">${secs.map(([key, title, line]) => `
+      <div>
+        <div class="section-sub"><b>${esc(title)}</b> · ${num(g[key].total)}</div>
+        <ul class="digest-list">${g[key].items.map((x) => `<li>${esc(line(x))}</li>`).join('')}</ul>
+      </div>`).join('')}</div>`}
+  </section>`;
+}
+
 async function viewOverview() {
-  const d = await api(`/api/overview${q(base())}`);
+  const [d, g] = await Promise.all([
+    api(`/api/overview${q(base())}`),
+    api('/api/digest').catch(() => null),
+  ]);
   const cov = d.coverage;
   const thin = cov.videosPublishedInPeriod < 5;
 
@@ -25,6 +50,8 @@ async function viewOverview() {
       ${tile('Видео в окне', num(cov.videosPublishedInPeriod), plabel(state.period))}
       ${tile('Без эмбеддинга', num(d.stats.videos_without_embedding), 'досчитает воркер')}
     </div>
+
+    ${digestBlock(g)}
 
     <div class="grid-2">
       <section class="card">

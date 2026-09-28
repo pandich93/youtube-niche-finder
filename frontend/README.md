@@ -57,7 +57,9 @@ the sections below follow the sidebar order.
 ### Overview
 
 Everything at once, in one call to `/api/overview`: outlier channels,
-upcoming competition, categories, keywords, viral videos.
+upcoming competition, categories, keywords, viral videos. On top, "За сутки"
+(`/api/digest`) — the last 24 hours as the morning digest would send them:
+new outliers, accelerating videos, rising channels, repackaging, gone items.
 
 ![Overview](../assets/dashboard.jpg)
 
