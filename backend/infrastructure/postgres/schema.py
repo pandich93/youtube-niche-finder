@@ -249,6 +249,22 @@ CREATE TABLE IF NOT EXISTS gone_items (
     PRIMARY KEY (kind, ref_id)
 );
 
+-- ---------- thumbnail versions (plan 05) ----------
+-- The API's thumbnail URL never changes when a creator swaps the image, so
+-- application/packaging.py fingerprints the image itself (dHash) for tracked
+-- channels and keeps each distinct version: the first one seen as a baseline,
+-- then one row per detected change (also logged to video_changes with
+-- field='thumbnail_image'). Once a thumbnail is replaced, YouTube serves the
+-- new one at the old URL -- this table is the only place the "before" lives.
+
+CREATE TABLE IF NOT EXISTS thumbnail_archive (
+    video_id TEXT,
+    captured_at TEXT,
+    dhash TEXT,
+    image BYTEA,             -- mqdefault.jpg, 320x180, ~10-20 KB
+    PRIMARY KEY (video_id, captured_at)
+);
+
 -- ---------- v9: manually-pasted transcripts + hybrid search (stage 19) ----------
 -- Never fetched automatically -- the user copies a transcript off YouTube's
 -- own UI and pastes it in; see PRIVACY.md.

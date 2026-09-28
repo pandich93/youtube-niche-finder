@@ -10,7 +10,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](backend/interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](docker-compose.yml)
 [![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-61%20tools-8A2BE2?style=flat-square)](backend/interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-62%20tools-8A2BE2?style=flat-square)](backend/interfaces/mcp/server.py)
 [![Last commit](https://img.shields.io/github/last-commit/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/commits/main)
 [![Open issues](https://img.shields.io/github/issues/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/issues)
 [![Open PRs](https://img.shields.io/github/issues-pr/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/pulls)
@@ -26,7 +26,7 @@ topic" is done by the model calling these tools, not the server.
 
 The project has three parts that together make up the "product":
 
-- **`backend/`** — Python: an MCP server (61 tools for Claude), an HTTP API
+- **`backend/`** — Python: an MCP server (62 tools for Claude), an HTTP API
   for the dashboard, and a background worker that logs view/subscriber
   history on a schedule (without this, "growth rate over 24 hours" doesn't
   exist — the YouTube API only ever returns "right now").
@@ -48,6 +48,9 @@ database.
   (24h / 48h / 7 / 30 / 90 days)
 - Trending categories and keywords, best time to publish, title patterns
 - Track specific channels: view/subscriber growth rate, snapshot history
+- Repackaging: title and thumbnail swaps after publishing, before/after
+  side by side and views per hour around the swap (thumbnails are
+  fingerprinted from the image itself — the API URL never changes)
 - The exact same calculation in Claude Desktop (via MCP) and on the web
   dashboard — one shared codebase, not two implementations
 - Niche clusters (k-means over channel embeddings) and a niche map;
@@ -211,7 +214,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of notable changes, in
 
 ## Read next
 
-- [backend/README.md](backend/README.md) — YouTube API quotas, all 61 tools
+- [backend/README.md](backend/README.md) — YouTube API quotas, all 62 tools
   with descriptions, how to read `period_by`, running with and without
   Docker, the DDD layer structure.
 - [frontend/README.md](frontend/README.md) — dashboard screens, where the

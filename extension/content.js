@@ -237,6 +237,8 @@
           <div class="nf-comments-body"></div>
         </div>
 
+        <div class="nf-pk"></div>
+
         ${llmOn ? `<div class="nf-sec nf-why-sec">
           <button class="nf-btn nf-ghost nf-why-btn">Почему выстрелило?</button>
           <div class="nf-why-body"></div>
@@ -361,6 +363,26 @@
       whyBtn.remove();
       if (body) body.innerHTML = whyViralHtml(r.data);
     });
+
+    const pk = await send({ type: 'packaging', videoId });
+    if (!root.isConnected || getVideoId() !== videoId) return;
+    const pkBox = root.querySelector('.nf-pk');
+    if (pkBox && pk.ok && pk.data && pk.data.count > 0) pkBox.innerHTML = packagingHtml(pk.data);
+  }
+
+  function packagingHtml(p) {
+    const titles = p.changes.filter((c) => c.field === 'title').length;
+    const thumbs = p.changes.filter((c) => c.field === 'thumbnail_image').length;
+    const parts = [];
+    if (titles) parts.push(`заголовок ×${titles}`);
+    if (thumbs) parts.push(`обложка ×${thumbs}`);
+    const dash = (SETTINGS?.baseUrl || 'http://127.0.0.1:8080') + '/#/packaging';
+    return `<div class="nf-sec">
+      <div class="nf-sec-h">Перепаковано ${p.count} ${plural(p.count, 'раз', 'раза', 'раз')}</div>
+      <div class="nf-hint">${esc(parts.join(' · '))} · последняя смена ${esc(ageText(
+        (Date.now() - new Date(p.changes[0].changedAt).getTime()) / 864e5))} назад</div>
+      <a class="nf-btn nf-ghost" href="${esc(dash)}" target="_blank" rel="noopener">«Было / стало» в дашборде</a>
+    </div>`;
   }
 
   function whyViralHtml(d) {

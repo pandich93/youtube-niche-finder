@@ -131,7 +131,9 @@ packaging==26.3
     #   huggingface-hub
     #   onnxruntime
 pillow==12.3.0
-    # via fastembed
+    # via
+    #   -r requirements.in
+    #   fastembed
 protobuf==7.36.2
     # via onnxruntime
 psycopg2-binary==2.9.13

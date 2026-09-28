@@ -11,6 +11,7 @@ Default daily budget (well inside the free tier):
   channels     once a day tracked channels                  ~1 unit / 50 channels
   trending     once a day mostPopular per region            ~3 units / region
   queries      once a day WORKER_QUERIES, if set            1 search call each
+  thumbnails   every 6h   tracked channels' last 30d        0 units (i.ytimg.com)
 
 Configure with env vars (see .env.example). Set WORKER_QUERIES to keep a set of
 topics continuously fresh, e.g. "ai automation,faceless history,нейросети".
@@ -29,6 +30,7 @@ from application import collecting as collector
 from application import enrichment as enrich_mod
 from application import maturity_curve as curve_mod
 from application import niche_clusters as clusters_mod
+from application import packaging as packaging_mod
 from domain import periods as P
 from infrastructure.llm import factory as llm_factory
 from infrastructure.llm.null import NullProvider
@@ -63,6 +65,12 @@ ENRICH_CHANNEL_BATCH = int(os.environ.get("WORKER_ENRICH_CHANNEL_BATCH", "50"))
 ENRICH_VIDEO_BATCH = int(os.environ.get("WORKER_ENRICH_VIDEO_BATCH", "100"))
 CLUSTER_INTERVAL_MIN = int(os.environ.get("WORKER_CLUSTER_INTERVAL_MIN", "1440"))
 CALIBRATE_INTERVAL_MIN = int(os.environ.get("WORKER_CALIBRATE_INTERVAL_MIN", "1440"))
+# Thumbnail fingerprints (plan 05): downloads thumbnails of tracked channels'
+# recent videos from i.ytimg.com -- no API quota, but a request to Google per
+# video, so it is scoped to tracked channels and can be switched off.
+DO_THUMBS = os.environ.get("WORKER_THUMBS", "1") not in ("0", "false", "no")
+THUMBS_INTERVAL_MIN = int(os.environ.get("WORKER_THUMBS_INTERVAL_MIN", "360"))
+THUMBS_LIMIT = int(os.environ.get("WORKER_THUMBS_LIMIT", "500"))
 
 _stop = False
 
@@ -186,6 +194,11 @@ def cycle():
     if _due("calibrate", CALIBRATE_INTERVAL_MIN):
         _safe("maturity curve", lambda: curve_mod.apply_calibration())
         _mark("calibrate")
+
+    if DO_THUMBS and _due("thumbs", THUMBS_INTERVAL_MIN):
+        _safe("thumbnail fingerprints", lambda: packaging_mod.fingerprint_thumbnails(
+            period=FULL_PERIOD, limit=THUMBS_LIMIT))
+        _mark("thumbs")
 
 
 def main():

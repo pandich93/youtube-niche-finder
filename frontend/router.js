@@ -14,6 +14,7 @@ import { viewTranscripts } from './screens/transcripts.js';
 import { viewNicheClusters } from './screens/clusters.js';
 import { viewTitleScoring } from './screens/titles.js';
 import { viewSaved } from './screens/saved.js';
+import { viewPackaging } from './screens/packaging.js';
 import { viewMetadata } from './screens/metadata.js';
 import { viewNiches } from './screens/niches.js';
 import { viewNiche } from './screens/niche.js';
@@ -50,6 +51,7 @@ const ROUTES = {
   clusters: { title: 'Карта ниш', run: viewNicheClusters },
   titles: { title: 'Проверить заголовки', run: viewTitleScoring },
   saved: { title: 'Избранное', run: viewSaved },
+  packaging: { title: 'Перепаковки', run: viewPackaging },
   metadata: { title: 'Разбор метаданных', run: viewMetadata },
   niches: { title: 'Ниши', run: viewNiches },
   data: { title: 'Данные', run: viewData },

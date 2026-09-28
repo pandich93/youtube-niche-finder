@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Repackaging — "Перепаковки"** (plan 05) — a dashboard screen, MCP tool
+  `packaging_changes` and `/api/packaging` for title and thumbnail swaps after
+  publishing: old vs new title or the archived before/after thumbnails side by
+  side, with views per hour 48h before vs after (an observed effect, not a
+  cause). Thumbnail swaps were never detected before: the API's thumbnail URL
+  stays the same when the image changes, so the old URL comparison could not
+  fire. The worker now downloads the 320x180 thumbnail of tracked channels'
+  recent videos from `i.ytimg.com` every `WORKER_THUMBS_INTERVAL_MIN` (360; no
+  API quota; `WORKER_THUMBS=0` turns it off), fingerprints it with a 64-bit
+  dHash and keeps every distinct version in the new `thumbnail_archive` table,
+  logging swaps as `video_changes.field = 'thumbnail_image'`. The extension's
+  video panel shows "repackaged N times" with a link to the dashboard.
+  `pillow` is now a direct dependency (it was already installed via fastembed).
+
 - **"Gone" alerts** (plan 04) — `refresh_channels` / `refresh_stats` now
   record ids the YouTube API stopped returning in a new `gone_items` table
   (`gone` in their results). An item counts as gone only after two misses

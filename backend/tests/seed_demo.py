@@ -60,6 +60,36 @@ def title_for(cat, i):
     return t.replace("{verb}", random.choice(VERBS)).replace("{place}", random.choice(PLACES))
 
 
+def _demo_jpeg(bg, fg):
+    import io
+
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (320, 180), bg)
+    ImageDraw.Draw(img).rectangle((20, 20, 170, 160), fill=fg)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=80)
+    return buf.getvalue()
+
+
+def seed_packaging(conn):
+    """Plan 05 demo: one retitled video and one thumbnail swap with both
+    archived versions, so the "Перепаковки" screen has something to show."""
+    vid = "avid000"
+    before = (NOW - timedelta(days=3)).isoformat()
+    after = (NOW - timedelta(days=1)).isoformat()
+    for ts, h, img in ((before, "00ff00ff00ff00ff", _demo_jpeg((20, 20, 20), (230, 40, 40))),
+                       (after, "ff00ff00ff00ff00", _demo_jpeg((240, 240, 240), (10, 60, 200)))):
+        conn.execute("INSERT INTO thumbnail_archive (video_id, captured_at, dhash, image) "
+                     "VALUES (?,?,?,?) ON CONFLICT (video_id, captured_at) DO NOTHING",
+                     (vid, ts, h, img))
+    conn.execute("INSERT INTO video_changes (video_id, changed_at, field, old_value, new_value) "
+                 "VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",
+                 (vid, after, "thumbnail_image", "00ff00ff00ff00ff", "ff00ff00ff00ff00"))
+    conn.execute("INSERT INTO video_changes (video_id, changed_at, field, old_value, new_value) "
+                 "VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",
+                 ("avid001", after, "title", "My first AI agent", "AI agents just changed everything"))
+
+
 def seed(days_back=75, per_channel=34):
     db.init_db()
     conn = db.get_conn()
@@ -123,6 +153,7 @@ def seed(days_back=75, per_channel=34):
                         conn, vid, int(views * share),
                         int(views * share * 0.04), int(views * share * 0.003), t, None,
                         (NOW - timedelta(hours=hours)).isoformat())
+    seed_packaging(conn)
     db.upsert_niche(conn, "demo", "synthetic demo corpus", "Demo")
     conn.commit()
     conn.close()

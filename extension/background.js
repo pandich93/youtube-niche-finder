@@ -139,6 +139,17 @@ async function similarVideos(videoId) {
   return data;
 }
 
+async function packagingHistory(videoId) {
+  /* Title/thumbnail swaps of this video (plan 05) -- zero quota, reads what
+     the worker already fingerprinted; null when the backend is unreachable. */
+  const key = 'packaging:' + videoId;
+  const hit = cacheGet(key, TTL.deep);
+  if (hit) return hit;
+  const data = await api(`/api/videos/${videoId}/packaging`).catch(() => null);
+  if (data) cacheSet(key, data);
+  return data;
+}
+
 async function videoComments(videoId, maxResults = 50) {
   /* POST because it spends 1 unit of quota (commentThreads.list) -- unlike
      everything else the panel shows automatically, this only runs when the
@@ -269,6 +280,7 @@ const HANDLERS = {
   'channel': (m) => inspectChannel(m.ref, m.refresh),
   'deep': (m) => channelDeep(m.channelId),
   'similarVideos': (m) => similarVideos(m.videoId),
+  'packaging': (m) => packagingHistory(m.videoId),
   'comments': (m) => videoComments(m.videoId, m.maxResults),
   'batch': (m) => inspectBatch(m.ids || []),
   'collect': async (m) => {

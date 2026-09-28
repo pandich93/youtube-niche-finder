@@ -160,6 +160,15 @@ The swipe file: videos and channels saved from the extension panel, with a
 snapshot of their metrics at save time, folder, and note (`/api/saved`);
 items can be removed from here.
 
+### Repackaging (`#/packaging`)
+
+Title and thumbnail swaps after publishing (`/api/packaging`), newest first:
+old vs new title, or the archived "before" and "after" thumbnails side by side
+(`/api/thumbnails/{videoId}/{capturedAt}.jpg`), with views per hour in the 48
+hours before vs after the swap. Filters: what changed, tracked channel; the
+period comes from the top bar. Thumbnails are fingerprinted by the worker for
+tracked channels only, so their history starts when a channel is tracked.
+
 ### Metadata review (`#/metadata`)
 
 Checks a draft title/description/tags against your own corpus (`POST

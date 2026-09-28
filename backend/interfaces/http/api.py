@@ -39,6 +39,7 @@ from application import maturity_curve
 from application import metadata_review as MR
 from application import niche_clusters as NCL
 from application import niche_export as NE
+from application import packaging as PKG
 from application import search as Q
 from application import tags as TG
 from application import transcripts as TR
@@ -610,6 +611,34 @@ def scan_events():
 @app.get("/api/title-changes")
 def title_changes(period: str = "7d", channel_id: str = None, limit: int = 50):
     return T.title_changes(period=period, channel_id=channel_id, limit=limit)
+
+
+@app.get("/api/packaging")
+def packaging_feed(period: str = "30d", channel_id: str = None, field: str = None,
+                   limit: int = 50):
+    """Repackaging feed (plan 05): title and thumbnail swaps with before/after
+    and the views-per-hour effect. Zero quota."""
+    try:
+        return PKG.packaging_feed(period=period, channel_id=channel_id, field=field,
+                                  limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/videos/{video_id}/packaging")
+def packaging_history(video_id: str):
+    return PKG.packaging_history(video_id)
+
+
+@app.get("/api/thumbnails/{video_id}/{captured_at}.jpg")
+def thumbnail_image(video_id: str, captured_at: str):
+    """An archived thumbnail version -- the only copy of a "before" image once
+    YouTube serves the new one at the same URL. Immutable, so cacheable."""
+    data = PKG.thumbnail_image(video_id, captured_at)
+    if not data:
+        raise HTTPException(status_code=404, detail="no archived thumbnail for this time")
+    return Response(content=data, media_type="image/jpeg",
+                    headers={"Cache-Control": "public, max-age=31536000, immutable"})
 
 
 @app.get("/api/best-time")

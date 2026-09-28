@@ -398,6 +398,22 @@ def test_refresh_stats_appends_history_instead_of_overwriting(monkeypatch):
     assert twice == once + 1
 
 
+# --------------------------------------------------- packaging_changes
+
+def test_packaging_changes_routes_to_feed_or_one_video_history(monkeypatch):
+    from application import packaging as packaging_mod
+    calls = []
+    monkeypatch.setattr(packaging_mod, "packaging_feed",
+                        lambda **kw: calls.append(("feed", kw)) or {"feed": True})
+    monkeypatch.setattr(packaging_mod, "packaging_history",
+                        lambda vid: calls.append(("history", vid)) or {"history": True})
+    assert srv.packaging_changes(field="title", channel_id="UC1") == {"feed": True}
+    assert calls[-1] == ("feed", {"period": "30d", "channel_id": "UC1",
+                                  "field": "title", "limit": 50})
+    assert srv.packaging_changes(video_id="v1") == {"history": True}
+    assert calls[-1] == ("history", "v1")
+
+
 # --------------------------------------------------- refresh_channels
 
 def test_refresh_channels_appends_a_growth_snapshot_each_call(monkeypatch):

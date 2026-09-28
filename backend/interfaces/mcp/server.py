@@ -729,9 +729,30 @@ def channel_velocity(channel_id: str, period: str = "30d", limit: int = 25) -> d
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
 def title_changes(period: str = "7d", channel_id: str = None, limit: int = 50) -> dict:
-    """Videos whose title or thumbnail changed between snapshots -- usually a
-    creator reacting to underperformance, and a useful competitive signal."""
+    """Videos whose title changed between snapshots -- usually a creator
+    reacting to underperformance, and a useful competitive signal. Thumbnail
+    swaps are not visible here (the API's thumbnail URL never changes); use
+    packaging_changes for those."""
     return T.title_changes(period=period, channel_id=channel_id, limit=limit)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def packaging_changes(period: str = "30d", channel_id: str = None, field: str = None,
+                      video_id: str = None, limit: int = 50) -> dict:
+    """Repackaging: title and thumbnail swaps after publishing, newest first,
+    with before/after (titles as text, thumbnails as archived image paths on
+    the dashboard) and views per hour in the 48h before vs after -- an
+    observed effect, not a cause. Thumbnail swaps come from the worker's
+    image fingerprints of TRACKED channels' recent videos (the API cannot see
+    them). field: title | thumbnail_image. Pass video_id for one video's full
+    history and all its archived thumbnail versions. Zero quota."""
+    from application import packaging as packaging_mod
+    if video_id:
+        return packaging_mod.packaging_history(video_id)
+    return packaging_mod.packaging_feed(period=period, channel_id=channel_id,
+                                        field=field, limit=limit)
 
 
 @mcp.tool(annotations=ToolAnnotations(

@@ -136,6 +136,9 @@ DELEGATIONS = [
     ("post", "/api/events/scan", "AL", "scan", (), {}, None),
     ("get", "/api/title-changes?channel_id=UC1", "T", "title_changes", (),
      {"channel_id": "UC1", "period": "7d"}, None),
+    ("get", "/api/packaging?channel_id=UC1&field=title", "PKG", "packaging_feed", (),
+     {"channel_id": "UC1", "field": "title", "period": "30d", "limit": 50}, None),
+    ("get", "/api/videos/v1/packaging", "PKG", "packaging_history", ("v1",), {}, None),
     ("get", "/api/best-time?timezone_offset_hours=5", "T", "best_time_to_publish", (),
      {"timezone_offset_hours": 5, "period": "90d"}, None),
     ("get", "/api/title-patterns?niche=n1&top_n=4", "T", "title_patterns", (),
@@ -305,6 +308,7 @@ VALUE_ERROR_ROUTES = [
     ("post", "/api/titles/score", {"candidates": []}, "EN", "score_titles"),
     ("post", "/api/titles/suggest", {"topic": ""}, "EN", "suggest_titles"),
     ("get", "/api/niche/n1/export.xlsx", None, "NE", "export_niche"),
+    ("get", "/api/packaging?field=bogus", None, "PKG", "packaging_feed"),
 ]
 
 
@@ -316,6 +320,18 @@ def test_value_error_from_the_application_becomes_400(stub, method, url, body, a
     resp = getattr(client, method)(url, **kw)
     assert resp.status_code == 400
     assert resp.json()["detail"] == "bad input: explained"
+
+
+def test_thumbnail_route_serves_archived_jpeg_or_404(stub):
+    img = stub("PKG", "thumbnail_image", result=b"\xff\xd8jpeg")
+    resp = client.get("/api/thumbnails/v1/2026-09-01T00%3A00%3A00%2B00%3A00.jpg")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.content == b"\xff\xd8jpeg"
+    assert img.args == ("v1", "2026-09-01T00:00:00+00:00")
+
+    stub("PKG", "thumbnail_image", result=b"")
+    assert client.get("/api/thumbnails/v1/1999-01-01.jpg").status_code == 404
 
 
 MISSING_FIELD_ROUTES = [
