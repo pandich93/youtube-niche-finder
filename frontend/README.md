@@ -70,7 +70,9 @@ outlier multiplier, max subscribers, estimated RPM range, video length, and
 Shorts (any / exclude / only); they're remembered in the browser, with a
 "reset filters" button for when a stale filter hides everything. RPM is an
 estimate from the YouTube category, not a measured payout, so it tops out
-around $8. A quota-spending collection form sits underneath.
+around $8; cards show it as a range (half to double the model's value, since
+published RPM estimates disagree by up to 7x) and the filter compares the
+middle of that range. A quota-spending collection form sits underneath.
 
 ### Viral videos
 

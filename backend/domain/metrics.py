@@ -334,6 +334,16 @@ NICHE_RPM = {
 }
 MONETISATION_DISCOUNT = 0.70
 
+# Plan 06: nobody can verify a per-niche RPM -- YouTube does not publish it,
+# and public tools disagree by up to 7x for the same niche -- so every
+# estimate also ships as a range: the NexLev-style effective RPM above as the
+# middle, divided and multiplied by RPM_SPREAD (a 4x-wide band). One stated
+# rule for every niche instead of invented per-niche bounds.
+RPM_SPREAD = 2.0
+RPM_RANGE_BASIS = (f"mid = NexLev-style niche RPM x {MONETISATION_DISCOUNT} monetisation discount; "
+                   f"low/high = mid / x {RPM_SPREAD:g}, because published RPM estimates for "
+                   "the same niche disagree by up to 7x and YouTube publishes none")
+
 
 def revenue_range(monthly_views: int) -> dict:
     return {
@@ -351,14 +361,29 @@ def rpm_effective(niche: str = "default") -> float:
     return round(rpm_base * MONETISATION_DISCOUNT, 3)
 
 
+def rpm_range(niche: str = "default") -> dict:
+    """Low / mid / high effective RPM for a niche label. `mid` is exactly
+    rpm_effective(), so min_rpm/max_rpm filters (which compare against it)
+    do not move; the band around it is RPM_SPREAD either way."""
+    mid = rpm_effective(niche)
+    return {"low": round(mid / RPM_SPREAD, 2), "mid": mid,
+            "high": round(mid * RPM_SPREAD, 2),
+            "confidence": "low", "basis": RPM_RANGE_BASIS}
+
+
 def revenue_niche(monthly_views: int, niche: str = "default") -> dict:
     rpm_base = NICHE_RPM.get((niche or "default").lower(), NICHE_RPM["default"])
     rpm_total = rpm_effective(niche)
+    rng = rpm_range(niche)
     return {
         "rpm_base": rpm_base,
         "rpm_effective": rpm_total,
+        "rpm_range": rng,
         "monthly_usd": round(monthly_views / 1000 * rpm_total, 2),
-        "model": "monthly_views/1000 * niche RPM * 0.70 monetisation discount",
+        "monthly_usd_low": round(monthly_views / 1000 * rng["low"], 2),
+        "monthly_usd_high": round(monthly_views / 1000 * rng["high"], 2),
+        "model": "monthly_views/1000 * niche RPM * 0.70 monetisation discount; "
+                 f"low/high use RPM / x {RPM_SPREAD:g}",
     }
 
 

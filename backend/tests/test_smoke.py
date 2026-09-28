@@ -132,10 +132,15 @@ def test_sections_return_data():
                   "projected30dViews", "viralScore"):
         assert field in top, field
     assert top["channelSubscribers"] <= 10000
+    rng = top["estimatedRpmRange"]                  # plan 06
+    assert rng["low"] < rng["mid"] == top["estimatedRpm"] < rng["high"]
 
     c = trends.most_popular_categories(period="14d")
     assert c["categories"] and c["categories"][0]["viewShare"] > 0
     assert c["categories"][0]["previousViewShare"] is not None
+    cat = c["categories"][0]                         # plan 06: effective, not base
+    assert cat["estimatedRpmRange"]["mid"] == M.rpm_effective(C.rpm_niche(cat["categoryId"]))
+    assert "estimatedRpmNiche" in cat                # kept for old clients
 
     k = trends.trending_keywords(period="14d", min_videos=3, sort_by="trend")
     assert k["keywords"] and k["keywords"][0]["trendScore"] >= 0
@@ -202,6 +207,8 @@ def test_channel_analytics_and_compare():
     assert a["growthAvailable"] and a["growth"]["30d"]["views"]["delta"] > 0
     assert a["grade"] and a["topOutliers"]
     assert a["revenue"]["socialBladeRange"]["low_usd"] > 0
+    nm = a["revenue"]["nicheModel"]                  # plan 06
+    assert nm["monthly_usd_low"] <= nm["monthly_usd"] <= nm["monthly_usd_high"]
 
     cmp_ = T.compare_channels(["UC0000000000000000000a", "UC0000000000000000000d"])
     assert len(cmp_["channels"]) == 2

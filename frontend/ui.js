@@ -62,6 +62,12 @@ function plural(n, one, few, many) {
 
 function pl(n, one, few, many) { return `${num(n)} ${plural(n, one, few, many)}`; }
 
+/* RPM-вилка (plan 06): оценка без проверяемого источника, поэтому всегда диапазон. */
+function usd(x) { return x == null ? '—' : x >= 10 ? String(Math.round(x)) : (+x).toFixed(1).replace('.0', ''); }
+function rpmRange(r) { return r ? `$${usd(r.low)}–${usd(r.high)}` : '—'; }
+const RPM_TIP = 'Оценка RPM по категории, не измеренная выплата: середина — модель ниши, '
+  + 'вилка ÷2…×2, потому что публичные оценки для одной ниши расходятся до 7 раз';
+
 function mult(x) { return x === null || x === undefined ? '—' : `${(+x).toFixed(1)}x`; }
 
 function ago(iso) {
@@ -206,7 +212,8 @@ function videoCard(v) {
     <div class="vcard-chips">
       <span class="chip chip-accent" data-tip="Просмотров на одного подписчика — насколько видео вышло за пределы своей аудитории">VSR ${(+v.viewsPerSubscriber).toFixed(1)}</span>
       ${v.outlierBand ? `<span class="chip">${esc(v.outlierBand)}</span>` : ''}
-      ${v.estimatedRpm != null ? `<span class="chip" data-tip="Оценка RPM по категории видео, не измеренная выплата">~$${v.estimatedRpm} RPM</span>` : ''}
+      ${v.estimatedRpmRange ? `<span class="chip" data-tip="${RPM_TIP}">~${rpmRange(v.estimatedRpmRange)} RPM</span>`
+        : v.estimatedRpm != null ? `<span class="chip" data-tip="${RPM_TIP}">~$${v.estimatedRpm} RPM</span>` : ''}
       ${v.acceleration != null ? `<span class="chip ${v.acceleration > 1.2 ? 'chip-good' : v.acceleration < 0.8 ? 'chip-bad' : ''}"
         data-tip="Ускорение: VPH сегодня против вчера">${v.acceleration > 1.2 ? '▲' : v.acceleration < 0.8 ? '▼' : '='} ${v.acceleration}</span>` : ''}
     </div>
@@ -337,4 +344,4 @@ function funnelBlock(res) {
 
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
-         lineChart, funnelBlock, aiLabelsBadge, scatterChart, state };
+         lineChart, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP };

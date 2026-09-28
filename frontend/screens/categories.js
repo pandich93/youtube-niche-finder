@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { api, q, num, compact, mult, esc, delta, sectionHead, empty, barList, table, state } from '../ui.js';
+import { api, q, num, compact, mult, esc, delta, sectionHead, empty, barList, table, state, rpmRange, RPM_TIP } from '../ui.js';
 import { view, plabel, base } from '../shared.js';
 
 /* ------------------------------------------------------------- Категории */
@@ -31,7 +31,8 @@ async function viewCategories() {
         { label: 'Рост', num: true, render: (r) => delta(r.viewsGrowth) },
         { label: 'Медиана множителя', num: true, render: (r) => mult(r.medianOutlier) },
         { label: 'Shorts', num: true, render: (r) => `${r.shortsShare}%` },
-        { label: 'RPM ниши', num: true, render: (r) => `$${r.estimatedRpmNiche}` },
+        { label: 'RPM ниши', num: true, render: (r) => r.estimatedRpmRange
+            ? `<span data-tip="${RPM_TIP}">${rpmRange(r.estimatedRpmRange)}</span>` : `$${r.estimatedRpmNiche}` },
       ], cats)}
     </div>`;
 }

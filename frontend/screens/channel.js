@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, aiLabelsBadge, state } from '../ui.js';
+import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, aiLabelsBadge, state, rpmRange } from '../ui.js';
 import { view, nicheOverviewBlock } from '../shared.js';
 
 /* ----------------------------------------------------------------- Канал */
@@ -60,8 +60,12 @@ async function viewChannel(id) {
         <div class="tiles">
           ${tile('Диапазон Social Blade',
             `$${num(a.revenue.socialBladeRange.low_usd)}–${num(a.revenue.socialBladeRange.high_usd)}`, 'в месяц')}
-          ${tile('Модель по RPM ниши', `$${num(a.revenue.nicheModel.monthly_usd)}`,
-            `RPM $${a.revenue.nicheModel.rpm_effective}`)}
+          ${a.revenue.nicheModel.monthly_usd_low != null
+            ? tile('Модель по RPM ниши',
+                `$${num(a.revenue.nicheModel.monthly_usd_low)}–${num(a.revenue.nicheModel.monthly_usd_high)}`,
+                `в месяц · RPM ${rpmRange(a.revenue.nicheModel.rpm_range)}`)
+            : tile('Модель по RPM ниши', `$${num(a.revenue.nicheModel.monthly_usd)}`,
+                `RPM $${a.revenue.nicheModel.rpm_effective}`)}
         </div>
         <div class="section-sub" style="margin-top:10px">Только AdSense, без спонсорских
           интеграций. Публичные оценки дохода регулярно ошибаются в 2–4 раза — читайте это

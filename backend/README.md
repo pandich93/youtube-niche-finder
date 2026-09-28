@@ -540,6 +540,7 @@ vph24h              = (views_now - views_24h_ago) / 24               # needs his
 acceleration        = today's vph24h / yesterday's vph24h            # >1.5 = accelerating
 momentum            = views per day over 30d / views per day over lifetime
 revenue             = monthly views / 1000 * niche RPM * 0.70
+rpm range           = that effective RPM / 2 ... * 2    # published estimates disagree by up to 7x
 ```
 
 Median instead of mean is deliberate: NexLev's baseline is the channel's

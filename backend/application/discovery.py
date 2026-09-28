@@ -374,6 +374,7 @@ def _video_out(r):
         "thumbnail": r["thumbnail"],
         "category": r["category"],
         "estimatedRpm": M.rpm_effective(C.rpm_niche(r["category_id"])),
+        "estimatedRpmRange": M.rpm_range(C.rpm_niche(r["category_id"])),
         "language": r["default_language"],
         "channelId": r["channel_id"],
         "channelTitle": r["channel_title"],
@@ -471,7 +472,10 @@ def most_popular_categories(period="7d", period_by="published", niche=None, regi
             "medianEngagementRate": M.safe_median([r["engagementRate"] for r in group]),
             "shortsShare": round(sum(1 for r in group if r["isShort"]) / len(group) * 100, 1),
             **_synthetic_share(group),
+            # base RPM before the 0.70 discount -- kept for old clients; the
+            # range is the effective RPM, the same number video cards show.
             "estimatedRpmNiche": M.NICHE_RPM.get(C.rpm_niche(cid), M.NICHE_RPM["default"]),
+            "estimatedRpmRange": M.rpm_range(C.rpm_niche(cid)),
             "topVideos": [{"videoId": r["video_id"], "title": r["title"],
                            "views": r["view_count"], "channel": r["channel_title"]}
                           for r in top],

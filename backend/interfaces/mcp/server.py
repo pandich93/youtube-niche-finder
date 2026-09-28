@@ -508,8 +508,10 @@ def search_outliers(query: str = None, niche: str = None, languages: list = None
     min_rpm/max_rpm filter on estimatedRpm, a NexLev-style RPM estimate
     derived from the video's category via the same static niche-RPM table
     channel revenue estimates use (domain/metrics.py NICHE_RPM) -- an
-    approximation, not a measured payout. min_video_length/max_video_length
-    are in seconds.
+    approximation, not a measured payout. estimatedRpm is the middle of
+    estimatedRpmRange (half to double it, low confidence: public estimates
+    for one niche disagree by up to 7x); quote the range, not the middle.
+    min_video_length/max_video_length are in seconds.
     """
     return q.search_outliers(
         query=query, niche=niche, languages=languages, max_subscribers=max_subscribers,

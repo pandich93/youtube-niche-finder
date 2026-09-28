@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **RPM as a range** (plan 06) — every RPM estimate now also comes as
+  `low / mid / high` (`estimatedRpmRange` on videos and categories,
+  `rpm_range` and `monthly_usd_low/high` in a channel's `nicheModel`): the
+  existing niche model is the middle, the band is half to double it, marked
+  `confidence: "low"` with the reason (public RPM estimates for one niche
+  disagree by up to 7x). Old fields and the `min_rpm`/`max_rpm` filters are
+  unchanged and compare the middle. Dashboard cards, the categories table and
+  the channel revenue tile show the range.
+
 - **Repackaging — "Перепаковки"** (plan 05) — a dashboard screen, MCP tool
   `packaging_changes` and `/api/packaging` for title and thumbnail swaps after
   publishing: old vs new title or the archived before/after thumbnails side by
@@ -327,6 +336,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `embed=True`.
 
 ### Fixed
+
+- The categories table showed the niche's base RPM (before the 0.70
+  monetisation discount) while video cards showed the discounted one, so the
+  same niche had two different numbers; both now show the discounted range.
 
 - **`scripts/mcp-docker.sh` no longer relies on `docker run --env-file`.**
   `docker compose` reads `.env` by dotenv rules and strips the quotes around
