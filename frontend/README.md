@@ -193,7 +193,8 @@ query), with video counts and the last collection time for each niche.
 ### Niche (`#/niche/<slug>`)
 
 Opened from the Niches list. Summary tiles (videos, channels, median
-multiplier, median views, viral skew), a views-by-publish-date scatter
+multiplier, median views, viral skew), the share of channels that look like a
+template conveyor (`/api/niches/{slug}/template-risk`), a views-by-publish-date scatter
 (colour per channel, hollow for videos younger than 30 days, filterable by
 channel IDs and Shorts), hit rate by tag group, the niche's videos with a
 manual tag editor, and LLM-proposed tags outside the taxonomy to accept or
@@ -209,7 +210,9 @@ growth rate by window (24h/7d/30d), and a revenue estimate. The "views over
 time" chart is built from the worker's snapshots, because the YouTube API
 only ever returns the state "right now" — the screenshot below shows the
 state with a single snapshot, before the chart has built up any history.
-Below that: similar channels by video embeddings
+A "template risk" card (`/api/channels/{id}/template-risk`) scores how much the last
+uploads look like one template repeated, with the reasons; a heuristic, not YouTube's
+verdict. Below that: similar channels by video embeddings
 (`/api/channels/{id}/similar`), and per-video buttons for live comments
 (`POST /api/videos/{id}/comments`, 1 quota unit) and a "why did it take
 off" LLM explanation (`/api/video/{id}/why`, cached; shows a hint instead

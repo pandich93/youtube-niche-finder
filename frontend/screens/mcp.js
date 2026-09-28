@@ -14,7 +14,7 @@ async function viewMcp() {
           данные, ищет вирусные видео, разбирает каналы и сам решает, что из найденного релевантно
           вашей теме. Дашборд (страница «Справка и FAQ» рядом) и MCP-сервер читают одну и ту же
           базу Postgres — можно собирать данные откуда угодно, а смотреть результат в другом месте.</p>
-        <p>Всего 63 инструмента. Тратят квоту YouTube только инструменты <strong>сбора</strong>;
+        <p>Всего 65 инструментов. Тратят квоту YouTube только инструменты <strong>сбора</strong>;
           всё остальное — <strong>разделы</strong>, трекинг и анализ каналов, теги, идеи, заголовки,
           алерты, избранное, транскрипты — читает уже собранную базу бесплатно. Отдельная группа
           <strong>LLM-функций</strong> работает, только если задан <code>LLM_PROVIDER</code>.
@@ -118,6 +118,7 @@ cp .env.example .env   # впишите YOUTUBE_API_KEY</code></pre>
           <li><code>niche_overview</code>, <code>niche_overview_from_channel</code>,
             <code>niche_videos</code>, <code>niche_map</code> — насыщенность ниши, её видео и карта
             ниш по кластерам каналов.</li>
+          <li><code>template_risk</code>, <code>niche_template_risk</code> — насколько загрузки канала (или каналов ниши) похожи на один шаблон: риск «неаутентичного контента» YouTube. Эвристика, не вердикт.</li>
           <li><code>check_ideas</code> — пакетная проверка идей по базе.</li>
           <li><code>list_niches</code>, <code>db_stats</code>, <code>data_coverage</code> — что собрано и
             хватает ли данных на окно.</li>

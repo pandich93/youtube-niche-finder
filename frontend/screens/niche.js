@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, state } from '../ui.js';
+import { $, api, q, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, state, nicheTemplateRiskBlock } from '../ui.js';
 import { view, plabel, nicheOverviewBlock, render } from '../shared.js';
 
 /* Доля хитов по тегам одной группы -- barList из tag_stats. Группа вводится
@@ -233,7 +233,7 @@ function wireScatterFilters(rerender) {
 
 async function viewNiche(slug) {
   const tagGroup = localStorage.getItem('nf.tagGroup') || 'theme';
-  const [d, stats, videoTags, proposed, scatter] = await Promise.all([
+  const [d, stats, videoTags, proposed, scatter, risk] = await Promise.all([
     api(`/api/niches/${encodeURIComponent(slug)}${q({ period: state.period, top_n: 30 })}`),
     api(`/api/tags/stats${q({ niche: slug, tag_group: tagGroup })}`),
     api(`/api/tags${q({ niche: slug })}`),
@@ -242,6 +242,7 @@ async function viewNiche(slug) {
       period: state.period, channels: scatterFilters.channels || undefined,
       include_shorts: scatterFilters.includeShorts,
     })}`),
+    api(`/api/niches/${encodeURIComponent(slug)}/template-risk`).catch(() => null),
   ]);
   if (!d.found) { view.innerHTML = notice(esc(d.hint || 'ниша не найдена')); return; }
 
@@ -255,6 +256,7 @@ async function viewNiche(slug) {
     sectionHead(`Ниша: ${slug}`, `${esc(d.query || '')} · ${plabel(state.period)}`, `
       <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.tsv">Экспорт TSV</a>
       <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.csv">Экспорт CSV</a>`))
+    + nicheTemplateRiskBlock(risk)
     + scatterSection(scatter.videos || [], scatterFilters)
     + tagStatsSection(stats, tagGroup)
     + nicheVideoTagsSection(d.top_videos_by_outlier_score || [], tagsByVideo, tagGroup, slug)

@@ -30,7 +30,8 @@ The extension never talks to the outside world — only to `127.0.0.1`.
   below), and a link to the dashboard.
 
 **Channel page** (under the header): subscribers, average views per video,
-growth estimate and momentum, revenue forecast, the channel's best
+growth estimate and momentum, revenue forecast, a template-risk line (how much the
+recent uploads look like one template; a heuristic, not YouTube's verdict), the channel's best
 outliers, the best time to publish in your time zone, title phrases that
 produce outliers, and similar channels. When background enrichment has
 classified the channel, an AI-label chip shows faceless / on-camera and the

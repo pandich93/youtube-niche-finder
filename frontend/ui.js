@@ -68,6 +68,64 @@ function rpmRange(r) { return r ? `$${usd(r.low)}–${usd(r.high)}` : '—'; }
 const RPM_TIP = 'Оценка RPM по категории, не измеренная выплата: середина — модель ниши, '
   + 'вилка ÷2…×2, потому что публичные оценки для одной ниши расходятся до 7 раз';
 
+/* Риск шаблонности (plan 01): эвристика по загрузкам, не вердикт YouTube. */
+const RISK_LEVEL = { low: ['низкий', ''], medium: ['средний', 'chip-warn'], high: ['высокий', 'chip-bad'],
+                     'insufficient-data': ['мало данных', ''] };
+const RISK_REASON = {
+  similarity: (v) => `заголовки очень похожи друг на друга (близость ${(+v).toFixed(2)})`,
+  templateShare: (v) => `${Math.round(v * 100)}% заголовков повторяют одно начало или конец`,
+  durationCv: (v) => `длительность видео почти не меняется (разброс ${(+v).toFixed(2)})`,
+  cadenceCv: (v) => `видео выходят с ровным ритмом (разброс интервалов ${(+v).toFixed(2)})`,
+};
+const RISK_NOTE = 'Эвристика по публичным паттернам загрузок, не решение YouTube: серии, подкасты '
+  + 'и музыкальные каналы тоже могут получить высокий балл.';
+
+function riskChip(level) {
+  const [label, cls] = RISK_LEVEL[level] || RISK_LEVEL['insufficient-data'];
+  return `<span class="chip ${cls}">${label}</span>`;
+}
+
+function templateRiskBlock(r) {
+  if (!r || !r.found) return '';
+  const head = sectionHead('Риск шаблонности', 'насколько последние загрузки похожи на один повторяемый шаблон');
+  if (r.level === 'insufficient-data') {
+    return `<div class="card">${head}<div class="section-sub">Мало данных: нужно не меньше 10 свежих
+      видео с эмбеддингами, сейчас ${num(r.videosAnalysed)}.</div></div>`;
+  }
+  return `<div class="card">${head}
+    <div class="tiles">
+      ${tile('Балл', `${r.score}<span class="tile-unit"> / 100</span>`, riskChip(r.level))}
+      ${tile('Видео в оценке', num(r.videosAnalysed), r.format === 'long-form' ? 'без Shorts' : 'все форматы')}
+    </div>
+    ${r.reasons.length ? `<ul class="digest-list">${r.reasons.map((x) =>
+      `<li style="white-space:normal">${esc((RISK_REASON[x.signal] || (() => x.text))(x.value))}</li>`).join('')}</ul>`
+      : '<div class="section-sub" style="margin-top:8px">Ни один сигнал шаблонности не выражен.</div>'}
+    <div class="section-sub" style="margin-top:8px">${RISK_NOTE}</div></div>`;
+}
+
+function nicheTemplateRiskBlock(n) {
+  if (!n || !n.found) return '';
+  const head = sectionHead('Риск шаблонности каналов ниши',
+    'какая доля каналов выглядит как конвейер — там, где их много, копировать формат опасно');
+  if (!n.channelsAnalysed) {
+    return `<div class="card">${head}<div class="section-sub">Мало данных: ни у одного канала нет 10+ свежих видео.</div></div>`;
+  }
+  return `<div class="card">${head}
+    <div class="tiles">
+      ${tile('Высокий риск', `${n.highRiskSharePercent}%`, `${num(n.levels.high)} из ${num(n.channelsAnalysed)} каналов`)}
+      ${tile('Средний', num(n.levels.medium))}
+      ${tile('Низкий', num(n.levels.low))}
+      ${tile('Мало данных', num(n.channelsInsufficient), 'меньше 10 видео')}
+    </div>
+    ${table([
+      { label: 'Самые шаблонные каналы', wrap: true, render: (c) => `<a href="#/channel/${esc(c.channelId)}">${esc(c.title || c.channelId)}</a>` },
+      { label: 'Подписчиков', num: true, render: (c) => compact(c.subscribers) },
+      { label: 'Балл', num: true, render: (c) => num(c.score) },
+      { label: 'Риск', render: (c) => riskChip(c.level) },
+    ], n.mostTemplated)}
+    <div class="section-sub" style="margin-top:8px">${RISK_NOTE}</div></div>`;
+}
+
 function mult(x) { return x === null || x === undefined ? '—' : `${(+x).toFixed(1)}x`; }
 
 function ago(iso) {
@@ -344,4 +402,4 @@ function funnelBlock(res) {
 
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
-         lineChart, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP };
+         lineChart, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock, nicheTemplateRiskBlock };

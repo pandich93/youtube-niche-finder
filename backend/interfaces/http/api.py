@@ -43,6 +43,7 @@ from application import niche_export as NE
 from application import packaging as PKG
 from application import search as Q
 from application import tags as TG
+from application import template_risk as TRK
 from application import transcripts as TR
 from infrastructure.categories import repository as C
 
@@ -637,6 +638,18 @@ def digest_send():
     """Send the digest now, ignoring DIGEST_HOUR and "already sent today" --
     for checking the Telegram/webhook setup."""
     return DG.send_digest(force=True)
+
+
+@app.get("/api/channels/{channel_id}/template-risk")
+def channel_template_risk(channel_id: str, last_n: int = 30):
+    """How templated a channel's recent uploads look (plan 01) -- a heuristic
+    over local data, zero quota."""
+    return TRK.template_risk(channel_id, last_n=last_n)
+
+
+@app.get("/api/niches/{slug}/template-risk")
+def niche_template_risk(slug: str, last_n: int = 30, top_n: int = 10):
+    return TRK.niche_template_risk(slug, last_n=last_n, top_n=top_n)
 
 
 @app.get("/api/videos/{video_id}/packaging")

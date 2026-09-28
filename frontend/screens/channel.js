@@ -1,16 +1,17 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, aiLabelsBadge, state, rpmRange } from '../ui.js';
+import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, aiLabelsBadge, state, rpmRange, templateRiskBlock } from '../ui.js';
 import { view, nicheOverviewBlock } from '../shared.js';
 
 /* ----------------------------------------------------------------- Канал */
 
 async function viewChannel(id) {
-  const [a, vel, hist, sim, nicheOv] = await Promise.all([
+  const [a, vel, hist, sim, nicheOv, risk] = await Promise.all([
     api(`/api/channels/${encodeURIComponent(id)}${q({ period: state.period })}`),
     api(`/api/channels/${encodeURIComponent(id)}/velocity${q({ period: state.period })}`),
     api(`/api/channels/${encodeURIComponent(id)}/history`),
     api(`/api/channels/${encodeURIComponent(id)}/similar`),
     api(`/api/channels/${encodeURIComponent(id)}/niche-overview`),
+    api(`/api/channels/${encodeURIComponent(id)}/template-risk`).catch(() => null),
   ]);
   view.innerHTML = `
     <div class="card">
@@ -86,6 +87,8 @@ async function viewChannel(id) {
           <button class="btn btn-ghost btn-sm js-why" data-video-id="${esc(r.videoId)}" data-video-title="${esc(r.title)}">почему выстрелило</button>` },
       ], a.topOutliers)}
     </div>
+
+    ${templateRiskBlock(risk)}
 
     <div class="card" id="commentsPanel" hidden></div>
     <div class="card" id="whyPanel" hidden></div>

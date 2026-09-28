@@ -5,7 +5,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-63%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-65%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -375,6 +375,8 @@ separately (or via cron), otherwise the velocity fields stay empty.
 | `track_channel` / `untrack_channel` / `list_tracked_channels` | a watchlist for history |
 | `channel_analytics` | profile, cadence, median vs. mean, viral skew, 24h/7d/30d/90d growth, momentum, grade, projections, two revenue models, top outliers |
 | `compare_channels` | comparison, ranked by views per subscriber |
+| `template_risk` | how templated a channel's last N uploads look, 0-100: title similarity, shared openings/endings, uniform lengths, metronome rhythm; Shorts and long-form never mixed; needs 10+ videos; a heuristic, not YouTube's verdict |
+| `niche_template_risk` | the same for every channel in a niche: low/medium/high counts, share of high-risk channels, the most templated ones |
 | `channel_velocity` | lifetime VPH, 24h VPH, daily gain, "accelerating / decelerating" |
 | `title_changes` | who renamed a video (thumbnail swaps are invisible to the API -- see `packaging_changes`) |
 | `packaging_changes` | title and thumbnail swaps with before/after and views per hour 48h before vs after; thumbnails come from the worker's image fingerprints of tracked channels; `video_id` for one video's full history |
@@ -589,6 +591,7 @@ youtube-niche-finder/
     │   ├── alerts.py           event detection (outlier, acceleration, ...)
     │   ├── metadata.py         metadata-review signals
     │   ├── packaging.py        thumbnail fingerprint distance, before/after views effect
+    │   ├── template_risk.py    title similarity / shared skeleton / length + cadence -> template score
     │   ├── title_scoring.py    deterministic title scoring
     │   ├── idea_verdicts.py    free / recent / proven / flopped for check_ideas
     │   ├── niche_clusters.py   plain numpy k-means
@@ -620,11 +623,12 @@ youtube-niche-finder/
     │   ├── niche_clusters.py   niche map: clustering + LLM naming
     │   ├── niche_export.py     niche videos to TSV/CSV
     │   ├── packaging.py        thumbnail fingerprinting, repackaging feed and history
+    │   ├── template_risk.py    per-channel and per-niche template risk
     │   ├── transcripts.py      manual transcript queue and hybrid search
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 63 tools
+    │   ├── mcp/server.py       MCP server, 65 tools
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
     │   └── worker/main.py      background collector's entry point

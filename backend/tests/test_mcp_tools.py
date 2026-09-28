@@ -414,6 +414,20 @@ def test_packaging_changes_routes_to_feed_or_one_video_history(monkeypatch):
     assert calls[-1] == ("history", "v1")
 
 
+# --------------------------------------------------- template risk
+
+def test_template_risk_tools_delegate_with_their_arguments(monkeypatch):
+    from application import template_risk as trk
+    calls = []
+    monkeypatch.setattr(trk, "template_risk",
+                        lambda cid, last_n: calls.append(("ch", cid, last_n)) or {"ch": 1})
+    monkeypatch.setattr(trk, "niche_template_risk",
+                        lambda n, last_n, top_n: calls.append(("niche", n, last_n, top_n)) or {"n": 1})
+    assert srv.template_risk("UC1", last_n=12) == {"ch": 1}
+    assert srv.niche_template_risk("abc", top_n=4) == {"n": 1}
+    assert calls == [("ch", "UC1", 12), ("niche", "abc", 30, 4)]
+
+
 # --------------------------------------------------- daily_digest
 
 def test_daily_digest_reads_the_summary_without_sending(monkeypatch):

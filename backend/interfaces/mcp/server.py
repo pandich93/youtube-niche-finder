@@ -1002,6 +1002,36 @@ def scan_for_alerts() -> dict:
 @mcp.tool(annotations=ToolAnnotations(
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
+def template_risk(channel_id: str, last_n: int = 30) -> dict:
+    """How much a channel's recent uploads look like one template repeated --
+    the pattern behind YouTube's "inauthentic content" demonetisations.
+    Scores the last_n uploads (long-form and Shorts are never mixed) 0-100
+    from title similarity (embeddings), shared title openings/endings,
+    uniform video length and a metronome upload rhythm, and says which of
+    them pushed it up. Needs 10+ videos, otherwise level is
+    insufficient-data. A heuristic over public patterns, NOT YouTube's
+    verdict: series, podcasts and music channels can score high. Zero quota."""
+    from application import template_risk as trk_mod
+    return trk_mod.template_risk(channel_id, last_n=last_n)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def niche_template_risk(niche: str, last_n: int = 30, top_n: int = 10) -> dict:
+    """template_risk for every channel with videos in a niche: how many are
+    low / medium / high risk, the share of high-risk channels among the
+    scored ones, and the top_n most templated channels. A niche where most
+    channels are high risk is one where copycats are about to be swept --
+    and where copying the format is dangerous. Same heuristic caveats as
+    template_risk. Zero quota."""
+    from application import template_risk as trk_mod
+    return trk_mod.niche_template_risk(niche, last_n=last_n, top_n=top_n)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
 def daily_digest(period: str = "24h", top_n: int = 5) -> dict:
     """The daily digest's content, without sending it: new outliers and
     accelerating videos on tracked channels, channels that just entered the

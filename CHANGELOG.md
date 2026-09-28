@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Template-risk check** (plan 01) — MCP `template_risk` / `niche_template_risk`,
+  `/api/channels/{id}/template-risk`, `/api/niches/{slug}/template-risk`, a card
+  on the channel and niche screens and a line in the extension's channel panel.
+  It scores how much a channel's last 30 uploads look like one template
+  repeated — the pattern YouTube's "inauthentic content" policy targets — 0-100
+  with the reasons: mean title similarity (embeddings), the share of titles
+  reusing the same opening or ending, how uniform the video lengths are and how
+  metronomic the upload rhythm is. Shorts and long-form are never mixed, fewer
+  than 10 videos gives `insufficient-data`, and no single signal decides (a
+  streamer with alike titles but varied lengths stays low). Thresholds come
+  from the distribution over the channels in the local database; there is no
+  labelled set of penalised channels, so it is a heuristic, not YouTube's
+  verdict. The niche view counts low/medium/high channels and lists the most
+  templated. Zero quota, no LLM, no schema change.
+
 - **Morning digest** (plan 07) — `NOTIFY_MODE=digest` (or `both`) sends one
   Telegram/webhook message a day instead of one per alert: new outliers and
   accelerating videos on tracked channels, rising channels, title/thumbnail

@@ -422,7 +422,18 @@
 
   // ------------------------------------------------------- страница канала
 
-  function channelHtml(d, deep) {
+  const RISK_LEVEL = { low: 'низкий', medium: 'средний', high: 'высокий' };
+
+  function riskRow(r) {
+    if (!r || !r.found || r.level === 'insufficient-data') return '';
+    const why = (r.reasons || []).map((x) => x.text).join('; ');
+    return `<div class="nf-row"><span class="nf-muted">Риск шаблонности:</span>
+      <b>${esc(RISK_LEVEL[r.level] || r.level)}</b> · ${r.score}/100
+      <span class="nf-hint" title="${esc(why)}">${esc(why || 'сигналы шаблонности не выражены')}.
+        Эвристика, не решение YouTube.</span></div>`;
+  }
+
+  function channelHtml(d, deep, risk) {
     const p = d.profile, m = d.metrics;
     const a = deep?.analytics?.found ? deep.analytics : null;
     const similar = (deep?.similar?.similar || []).slice(0, 5);
@@ -447,6 +458,7 @@
 
         <div class="nf-row"><span class="nf-muted">Динамика:</span> ${esc(growthLine)}
           <span class="nf-hint">${d.snapshots} ${plural(d.snapshots, 'снапшот', 'снапшота', 'снапшотов')}</span></div>
+        ${riskRow(risk)}
 
         <div class="nf-row"><span class="nf-muted">Доход в месяц, оценка:</span>
           <b>$${decimal(m.revenue.low_usd, 0)}–$${decimal(m.revenue.high_usd, 0)}</b></div>
@@ -531,7 +543,14 @@
       if (!root.isConnected || channelRef() !== ref) return;
     }
 
-    root.innerHTML = channelHtml(d, deep);
+    let risk = null;
+    if (d.hasDeepAnalytics) {
+      const rr = await send({ type: 'templateRisk', channelId: d.channelId });
+      if (rr.ok) risk = rr.data;
+      if (!root.isConnected || channelRef() !== ref) return;
+    }
+
+    root.innerHTML = channelHtml(d, deep, risk);
     wireCommon(root, () => renderChannel(ref, { refresh: true }));
 
     const dash = root.querySelector('.nf-dash');

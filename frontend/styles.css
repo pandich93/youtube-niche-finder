@@ -244,6 +244,7 @@ select:focus-visible, input:focus-visible, button:focus-visible, a:focus-visible
 
 /* Обзор: блок «За сутки» (дайджест) */
 .digest-list { margin: 6px 0 12px; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+.tile-unit { font-size: 13px; color: var(--muted); font-weight: 400; }
 .digest-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Перепаковки: «было / стало» */
@@ -270,6 +271,7 @@ select:focus-visible, input:focus-visible, button:focus-visible, a:focus-visible
 .chip-accent { background: var(--series-soft); border-color: transparent; color: var(--ink); }
 .chip-good { color: var(--good); }
 .chip-bad  { color: var(--critical); }
+.chip-warn { color: var(--warning); }
 
 /* --------------------------------------------------------------- таблица */
 

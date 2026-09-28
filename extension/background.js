@@ -150,6 +150,17 @@ async function packagingHistory(videoId) {
   return data;
 }
 
+async function templateRisk(channelId) {
+  /* Plan 01: how templated the channel's recent uploads look. Zero quota, a
+     read over the local database; null when the backend is unreachable. */
+  const key = 'trisk:' + channelId;
+  const hit = cacheGet(key, TTL.deep);
+  if (hit) return hit;
+  const data = await api(`/api/channels/${channelId}/template-risk`).catch(() => null);
+  if (data) cacheSet(key, data);
+  return data;
+}
+
 async function videoComments(videoId, maxResults = 50) {
   /* POST because it spends 1 unit of quota (commentThreads.list) -- unlike
      everything else the panel shows automatically, this only runs when the
@@ -281,6 +292,7 @@ const HANDLERS = {
   'deep': (m) => channelDeep(m.channelId),
   'similarVideos': (m) => similarVideos(m.videoId),
   'packaging': (m) => packagingHistory(m.videoId),
+  'templateRisk': (m) => templateRisk(m.channelId),
   'comments': (m) => videoComments(m.videoId, m.maxResults),
   'batch': (m) => inspectBatch(m.ids || []),
   'collect': async (m) => {
