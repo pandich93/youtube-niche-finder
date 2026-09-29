@@ -190,6 +190,9 @@ def _enrich(conn, rows, ref=None):
     MC.ensure_loaded(conn)
     baselines, period_baselines = _channel_baselines(conn, {r["channel_id"] for r in rows})
     history = _history_map(conn, [r["video_id"] for r in rows])
+    # title_for is a SELECT: one per (category, region) for this call, not one
+    # per row. Local on purpose -- refresh_categories may rename them later.
+    titles = {}
     for r in rows:
         views = r["view_count"] or 0
         age_h = P.hours_since(r["published_at"], ref)
@@ -226,7 +229,10 @@ def _enrich(conn, rows, ref=None):
         r["acceleration"] = M.acceleration(v24, (v48 * 2 - v24) if v48 is not None and v24 is not None else None)
         r["snapshots"] = len(hist)
         r["categoryId"] = r["category_id"]
-        r["category"] = C.title_for(r["category_id"], r["region"] or "US")
+        key = (r["category_id"], r["region"] or "US")
+        if key not in titles:
+            titles[key] = C.title_for(*key)
+        r["category"] = titles[key]
         r["isShort"] = r["is_short"]
         # None = the creator's status.containsSyntheticMedia flag was absent
         # (old video, or the field wasn't requested) -- distinct from a

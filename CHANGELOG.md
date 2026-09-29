@@ -436,6 +436,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Slow loads on large windows** — `load_window` looked up the category title
+  with one database query per video (3573 on a 120-day window, about 90% of its
+  time). It now looks each (category, region) pair up once per call: a
+  120-day window, the `trending-us` overview, the cluster map and the niche
+  trend list went from 4-5 s to about 0.4 s on a real database. Same titles,
+  no global cache (categories can still be renamed by `refresh_categories`).
+
 - The categories table showed the niche's base RPM (before the 0.70
   monetisation discount) while video cards showed the discounted one, so the
   same niche had two different numbers; both now show the discounted range.
