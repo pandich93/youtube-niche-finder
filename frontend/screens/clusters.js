@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, num, mult, esc, toast, sectionHead, empty, table } from '../ui.js';
+import { $, api, num, mult, esc, toast, sectionHead, empty, table, saturationChip } from '../ui.js';
 import { view } from '../shared.js';
 
 /* ------------------------------------------------------- Карта ниш (08) */
@@ -18,6 +18,7 @@ async function viewNicheClusters() {
         { label: 'Скорость (VPH)', num: true, render: (c) => num(c.totalVelocity) },
         { label: 'Faceless', num: true, render: (c) => c.facelessShare != null ? `${Math.round(c.facelessShare * 100)}%` : '—' },
         { label: 'Конкуренция (>100k)', num: true, render: (c) => num(c.competitionCount) },
+        { label: 'Тренд', render: (c) => saturationChip(c.saturation) || '—' },
       ], d.clusters) : empty(d.hint || 'кластеров пока нет')}
     </div>`;
 

@@ -12,6 +12,7 @@ import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import collecting, llm_gateway, maturity_curve
 from application import discovery as trends
+from application import saturation as SAT
 from domain import idea_verdicts as IV
 from domain import metrics as M
 from infrastructure.categories import repository as C
@@ -160,6 +161,8 @@ def niche_overview(niche: str, period: str = "all", top_n: int = 5) -> dict:
                 "hint": "nothing collected under this slug yet -- run collect_niche"}
 
     overview = _overview_from_rows(rows, top_n=top_n)
+    # plan 08: a trend over its own 120-day window, whatever `period` is
+    overview["saturation_v2"] = SAT.niche_saturation(niche)
     overview.update({
         "niche": niche,
         "found": True,
@@ -320,6 +323,7 @@ def niche_overview_from_channel(channel_id: str, limit: int = 15,
                 "hint": "similar channels found, but no videos in the requested period"}
 
     overview = _overview_from_rows(rows)
+    overview["saturation_v2"] = SAT.channels_saturation(channel_ids)
     overview.update({
         "channel_id": channel_id,
         "found": True,

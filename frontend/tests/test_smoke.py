@@ -176,6 +176,9 @@ def test_screen_renders_without_errors(browser, base_url, route):
     # Карточка пробелов (план 03): без кэша комментариев -- кнопка «Прочитать
     # комментарии», квота сама не тратится.
     ("niche/demo", ["Пробелы в контенте", "Прочитать комментарии"]),
+    # Тренд ниши (план 08): блок на экране ниши и колонка в списке ниш.
+    ("niche/demo", ["Тренд ниши", "Видео за 30 дней"]),
+    ("niches", ["Тренд"]),
     # Бриф под вопрос зрителей: тема из ?gap= доходит до экрана.
     ("brief/avid000?gap=how%20to%20start%20a%20tiny%20AI%20lab%3F",
      ["Бриф под пробел", "how to start a tiny AI lab?"]),
@@ -189,5 +192,7 @@ def test_content_gaps_parts_are_on_screen(browser, base_url, route, expected):
         text = page.inner_text("#view")
     finally:
         page.close()
+    # Подписи плиток и заголовки таблиц CSS выводит заглавными, inner_text
+    # отдаёт уже преобразованный текст -- сравниваем без регистра.
     for part in expected:
-        assert part in text, f"{part!r} not on #/{route}: {text[:400]}"
+        assert part.lower() in text.lower(), f"{part!r} not on #/{route}: {text[:400]}"

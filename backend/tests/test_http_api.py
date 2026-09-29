@@ -99,6 +99,8 @@ DELEGATIONS = [
     ("get", "/api/search?query=&niche=n1&sort_by=views", "Q", "search_outliers", (),
      {"query": None, "niche": "n1", "sort_by": "views"}, "results"),
     ("get", "/api/niches", "Q", "list_niches", (), {}, "niches"),
+    # plan 08: must not be taken for a niche slug by /api/niches/{slug}
+    ("get", "/api/niches/saturation", "SAT", "all_niches_saturation", (), {}, None),
     ("get", "/api/niches/abc?top_n=2", "Q", "niche_overview", ("abc",),
      {"top_n": 2, "period": "all"}, None),
     ("get", "/api/niches/abc/videos?channels=UC1,UC2&include_shorts=false", "Q",

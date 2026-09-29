@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Niche trend** (plan 08) — `saturation_v2` in `niche_overview` /
+  `niche_overview_from_channel` (MCP and `/api/niches/{slug}`), a new
+  `GET /api/niches/saturation` for every niche at once, a "Тренд ниши" block
+  on the niche screen, a "Тренд" column in the niche list and on the cluster
+  map. The last 30 days against the 90 before them, always in its own 120-day
+  window whatever the requested period: supply (videos), demand (median views
+  projected to day 30, so old and new videos compare; Shorts and long-form
+  never mixed; videos under 3 days left out), entrants (channels created in
+  the window) and newcomers (channels under 180 days with a video at
+  outlier >= 2). Status growing / stable / cooling / saturated, or
+  insufficient-data under 20 videos in either window; every signal is a reason
+  with its numbers, and `confidence: low` marks a trend when most videos were
+  not seen young, since it may only reflect how they were collected. Clusters
+  show the trend but keep their opportunity order. The old `saturation_hint`
+  stays. No schema change, zero quota.
+
 - **Content gaps** (plan 03) — MCP `content_gaps`, `GET` / `POST
   /api/niches/{slug}/content-gaps` and a "Пробелы в контенте" card on the niche
   screen. Questions and requests from the comments of a niche's most-viewed

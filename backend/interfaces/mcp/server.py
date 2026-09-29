@@ -363,7 +363,9 @@ def niche_map() -> dict:
     video embeddings (no manual niche definition needed) -- name,
     description, audience, channel count, median outlier score, total view
     velocity, faceless share, and a competition count (channels over 100k
-    subs), sorted by opportunity (high outlier, low competition first).
+    subs), sorted by opportunity (high outlier, low competition first). Each
+    cluster also carries `saturation` (the niche_overview trend over its
+    channels); it is shown, not folded into the order.
     Recomputed daily by the worker, or on demand via
     POST /api/niche-clusters/recompute."""
     return clusters_uc.niche_map()
@@ -620,7 +622,14 @@ def check_ideas(ideas: list, niche: str = None, min_similarity: float = 0.55,
 def niche_overview(niche: str, period: str = "all") -> dict:
     """Saturation and opportunity read on a collected niche: channel-size
     distribution, median outlier, viral skew, Shorts share, top categories and
-    how many small channels are breaking out."""
+    how many small channels are breaking out. saturation_v2 is the trend: the
+    last 30 days against the 90 before (always its own 120-day window, not
+    `period`) -- status growing / stable / cooling / saturated /
+    insufficient-data (under 20 videos in either window), from supply (videos),
+    demand (median views projected to day 30), entrants (channels created in
+    the window) and newcomers breaking out, each as a reason with its numbers;
+    confidence "low" when few of the videos were seen young, i.e. the trend may
+    be how they were collected. Zero quota."""
     return q.niche_overview(niche, period=period)
 
 
@@ -681,8 +690,9 @@ def niche_overview_from_channel(channel_id: str, limit: int = 15,
     opportunity read as niche_overview, but anchored on a channel instead of
     a pre-collected niche slug. Finds the channel's closest peers via
     similar_channels (embedding centroid, FREE/local) and runs the analysis
-    over the channel + its peers. FREE, no quota -- needs the channel to have
-    embedded videos, same requirement as similar_channels.
+    over the channel + its peers, saturation_v2 trend included. FREE, no
+    quota -- needs the channel to have embedded videos, same requirement as
+    similar_channels.
     """
     return q.niche_overview_from_channel(channel_id, limit=limit,
                                          min_videos_embedded=min_videos_embedded,

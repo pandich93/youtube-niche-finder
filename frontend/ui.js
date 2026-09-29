@@ -452,7 +452,70 @@ function sponsorBlock(d, title, sub) {
   </div>`;
 }
 
+/* Тренд насыщенности ниши (план 08): последние 30 дней против 90 до них.
+   Две точки -- это «было → стало» в плитке с изменением, а не график. Статус --
+   бейдж с подписью, не один цвет. */
+const SAT_STATUS = {
+  growing: ['растёт', 'chip-good'],
+  stable: ['держится', ''],
+  cooling: ['остывает', 'chip-warn'],
+  saturated: ['забита', 'chip-bad'],
+  'insufficient-data': ['мало данных', ''],
+};
+const SAT_REASON = {
+  'supply-up': 'видео выходит больше, чем раньше',
+  'supply-down': 'видео выходит меньше, чем раньше',
+  'supply-flat': 'видео выходит столько же',
+  'demand-up': 'просмотры новых видео выше, чем раньше',
+  'demand-down': 'просмотры новых видео ниже, чем раньше',
+  'demand-flat': 'просмотры новых видео на прежнем уровне',
+  'demand-unknown': 'просмотры сравнить не по чему',
+  'entrants-up': 'новых каналов появляется больше',
+  'entrants-down': 'новых каналов появляется меньше',
+  'entrants-flat': 'новые каналы появляются с прежней скоростью',
+  'entrants-unknown': 'даты создания каналов неизвестны',
+  'newcomers-break-out': 'новички часто выстреливают',
+  'newcomers-some': 'новички выстреливают иногда',
+  'newcomers-rarely-break-out': 'новички почти не выстреливают',
+  'newcomers-unknown': 'молодых каналов слишком мало для вывода',
+  'supply-unknown': 'объём сравнить не по чему',
+  'few-videos': 'меньше 20 видео в одном из окон — тренд не считаем',
+  'low-coverage': 'большинство видео мы не застали молодыми — тренд может быть артефактом сбора',
+};
+
+function saturationChip(s) {
+  if (!s) return '';
+  const [label, cls] = SAT_STATUS[s.status] || [s.status, ''];
+  const low = s.confidence === 'low' && s.status !== 'insufficient-data';
+  return `<span class="chip ${cls}" title="${low ? 'низкая уверенность: мало видео застали молодыми' : ''}">${esc(label)}${low ? ' ?' : ''}</span>`;
+}
+
+function saturationBlock(s) {
+  if (!s) return '';
+  const sig = s.signals;
+  const x = (r) => (r == null ? '' : ` · ×${r}`);
+  const reasons = (s.reasons || []).map((r) => SAT_REASON[r.code] || r.code);
+  return `<div class="card">
+    ${sectionHead('Тренд ниши', `последние 30 дней против 90 до них · ${s.format === 'short' ? 'Shorts' : 'длинные видео'}`,
+      saturationChip(s))}
+    <div class="tiles">
+      ${tile('Видео за 30 дней', `${num(sig.supply.basePer30d)} → ${num(sig.supply.recent)}`,
+        `было в среднем → сейчас${x(sig.supply.ratio)}`)}
+      ${tile('Просмотры новых видео', `${compact(sig.demand.baseMedian)} → ${compact(sig.demand.recentMedian)}`,
+        `медиана прогноза на 30-й день${x(sig.demand.ratio)}`)}
+      ${tile('Новые каналы за 30 дней', `${num(sig.entrants.basePer30d)} → ${num(sig.entrants.recent)}`,
+        sig.entrants.unknownAge ? `без даты создания: ${num(sig.entrants.unknownAge)}` : 'созданы в окне')}
+      ${tile('Новички выстреливают', sig.newcomers.share == null ? '—' : `${Math.round(sig.newcomers.share * 100)}%`,
+        `${num(sig.newcomers.brokeOut)} из ${num(sig.newcomers.channels)} каналов младше 180 дней, множитель ≥ 2`)}
+    </div>
+    <ul class="digest-list" style="margin-top:10px">${reasons.map((r) => `<li style="white-space:normal">${esc(r)}</li>`).join('')}</ul>
+    <div class="section-sub">Видео: ${num(s.counts.recent)} за 30 дней и ${num(s.counts.base)} за 90 до них.
+      ${sig.coverage.caughtYoungShare != null ? `Застали молодыми: ${Math.round(sig.coverage.caughtYoungShare * 100)}%.` : ''}
+      Считается только по собранному здесь.</div>
+  </div>`;
+}
+
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
          lineChart, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
-         nicheTemplateRiskBlock, sponsorBlock };
+         nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock };

@@ -351,10 +351,10 @@ separately (or via cron), otherwise the velocity fields stay empty.
 | `search_outliers` | outlier search over the database, semantically ranked by `query` |
 | `top_tags_by_category` | literal YouTube tags, as creators set them, ranked per category by frequency and breakout correlation |
 | `check_ideas` | batch-check up to 50 content ideas against the corpus: free / recent / proven / flopped |
-| `niche_overview` | niche density: channel-size distribution, viral skew, Shorts share |
+| `niche_overview` | niche density: channel-size distribution, viral skew, Shorts share; `saturation_v2` -- the trend over its own 120-day window (last 30 days vs the 90 before, whatever `period`): status growing / stable / cooling / saturated / insufficient-data (<20 videos per window), signals supply, demand (median views projected to day 30), entrants (channels created in the window), newcomers breaking out, each with its numbers; `confidence: low` when few videos were seen young. Zero quota. `GET /api/niches/saturation` gives every niche's status in one pass |
 | `niche_overview_from_channel` | the same read, anchored on a channel: finds its closest peers via `similar_channels` |
 | `niche_videos` | flat per-video list for a niche: date, views, channel, rolling and period outlier, duration |
-| `niche_map` | informal niches from k-means over channel embeddings: name, audience, median outlier, velocity, faceless share, competition |
+| `niche_map` | informal niches from k-means over channel embeddings: name, audience, median outlier, velocity, faceless share, competition, and each cluster's `saturation` trend (shown, not used for the order) |
 | `similar_channels` / `similar_videos` | semantically closest channels / videos in the local corpus (pgvector when available) |
 | `list_niches`, `db_stats` | what's been collected |
 | `data_coverage` | whether there's enough data for the requested window — call this first if a section comes back empty |
@@ -600,6 +600,7 @@ youtube-niche-finder/
     │   ├── packaging.py        thumbnail fingerprint distance, before/after views effect
     │   ├── sponsors.py         sponsor / promo-code / affiliate extraction from descriptions, brand normalisation
     │   ├── template_risk.py    title similarity / shared skeleton / length + cadence -> template score
+    │   ├── saturation.py       niche trend: supply, demand, entrants, newcomers -> growing / stable / cooling / saturated
     │   ├── hook_scoring.py     rule-based hook score, hook text extraction, niche aggregation
     │   ├── content_gaps.py     question picking from comments, grouping, demand vs coverage
     │   ├── title_scoring.py    deterministic title scoring
@@ -635,6 +636,7 @@ youtube-niche-finder/
     │   ├── packaging.py        thumbnail fingerprinting, repackaging feed and history
     │   ├── sponsors.py         sponsor scan (worker step + backfill), sponsor_map, channel_sponsors
     │   ├── template_risk.py    per-channel and per-niche template risk
+    │   ├── saturation.py       niche trend over the last 120 days: one niche, a channel set, all niches
     │   ├── hook_score.py       hook_report, niche_hook_benchmark, score_hook_text (LLM review cached in video_insights)
     │   ├── briefs.py           outlier -> brief for your own video (+ draft)
     │   ├── content_gaps.py     viewer questions from comments vs what the niche already covers

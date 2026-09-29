@@ -44,6 +44,7 @@ from application import metadata_review as MR
 from application import niche_clusters as NCL
 from application import niche_export as NE
 from application import packaging as PKG
+from application import saturation as SAT
 from application import search as Q
 from application import sponsors as SP
 from application import tags as TG
@@ -409,6 +410,14 @@ def overview(period: str = "24h", niche: str = None):
 @app.get("/api/niches")
 def niches():
     return {"niches": Q.list_niches()}
+
+
+@app.get("/api/niches/saturation")
+def niches_saturation():
+    """Plan 08: every niche's trend (growing / stable / cooling / saturated /
+    insufficient-data) in one pass, for the niche list. Zero quota. Declared
+    before /api/niches/{slug} so "saturation" is not taken for a slug."""
+    return SAT.all_niches_saturation()
 
 
 @app.get("/api/niches/{slug}")

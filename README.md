@@ -68,6 +68,11 @@ database.
   uniform lengths and a metronome upload rhythm (a heuristic, not a verdict)
 - Niche clusters (k-means over channel embeddings) and a niche map;
   semantic similarity of channels and videos via pgvector
+- Niche trend: growing / holding / cooling / saturated, from the last 30 days
+  against the 90 before — how many videos come out, how the new ones are
+  watched (projected to day 30), how many channels were created and whether
+  newcomers break out; "not enough data" under 20 videos per window, and a
+  "low confidence" mark when most videos were not seen young
 - Idea checker, title scoring and title suggestions, SEO review of a
   draft's title/description/tags, drafts linked to published videos
 - Outlier to brief: one call turns a video that beat its channel into a

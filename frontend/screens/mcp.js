@@ -117,7 +117,8 @@ cp .env.example .env   # впишите YOUTUBE_API_KEY</code></pre>
             смысловой поиск по базе (pgvector).</li>
           <li><code>niche_overview</code>, <code>niche_overview_from_channel</code>,
             <code>niche_videos</code>, <code>niche_map</code> — насыщенность ниши, её видео и карта
-            ниш по кластерам каналов.</li>
+            ниш по кластерам каналов. Поле <code>saturation_v2</code> — тренд: последние 30 дней против
+            90 до них (растёт / держится / остывает / забита / мало данных) с причинами и числами.</li>
           <li><code>template_risk</code>, <code>niche_template_risk</code> — насколько загрузки канала (или каналов ниши) похожи на один шаблон: риск «неаутентичного контента» YouTube. Эвристика, не вердикт.</li>
           <li><code>check_ideas</code> — пакетная проверка идей по базе.</li>
           <li><code>list_niches</code>, <code>db_stats</code>, <code>data_coverage</code> — что собрано и

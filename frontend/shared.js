@@ -1,6 +1,6 @@
 /* Общее для экранов: контейнер #view, подписи периодов, форма сбора, подвал
    с квотой, нишевый обзор и перерисовка текущего экрана. */
-import { $, api, num, compact, mult, esc, toast, tile, sectionHead, barList, table, state } from './ui.js';
+import { $, api, num, compact, mult, esc, toast, tile, sectionHead, barList, table, state, saturationBlock } from './ui.js';
 
 /* render() живёт в router.js, но экраны перерисовывают себя через него после
    действий. Прямой импорт дал бы цикл router -> screens -> router, поэтому
@@ -103,6 +103,7 @@ function nicheOverviewBlock(d, head) {
         ${tile('Пробитий у мелких', num(d.small_channel_breakouts), '≤10k подп., VSR ≥ 5')}
       </div>
     </div>
+    ${saturationBlock(d.saturation_v2)}
     <div class="grid-2">
       <div class="card">
         ${sectionHead('Каналы по размеру', SATURATION[d.saturation_hint] || d.saturation_hint)}

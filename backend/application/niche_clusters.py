@@ -13,6 +13,7 @@ import os
 import infrastructure.postgres as db
 from application import discovery as trends
 from application import llm_gateway as gw
+from application import saturation as SAT
 from domain import niche_clusters as NC
 from infrastructure.llm import factory
 
@@ -172,6 +173,21 @@ def _opportunity_score(c: dict) -> float:
     return outlier / (1 + (c.get("competitionCount") or 0))
 
 
+def _add_saturation(clusters):
+    """Plan 08: each cluster's trend over its channels, shown next to the
+    opportunity score but not folded into it -- clusters are channel groups
+    and most are still too thin for a trend to reorder them."""
+    all_ids = {cid for c in clusters for cid in c["channelIds"]}
+    rows = trends.load_window(period=SAT.WINDOW, channel_ids=list(all_ids)) if all_ids else []
+    groups = {}
+    for c in clusters:
+        members = set(c["channelIds"])
+        groups[c["clusterId"]] = {r["video_id"] for r in rows if r["channel_id"] in members}
+    result = SAT.grouped(rows, groups)
+    for c in clusters:
+        c["saturation"] = result[c["clusterId"]]
+
+
 def niche_map() -> dict:
     conn = db.get_conn()
     rows = conn.execute(
@@ -186,5 +202,6 @@ def niche_map() -> dict:
         "createdAt": r["created_at"],
     } for r in rows]
     clusters.sort(key=_opportunity_score, reverse=True)
+    _add_saturation(clusters)
     return {"clusters": clusters,
            "hint": None if clusters else "no clusters computed yet -- run compute_clusters"}
