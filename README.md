@@ -246,9 +246,10 @@ run the test suite.
 ## Multi-user mode (experimental)
 
 Off by default: niche-finder is a single-user tool on your own machine.
-`NF_MULTI_USER=1` adds sign-in with invited accounts (`cli.py create-user`), but
-per-user separation of the data is still in progress — do not give accounts to
-other people yet. Details: [backend/README.md](backend/README.md#multi-user-mode-plan-15-experimental-off-by-default).
+`NF_MULTI_USER=1` adds sign-in with invited accounts (`cli.py create-user`), and
+each user gets their own watchlist, swipe file, drafts, transcript queue and
+alerts; the YouTube quota, notifications and LLM budget are still shared, so do
+not give accounts to other people yet. Details: [backend/README.md](backend/README.md#multi-user-mode-plan-15-experimental-off-by-default).
 
 ## Privacy
 

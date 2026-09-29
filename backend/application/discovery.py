@@ -710,7 +710,7 @@ def coverage(period="7d") -> dict:
     oldest = conn.execute(
         "SELECT MIN(captured_at) FROM video_stats_history").fetchone()[0]
     tracked = conn.execute(
-        "SELECT COUNT(*) FROM tracked_channels WHERE active=1").fetchone()[0]
+        "SELECT COUNT(DISTINCT channel_id) FROM tracked_channels WHERE active=1").fetchone()[0]
     calls_today = collector.search_calls_today(conn)
     calls_left = max(0, yt.SEARCH_DAILY_CALL_LIMIT - calls_today)
     conn.close()

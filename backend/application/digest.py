@@ -17,6 +17,7 @@ import infrastructure.postgres as db
 from application import channel_tracking as T
 from application import packaging as PKG
 from domain import periods as P
+from domain.users import LOCAL_USER_ID
 from infrastructure.notify import factory as notify_factory
 from infrastructure.notify.null import NullNotifier
 
@@ -53,10 +54,11 @@ def _cut(s, n=TITLE_MAX) -> str:
     return s if len(s) <= n else s[:n - 1].rstrip() + "…"
 
 
-def _events(conn, kinds, start) -> list:
-    q = ("SELECT id, kind, ref_id, payload, created_at FROM events WHERE kind IN (%s)"
-         % ",".join("?" * len(kinds)))
-    params = list(kinds)
+def _events(conn, kinds, start, user_id=LOCAL_USER_ID) -> list:
+    from application.alerts import VISIBLE_TO_USER
+    q = ("SELECT id, kind, ref_id, payload, created_at FROM events e WHERE kind IN (%s) AND "
+         % ",".join("?" * len(kinds))) + VISIBLE_TO_USER
+    params = list(kinds) + [user_id]
     if start:
         q += " AND created_at >= ?"
         params.append(start)
@@ -71,7 +73,7 @@ def _events(conn, kinds, start) -> list:
     return out
 
 
-def build_digest(period: str = "24h", top_n: int = 5) -> dict:
+def build_digest(period: str = "24h", top_n: int = 5, user_id: int = LOCAL_USER_ID) -> dict:
     """Everything worth a morning glance for the last `period`: new outliers
     and accelerating videos on tracked channels, channels that just entered
     the corpus already outperforming, title/thumbnail swaps, and channels or
@@ -83,7 +85,7 @@ def build_digest(period: str = "24h", top_n: int = 5) -> dict:
     try:
         out, event_ids = {}, []
         for name, (kinds, rank_field) in EVENT_SECTIONS.items():
-            evs = _events(conn, kinds, start)
+            evs = _events(conn, kinds, start, user_id)
             event_ids += [e["id"] for e in evs]
             if rank_field:
                 evs.sort(key=lambda e: e["payload"].get(rank_field) or 0, reverse=True)

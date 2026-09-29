@@ -419,6 +419,15 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+
+-- plan 15 (5.4): "read" is personal even though the event is shared -- one row
+-- per user and event once that user has seen it (was events.seen_at).
+CREATE TABLE IF NOT EXISTS event_reads (
+    user_id BIGINT NOT NULL DEFAULT 1,
+    event_id BIGINT NOT NULL,
+    seen_at TEXT NOT NULL,
+    PRIMARY KEY (user_id, event_id)
+);
 """
 
 # columns added to pre-existing tables (name -> DDL type)
@@ -432,6 +441,9 @@ MIGRATIONS = {
     "alert_deliveries": {"user_id": _USER_ID},
     "transcript_requests": {"user_id": _USER_ID},
     "llm_usage": {"user_id": _USER_ID},
+    # plan 15 (5.4): which channel an event is about, so a user sees the events
+    # of their own watchlist (filled from payload.channelId for older rows)
+    "events": {"channel_id": "TEXT"},
     # plan 14 fix: the exact redirect the consent used (the token exchange must repeat it)
     "own_oauth_pending": {"redirect_uri": "TEXT"},
     "videos": {
@@ -581,6 +593,25 @@ def migrate(conn):
     for table in PERSONAL_TABLES:
         if "user_id" in _existing_columns(conn, table):
             conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_user ON {table}(user_id)")
+    _owner_keys(conn)
+    if "channel_id" in _existing_columns(conn, "events"):
+        # parsed in Python, not payload::jsonb: one malformed old payload must
+        # not stop the server from starting -- such a row just stays unassigned
+        import json
+        for r in conn.execute("SELECT id, payload FROM events WHERE channel_id IS NULL "
+                              "AND payload IS NOT NULL").fetchall():
+            try:
+                channel = (json.loads(r["payload"]) or {}).get("channelId")
+            except (TypeError, ValueError, AttributeError):
+                channel = None
+            if channel:
+                conn.execute("UPDATE events SET channel_id = ? WHERE id = ?", (channel, r["id"]))
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_events_channel ON events(channel_id)")
+    if _existing_columns(conn, "event_reads") and "seen_at" in _existing_columns(conn, "events"):
+        # the local user's read marks from before event_reads existed
+        conn.execute("INSERT INTO event_reads (user_id, event_id, seen_at) "
+                     "SELECT ?, id, seen_at FROM events WHERE seen_at IS NOT NULL "
+                     "ON CONFLICT DO NOTHING", (LOCAL_USER_ID,))
     if _existing_columns(conn, "users"):
         conn.execute("INSERT INTO users (id, email, is_admin, created_at) VALUES (?, 'local', 1, ?) "
                      "ON CONFLICT (id) DO NOTHING", (LOCAL_USER_ID, now_iso()))
@@ -592,6 +623,35 @@ def migrate(conn):
         (str(SCHEMA_VERSION),),
     )
     return added
+
+
+# plan 15 (5.4): a row is unique per owner, so two users can track the same
+# channel or ask for the same transcript. Swapped once, on the first start.
+_OWNER_KEYS = {"tracked_channels": ("user_id", "channel_id"),
+               "transcript_requests": ("user_id", "video_id")}
+
+
+def _primary_key(conn, table):
+    return [r["column_name"] for r in conn.execute(
+        "SELECT kcu.column_name FROM information_schema.table_constraints tc "
+        "JOIN information_schema.key_column_usage kcu ON kcu.constraint_name = tc.constraint_name "
+        "AND kcu.table_schema = tc.table_schema AND kcu.table_name = tc.table_name "
+        "WHERE tc.table_schema = current_schema() AND tc.table_name = ? "
+        "AND tc.constraint_type = 'PRIMARY KEY' ORDER BY kcu.ordinal_position", (table,)).fetchall()]
+
+
+def _owner_keys(conn):
+    for table, key in _OWNER_KEYS.items():
+        cols = _existing_columns(conn, table)
+        if "user_id" not in cols or _primary_key(conn, table) == list(key):
+            continue
+        name = conn.execute(
+            "SELECT constraint_name FROM information_schema.table_constraints "
+            "WHERE table_schema = current_schema() AND table_name = ? AND constraint_type = 'PRIMARY KEY'",
+            (table,)).fetchone()
+        if name:
+            conn.execute(f'ALTER TABLE {table} DROP CONSTRAINT "{name["constraint_name"]}"')
+        conn.execute(f"ALTER TABLE {table} ADD PRIMARY KEY ({', '.join(key)})")
 
 
 def init_db():

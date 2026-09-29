@@ -60,10 +60,16 @@ def _clean(monkeypatch):
 
 
 def _event(kind, ref_id, payload, hours_ago=1):
+    # The digest covers the local user's watchlist (plan 15): the event's
+    # channel is tracked here, as the alert scan only emits for tracked ones.
+    channel = payload.get("channelId") or "UCdigesttest"
     conn = db.get_conn()
-    conn.execute("INSERT INTO events (kind, ref_id, payload, created_at) VALUES (?,?,?,?)",
+    conn.execute("INSERT INTO tracked_channels (user_id, channel_id, added_at, active) "
+                 "VALUES (1, ?, ?, 1) ON CONFLICT DO NOTHING", (channel, db.now_iso()))
+    conn.execute("INSERT INTO events (kind, ref_id, payload, created_at, channel_id) "
+                 "VALUES (?,?,?,?,?)",
                  (kind, ref_id, __import__("json").dumps(payload),
-                  (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat()))
+                  (datetime.now(timezone.utc) - timedelta(hours=hours_ago)).isoformat(), channel))
     conn.commit()
     conn.close()
 

@@ -100,8 +100,9 @@ def _channel_candidates(conn, limit: int):
     cutoff = (datetime.now(timezone.utc) - timedelta(days=LLM_RELABEL_DAYS)).isoformat()
     return conn.execute(
         "SELECT c.channel_id, c.title, c.description, "
-        "(tc.channel_id IS NOT NULL AND tc.active = 1) AS is_tracked "
-        "FROM channels c LEFT JOIN tracked_channels tc ON tc.channel_id = c.channel_id "
+        "EXISTS (SELECT 1 FROM tracked_channels tc WHERE tc.channel_id = c.channel_id "
+        "AND tc.active = 1) AS is_tracked "
+        "FROM channels c "
         "WHERE c.llm_labeled_at IS NULL OR c.llm_labeled_at < ? "
         "ORDER BY is_tracked DESC, c.first_seen_at DESC NULLS LAST "
         "LIMIT ?", (cutoff, limit)).fetchall()

@@ -39,7 +39,12 @@ def _clear_alert_tables():
 
 
 def _emit(kind, ref_id, payload):
+    # Alerts go to the local user's notifier only for channels on their
+    # watchlist (plan 15), so the channel an event is about is tracked here.
+    payload = {"channelId": "UCnotifytest", **payload}
     conn = db.get_conn()
+    conn.execute("INSERT INTO tracked_channels (user_id, channel_id, added_at, active) "
+                 "VALUES (1, ?, ?, 1) ON CONFLICT DO NOTHING", (payload["channelId"], db.now_iso()))
     alerts._emit(conn, kind, ref_id, payload)
     conn.commit()
     conn.close()

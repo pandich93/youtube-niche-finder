@@ -12,6 +12,7 @@ import infrastructure.postgres as db
 from application import channel_tracking as T
 from application import discovery as trends
 from domain import alerts as A
+from domain.users import LOCAL_USER_ID
 from infrastructure.notify import factory as notify_factory
 from infrastructure.notify.null import NullNotifier
 
@@ -39,8 +40,9 @@ def _emit(conn, kind, ref_id, payload) -> bool:
     if _already_emitted(conn, kind, ref_id):
         return False
     conn.execute(
-        "INSERT INTO events (kind, ref_id, payload, created_at) VALUES (?,?,?,?)",
-        (kind, ref_id, json.dumps(payload, ensure_ascii=False), db.now_iso()),
+        "INSERT INTO events (kind, ref_id, payload, created_at, channel_id) VALUES (?,?,?,?,?)",
+        (kind, ref_id, json.dumps(payload, ensure_ascii=False), db.now_iso(),
+         (payload or {}).get("channelId")),
     )
     return True
 
@@ -96,8 +98,9 @@ def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
     """Run every detector against TRACKED channels only -- alerts are about
     channels you asked to watch, not the whole database. Safe to call every
     worker cycle: see _emit for why repeats never duplicate."""
-    tracked = T.list_tracked()
-    channel_ids = [c["channel_id"] for c in tracked]
+    # every user's tracked channels, each once: an event is a shared fact, who
+    # sees it is decided when reading (list_events)
+    channel_ids = T.tracked_channel_ids()
     empty_counts = {"outlier": 0, "acceleration": 0, "title_change": 0, "silence_break": 0,
                     "channel_gone": 0, "video_gone": 0}
     if not channel_ids:
@@ -154,6 +157,13 @@ def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
     return {"channelsScanned": len(channel_ids), "videosScanned": len(rows), "emitted": emitted}
 
 
+# plan 15 (5.4): an event is a shared fact; a user sees it when its channel
+# (events.channel_id, set when it is emitted) is on their watchlist. "Seen" is
+# personal (event_reads), not events.seen_at.
+VISIBLE_TO_USER = ("EXISTS (SELECT 1 FROM tracked_channels t WHERE t.user_id = ? "
+                   "AND t.channel_id = e.channel_id)")
+
+
 def _shape_event(r) -> dict:
     try:
         payload = json.loads(r["payload"]) if r["payload"] else {}
@@ -163,17 +173,17 @@ def _shape_event(r) -> dict:
            "createdAt": r["created_at"], "seenAt": r["seen_at"]}
 
 
-def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100) -> list:
-    where, params = [], []
+def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100,
+                user_id: int = LOCAL_USER_ID) -> list:
+    where, params = [VISIBLE_TO_USER], [user_id, user_id]
     if unseen_only:
-        where.append("seen_at IS NULL")
+        where.append("r.seen_at IS NULL")
     if kind:
-        where.append("kind = ?")
+        where.append("e.kind = ?")
         params.append(kind)
-    sql = "SELECT * FROM events"
-    if where:
-        sql += " WHERE " + " AND ".join(where)
-    sql += " ORDER BY created_at DESC LIMIT ?"
+    sql = ("SELECT e.id, e.kind, e.ref_id, e.payload, e.created_at, r.seen_at FROM events e "
+           "LEFT JOIN event_reads r ON r.event_id = e.id AND r.user_id = ? "
+           "WHERE " + " AND ".join(where) + " ORDER BY e.created_at DESC LIMIT ?")
     params.append(limit)
     conn = db.get_conn()
     rows = conn.execute(sql, params).fetchall()
@@ -181,21 +191,31 @@ def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100) -
     return [_shape_event(r) for r in rows]
 
 
-def unseen_count() -> int:
+def unseen_count(user_id: int = LOCAL_USER_ID) -> int:
     conn = db.get_conn()
-    row = conn.execute("SELECT COUNT(*) AS n FROM events WHERE seen_at IS NULL").fetchone()
+    row = conn.execute(
+        "SELECT COUNT(*) AS n FROM events e WHERE " + VISIBLE_TO_USER + " AND NOT EXISTS "
+        "(SELECT 1 FROM event_reads r WHERE r.event_id = e.id AND r.user_id = ?)",
+        (user_id, user_id)).fetchone()
     conn.close()
     return (row["n"] if row else 0) or 0
 
 
-def mark_seen(ids: list = None, all_unseen: bool = False) -> dict:
+def mark_seen(ids: list = None, all_unseen: bool = False, user_id: int = LOCAL_USER_ID) -> dict:
+    """This user's read marks only, and only on events this user can see."""
     conn = db.get_conn()
     now = db.now_iso()
-    if all_unseen:
-        conn.execute("UPDATE events SET seen_at=? WHERE seen_at IS NULL", (now,))
-    elif ids:
-        placeholders = ",".join("?" * len(ids))
-        conn.execute(f"UPDATE events SET seen_at=? WHERE id IN ({placeholders})", [now, *ids])
+    sql = ("INSERT INTO event_reads (user_id, event_id, seen_at) SELECT ?, e.id, ? FROM events e "
+           "WHERE " + VISIBLE_TO_USER)
+    params = [user_id, now, user_id]
+    if not all_unseen:
+        ids = [int(i) for i in (ids or [])]
+        if not ids:
+            conn.close()
+            return {"ok": True}
+        sql += " AND e.id IN (%s)" % ",".join("?" * len(ids))
+        params += ids
+    conn.execute(sql + " ON CONFLICT DO NOTHING", params)
     conn.commit()
     conn.close()
     return {"ok": True}
@@ -264,9 +284,11 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE) -> dict:
 
     conn = db.get_conn()
     try:
+        # instant delivery goes to the channel configured in .env, i.e. the
+        # local user's (per-user notification settings: plan 15, 5.9)
         rows = conn.execute(
-            "SELECT id, kind, ref_id, payload, created_at, seen_at FROM events "
-            "ORDER BY created_at ASC"
+            "SELECT e.id, e.kind, e.ref_id, e.payload, e.created_at, NULL AS seen_at FROM events e "
+            "WHERE " + VISIBLE_TO_USER + " ORDER BY e.created_at ASC", (LOCAL_USER_ID,)
         ).fetchall()
         events = [_shape_event(r) for r in rows]
         keys = [str(e["id"]) for e in events]

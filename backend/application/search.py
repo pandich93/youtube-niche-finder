@@ -359,7 +359,7 @@ def db_stats() -> dict:
         "channels": one("SELECT COUNT(*) FROM channels"),
         "videos": one("SELECT COUNT(*) FROM videos"),
         "niches": one("SELECT COUNT(*) FROM niches"),
-        "tracked_channels": one("SELECT COUNT(*) FROM tracked_channels WHERE active=1"),
+        "tracked_channels": one("SELECT COUNT(DISTINCT channel_id) FROM tracked_channels WHERE active=1"),
         "video_stat_snapshots": one("SELECT COUNT(*) FROM video_stats_history"),
         "channel_stat_snapshots": one("SELECT COUNT(*) FROM channel_stats_history"),
         "chart_snapshots": one("SELECT COUNT(*) FROM chart_snapshots"),

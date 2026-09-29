@@ -489,9 +489,10 @@ def niche_sponsors(slug: str, period: str = "all", top_n: int = 10):
 
 
 @app.get("/api/channels/tracked")
-def tracked(faceless: bool = None, content_format: str = None, topic: str = None):
+def tracked(request: Request, faceless: bool = None, content_format: str = None,
+            topic: str = None):
     return {"channels": T.list_tracked(faceless=faceless, content_format=content_format,
-                                       topic=topic)}
+                                       topic=topic, user_id=_uid(request))}
 
 
 @app.get("/api/channels/{channel_id}")
@@ -540,28 +541,31 @@ def similar_videos(video_id: str, niche: str = None, limit: int = 10,
 # ------------------------------------------------------------ swipe file
 
 @app.get("/api/saved")
-def saved_items(kind: str = None, folder: str = None, limit: int = 200):
-    return {"items": L.list_items(kind=kind, folder=folder, limit=limit)}
+def saved_items(request: Request, kind: str = None, folder: str = None, limit: int = 200):
+    return {"items": L.list_items(kind=kind, folder=folder, limit=limit, user_id=_uid(request))}
 
 
 @app.get("/api/saved/folders")
-def saved_folders():
-    return {"folders": L.list_folders()}
+def saved_folders(request: Request):
+    return {"folders": L.list_folders(user_id=_uid(request))}
 
 
 @app.post("/api/saved")
-def save_item(payload: dict = Body(...)):
+def save_item(request: Request, payload: dict = Body(...)):
     try:
         return L.save_item(payload.get("kind"), payload.get("refId") or payload.get("ref_id"),
                            payload=payload.get("payload"), note=payload.get("note"),
-                           folder=payload.get("folder"))
+                           folder=payload.get("folder"), user_id=_uid(request))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.delete("/api/saved/{item_id}")
-def delete_saved_item(item_id: int):
-    return L.delete_item(item_id)
+def delete_saved_item(request: Request, item_id: int):
+    out = L.delete_item(item_id, user_id=_uid(request))
+    if "deleted" in out and out["deleted"] is None:     # not this user's item
+        raise HTTPException(status_code=404, detail="saved item not found")
+    return out
 
 
 # ------------------------------------------------------------ video tags (16)
@@ -630,7 +634,7 @@ def metadata_review(payload: dict = Body(...)):
 
 
 @app.post("/api/drafts")
-def create_draft(payload: dict = Body(...)):
+def create_draft(request: Request, payload: dict = Body(...)):
     return MR.save_draft(
         payload.get("title") or "",
         description=payload.get("description") or "",
@@ -639,41 +643,47 @@ def create_draft(payload: dict = Body(...)):
         channel_id=payload.get("channelId") or payload.get("channel_id"),
         is_short=bool(payload.get("isShort") or payload.get("is_short") or False),
         review=payload.get("review"),
+        user_id=_uid(request),
     )
 
 
 @app.get("/api/drafts")
-def get_drafts(channel_id: str = None, unpublished_only: bool = False, limit: int = 100):
-    return {"drafts": MR.list_drafts(channel_id=channel_id,
-                                     unpublished_only=unpublished_only, limit=limit)}
+def get_drafts(request: Request, channel_id: str = None, unpublished_only: bool = False,
+               limit: int = 100):
+    return {"drafts": MR.list_drafts(channel_id=channel_id, unpublished_only=unpublished_only,
+                                     limit=limit, user_id=_uid(request))}
 
 
 @app.post("/api/drafts/{draft_id}/link")
-def link_draft(draft_id: int, payload: dict = Body(...)):
+def link_draft(request: Request, draft_id: int, payload: dict = Body(...)):
     video_id = payload.get("videoId") or payload.get("video_id")
     if not video_id:
         raise HTTPException(status_code=400, detail="videoId required")
-    return MR.link_draft(draft_id, video_id)
+    try:
+        return MR.link_draft(draft_id, video_id, user_id=_uid(request))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.get("/api/drafts/outcomes")
-def draft_outcomes(min_age_days: float = 7.0):
-    return {"outcomes": MR.draft_outcomes(min_age_days=min_age_days)}
+def draft_outcomes(request: Request, min_age_days: float = 7.0):
+    return {"outcomes": MR.draft_outcomes(min_age_days=min_age_days, user_id=_uid(request))}
 
 
 # ------------------------------------------------------------- alerts (8.9)
 
 @app.get("/api/events")
-def get_events(unseen_only: bool = False, kind: str = None, limit: int = 100):
-    return {"events": AL.list_events(unseen_only=unseen_only, kind=kind, limit=limit),
-           "unseenCount": AL.unseen_count()}
+def get_events(request: Request, unseen_only: bool = False, kind: str = None, limit: int = 100):
+    uid = _uid(request)
+    return {"events": AL.list_events(unseen_only=unseen_only, kind=kind, limit=limit, user_id=uid),
+           "unseenCount": AL.unseen_count(user_id=uid)}
 
 
 @app.post("/api/events/seen")
-def mark_events_seen(payload: dict = Body(default={})):
+def mark_events_seen(request: Request, payload: dict = Body(default={})):
     ids = payload.get("ids")
     all_unseen = bool(payload.get("all") or not ids)
-    return AL.mark_seen(ids=ids, all_unseen=all_unseen)
+    return AL.mark_seen(ids=ids, all_unseen=all_unseen, user_id=_uid(request))
 
 
 @app.post("/api/events/scan")
@@ -701,9 +711,9 @@ def packaging_feed(period: str = "30d", channel_id: str = None, field: str = Non
 
 
 @app.get("/api/digest")
-def digest_preview(period: str = "24h", top_n: int = 5):
+def digest_preview(request: Request, period: str = "24h", top_n: int = 5):
     """What the daily digest (plan 07) would contain right now -- read-only."""
-    return DG.build_digest(period=period, top_n=top_n)
+    return DG.build_digest(period=period, top_n=top_n, user_id=_uid(request))
 
 
 @app.post("/api/digest/send")
@@ -714,7 +724,7 @@ def digest_send():
 
 
 @app.post("/api/briefs")
-def make_brief(payload: dict = Body(...)):
+def make_brief(request: Request, payload: dict = Body(...)):
     """Outlier -> brief (plan 02). save=false previews without writing anything;
     save=true also stores a draft linked to the source video. Zero quota."""
     video_id = payload.get("videoId") or payload.get("video_id")
@@ -724,7 +734,8 @@ def make_brief(payload: dict = Body(...)):
         video_id, niche=payload.get("niche"),
         use_llm=payload.get("useLlm", payload.get("use_llm", True)),
         save=payload.get("save", True),
-        gap_topic=payload.get("gapTopic", payload.get("gap_topic")))
+        gap_topic=payload.get("gapTopic", payload.get("gap_topic")),
+        user_id=_uid(request))
     if not brief.get("found", True):
         raise HTTPException(status_code=404, detail=brief.get("hint") or "video not found")
     return brief
@@ -932,7 +943,7 @@ def title_patterns(niche: str = None, channel_id: str = None, period: str = "90d
 # ------------------------------------------- операции, которые тратят квоту
 
 @app.post("/api/collect/channel")
-def collect_channel(payload: dict = Body(...)):
+def collect_channel(request: Request, payload: dict = Body(...)):
     _need_key()
     ref = (payload.get("channel") or "").strip()
     if not ref:
@@ -943,7 +954,7 @@ def collect_channel(payload: dict = Body(...)):
     if res.get("error"):
         raise HTTPException(status_code=404, detail=res["error"])
     if payload.get("track"):
-        T.track(res["channelId"], payload.get("note"))
+        T.track(res["channelId"], payload.get("note"), user_id=_uid(request))
         res["tracked"] = True
     return res
 
@@ -1020,37 +1031,41 @@ def fetch_content_gaps(slug: str, payload: dict = Body(default={})):
 
 
 @app.post("/api/transcripts/request")
-def request_transcript(payload: dict = Body(...)):
+def request_transcript(request: Request, payload: dict = Body(...)):
     video_id = payload.get("videoId") or payload.get("video_id")
     if not video_id:
         raise HTTPException(status_code=400, detail="videoId is required")
     return TR.request_transcript(video_id, reason=payload.get("reason"),
                                  compare_group=payload.get("compareGroup"),
-                                 requested_by=payload.get("requestedBy") or "dashboard")
+                                 requested_by=payload.get("requestedBy") or "dashboard",
+                                 user_id=_uid(request))
 
 
 @app.get("/api/transcripts/queue")
-def transcript_queue(status: str = None):
-    return {"queue": TR.list_transcript_queue(status=status)}
+def transcript_queue(request: Request, status: str = None):
+    return {"queue": TR.list_transcript_queue(status=status, user_id=_uid(request))}
 
 
 @app.post("/api/transcripts/{video_id}/save")
-def save_transcript(video_id: str, payload: dict = Body(...)):
+def save_transcript(request: Request, video_id: str, payload: dict = Body(...)):
     text = payload.get("text") or ""
     if not text.strip():
         raise HTTPException(status_code=400, detail="text is required")
-    return TR.save_transcript(video_id, text, language=payload.get("language"))
+    return TR.save_transcript(video_id, text, language=payload.get("language"),
+                              user_id=_uid(request))
 
 
 @app.post("/api/transcripts/{video_id}/reindex")
-def reindex_transcript(video_id: str):
-    return TR.reindex_transcript(video_id)
+def reindex_transcript(request: Request, video_id: str):
+    return TR.reindex_transcript(video_id, user_id=_uid(request))
 
 
 @app.get("/api/transcripts/search")
-def search_transcripts(query: str, niche: str = None, compare_group: str = None, k: int = 10):
+def search_transcripts(request: Request, query: str, niche: str = None,
+                       compare_group: str = None, k: int = 10):
     try:
-        return TR.search_transcripts(query, niche=niche, compare_group=compare_group, k=k)
+        return TR.search_transcripts(query, niche=niche, compare_group=compare_group, k=k,
+                                     user_id=_uid(request))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1129,7 +1144,7 @@ def why_viral(video_id: str, force_refresh: bool = False):
 
 
 @app.post("/api/channels/track")
-def track(payload: dict = Body(...)):
+def track(request: Request, payload: dict = Body(...)):
     raw = (payload.get("channel_id") or "").strip()
     if not raw:
         raise HTTPException(status_code=400, detail="нужно поле channel_id")
@@ -1140,12 +1155,12 @@ def track(payload: dict = Body(...)):
         raise HTTPException(status_code=404, detail=str(e))
     finally:
         conn.close()
-    return T.track(cid, payload.get("note"))
+    return T.track(cid, payload.get("note"), user_id=_uid(request))
 
 
 @app.delete("/api/channels/tracked/{channel_id}")
-def untrack(channel_id: str):
-    return T.untrack(channel_id)
+def untrack(request: Request, channel_id: str):
+    return T.untrack(channel_id, user_id=_uid(request))
 
 
 # ------------------------------------- разбор произвольной страницы YouTube
@@ -1154,13 +1169,13 @@ def untrack(channel_id: str):
 # при промахе добираем 1-2 units и сохраняем — см. application/inspection.py.
 
 @app.get("/api/inspect/video")
-def inspect_video(video_id: str, refresh: bool = False, fetch: bool = True):
-    return I.inspect_video(API_KEY, video_id, refresh=refresh, fetch=fetch)
+def inspect_video(request: Request, video_id: str, refresh: bool = False, fetch: bool = True):
+    return I.inspect_video(API_KEY, video_id, refresh=refresh, fetch=fetch, user_id=_uid(request))
 
 
 @app.get("/api/inspect/channel")
-def inspect_channel(ref: str, refresh: bool = False, fetch: bool = True):
-    return I.inspect_channel(API_KEY, ref, refresh=refresh, fetch=fetch)
+def inspect_channel(request: Request, ref: str, refresh: bool = False, fetch: bool = True):
+    return I.inspect_channel(API_KEY, ref, refresh=refresh, fetch=fetch, user_id=_uid(request))
 
 
 @app.post("/api/inspect/videos")

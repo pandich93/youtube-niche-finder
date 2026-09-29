@@ -303,7 +303,7 @@ def test_fix_tracked_dry_run_reports_without_changing_anything(monkeypatch):
     conn = db.get_conn()
     conn.execute(
         "INSERT INTO tracked_channels (channel_id, added_at, active) VALUES (?,?,1) "
-        "ON CONFLICT (channel_id) DO NOTHING",
+        "ON CONFLICT (user_id, channel_id) DO NOTHING",
         ("@fixtrackedhandle", db.now_iso()))
     conn.commit()
     conn.close()
@@ -325,11 +325,11 @@ def test_fix_tracked_apply_rewrites_resolvable_rows_and_drops_the_rest(monkeypat
     conn = db.get_conn()
     conn.execute(
         "INSERT INTO tracked_channels (channel_id, added_at, active) VALUES (?,?,1) "
-        "ON CONFLICT (channel_id) DO NOTHING",
+        "ON CONFLICT (user_id, channel_id) DO NOTHING",
         ("@fixtrackedapply", db.now_iso()))
     conn.execute(
         "INSERT INTO tracked_channels (channel_id, added_at, active) VALUES (?,?,1) "
-        "ON CONFLICT (channel_id) DO NOTHING",
+        "ON CONFLICT (user_id, channel_id) DO NOTHING",
         ("@totallyunresolvable", db.now_iso()))
     conn.commit()
     conn.close()

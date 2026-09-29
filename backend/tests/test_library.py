@@ -17,7 +17,8 @@ from module_doubles import ModuleDoubles  # noqa: E402
 SCHEMA = """
 CREATE TABLE saved_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  kind TEXT, ref_id TEXT, folder TEXT, note TEXT, payload TEXT, created_at TEXT
+  kind TEXT, ref_id TEXT, folder TEXT, note TEXT, payload TEXT, created_at TEXT,
+  user_id INTEGER NOT NULL DEFAULT 1
 );
 """
 

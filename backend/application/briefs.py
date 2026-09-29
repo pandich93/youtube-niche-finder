@@ -16,6 +16,7 @@ from application import metadata_review as MR
 from application import search as Q
 from application import transcripts as TR
 from domain import idea_verdicts as IV
+from domain.users import LOCAL_USER_ID
 
 HOOK_WORDS = 75          # ~30 seconds of speech
 SIMILAR_LIMIT = 5
@@ -81,7 +82,7 @@ def _references(conn, video_id):
 
 
 def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
-                save: bool = True, gap_topic: str = None) -> dict:
+                save: bool = True, gap_topic: str = None, user_id: int = LOCAL_USER_ID) -> dict:
     """Brief for a video of your own, built from one outlier: its numbers and
     hook, why it worked and title patterns of the niche, whether the topic is
     already covered (source excluded), title candidates, and similar videos as
@@ -180,9 +181,9 @@ def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
 
     if save:
         if not hook["available"]:
-            TR.request_transcript(video_id, reason="brief")
+            TR.request_transcript(video_id, reason="brief", user_id=user_id)
         working = suggestions[0]["title"] if suggestions else topic
         brief["draftId"] = MR.save_draft(
             working, niche=niche, is_short=source["isShort"], review=brief,
-            source_video_id=video_id)["id"]
+            source_video_id=video_id, user_id=user_id)["id"]
     return brief

@@ -35,8 +35,8 @@ CREATE TABLE videos (video_id TEXT PRIMARY KEY, channel_id TEXT, title TEXT,
   default_language TEXT, updated_at TEXT, category_id TEXT, region TEXT,
   is_short INTEGER, topic_categories TEXT, first_seen_at TEXT, live_content TEXT,
   contains_synthetic_media INTEGER);
-CREATE TABLE tracked_channels (channel_id TEXT PRIMARY KEY, note TEXT, added_at TEXT,
-  last_refreshed_at TEXT, active INTEGER DEFAULT 1);
+CREATE TABLE tracked_channels (user_id INTEGER NOT NULL DEFAULT 1, channel_id TEXT, note TEXT,
+  added_at TEXT, last_refreshed_at TEXT, active INTEGER DEFAULT 1, PRIMARY KEY (user_id, channel_id));
 CREATE TABLE video_stats_history (video_id TEXT, captured_at TEXT, view_count INTEGER,
   like_count INTEGER, comment_count INTEGER, title TEXT, thumbnail TEXT,
   PRIMARY KEY (video_id, captured_at));

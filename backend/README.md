@@ -233,13 +233,20 @@ session. Without a session `/api` answers 401 except sign-in, `/api/health` and
 the Google OAuth return. Every personal table has a `user_id` (existing rows
 moved to user 1, "local").
 
-**Not ready for other people yet.** Sub-stages 5.1–5.3 add the switch,
-accounts and data ownership; separating tracked channels, drafts, the swipe
-file and alerts per user is sub-stage 5.4. Until then everyone who signs in
-sees the same data (only "Мои каналы" is already per user). The extension and
-MCP over HTTP do not sign in yet (5.7, 5.8). One YouTube API key serves the
-whole installation, as the YouTube API policies require one API project per
-application (III.D.1.c); per-user quota budgets come in 5.5.
+Per user (sub-stage 5.4): the watchlist, the swipe file, drafts, the
+transcript queue, alert read marks and "Мои каналы". Shared by everyone:
+public YouTube data (channels, videos, niches, pasted transcripts) and alert
+events — a user sees the events of the channels on their own watchlist; the
+worker refreshes each tracked channel once, whoever tracks it. MCP over stdio
+acts as the local user.
+
+**Not ready for other people yet.** Still shared or missing: the YouTube
+quota (one key for the installation, as the YouTube API policies require one
+API project per application, III.D.1.c — per-user budgets come in 5.5, so one
+user could spend everyone's daily quota), Telegram/webhook alerts and the
+digest (they follow the local user's watchlist; per-user settings in 5.9),
+the LLM budget and rate limit (5.10), and sign-in for the extension and MCP
+over HTTP (5.7, 5.8).
 
 ### CLI: everything, without Claude Desktop
 

@@ -25,6 +25,7 @@ from application import monetization as MON
 from domain import keywords as K
 from domain import metrics as M
 from domain import periods as P
+from domain.users import LOCAL_USER_ID
 from infrastructure.categories import repository as C
 
 
@@ -40,12 +41,13 @@ def _dt(iso):
 
 # ------------------------------------------------------------- watchlist
 
-def list_tracked(faceless: bool = None, content_format: str = None, topic: str = None) -> list:
-    """faceless/content_format/topic (stage 03) filter on channels.llm_labels
-    -- a channel never AI-labeled simply doesn't match any of the three."""
+def list_tracked(faceless: bool = None, content_format: str = None, topic: str = None,
+                 user_id: int = LOCAL_USER_ID) -> list:
+    """This user's watchlist. faceless/content_format/topic (stage 03) filter on
+    channels.llm_labels -- a channel never AI-labeled simply doesn't match."""
     conn = db.get_conn()
-    where = ["t.active = 1"]
-    params = []
+    where = ["t.active = 1", "t.user_id = ?"]
+    params = [user_id]
     if faceless is not None:
         where.append("(c.llm_labels->>'is_faceless')::boolean = ?")
         params.append(faceless)
@@ -111,20 +113,32 @@ def resolve_channel_id(conn, api_key: str, raw: str) -> str:
     return ch["id"]
 
 
-def track(channel_id: str, note: str = None) -> dict:
+def track(channel_id: str, note: str = None, user_id: int = LOCAL_USER_ID) -> dict:
     conn = db.get_conn()
-    db.track_channel(conn, channel_id, note)
+    db.track_channel(conn, channel_id, note, user_id=user_id)
     conn.commit()
     conn.close()
     return {"channelId": channel_id, "tracked": True, "note": note}
 
 
-def untrack(channel_id: str) -> dict:
+def untrack(channel_id: str, user_id: int = LOCAL_USER_ID) -> dict:
     conn = db.get_conn()
-    db.untrack_channel(conn, channel_id)
+    db.untrack_channel(conn, channel_id, user_id=user_id)
     conn.commit()
     conn.close()
     return {"channelId": channel_id, "tracked": False}
+
+
+def tracked_channel_ids() -> list:
+    """Every channel someone tracks, each once -- what the worker and the
+    alert scan refresh (shared public data, plan 15)."""
+    conn = db.get_conn()
+    try:
+        return [r["channel_id"] for r in conn.execute(
+            "SELECT DISTINCT channel_id FROM tracked_channels WHERE active = 1 "
+            "ORDER BY channel_id").fetchall()]
+    finally:
+        conn.close()
 
 
 def fix_tracked(api_key: str = None, apply: bool = False) -> dict:
@@ -137,30 +151,39 @@ def fix_tracked(api_key: str = None, apply: bool = False) -> dict:
     """
     conn = db.get_conn()
     try:
+        # every user's rows (plan 15): a raw handle is fixed in each watchlist
+        # it sits in, and dropped where that user already tracks the real id
         rows = [dict(r) for r in conn.execute(
-            "SELECT channel_id FROM tracked_channels WHERE channel_id NOT LIKE 'UC%'"
+            "SELECT user_id, channel_id FROM tracked_channels WHERE channel_id NOT LIKE 'UC%'"
         ).fetchall()]
-        fixed, unresolved = [], []
+        fixed, unresolved, resolved = [], [], {}
         for r in rows:
-            raw = r["channel_id"]
-            try:
-                cid = resolve_channel_id(conn, api_key, raw)
-            except ValueError:
-                unresolved.append(raw)
+            raw, uid = r["channel_id"], r["user_id"]
+            if raw not in resolved:
+                try:
+                    resolved[raw] = resolve_channel_id(conn, api_key, raw)
+                except ValueError:
+                    resolved[raw] = None
+            cid = resolved[raw]
+            if cid is None:
+                if raw not in unresolved:
+                    unresolved.append(raw)
+                if apply:
+                    conn.execute("DELETE FROM tracked_channels WHERE channel_id=? AND user_id=?",
+                                 (raw, uid))
                 continue
-            fixed.append({"was": raw, "now": cid})
+            if {"was": raw, "now": cid} not in fixed:
+                fixed.append({"was": raw, "now": cid})
             if apply:
-                dup = conn.execute(
-                    "SELECT 1 FROM tracked_channels WHERE channel_id=?", (cid,)).fetchone()
+                dup = conn.execute("SELECT 1 FROM tracked_channels WHERE channel_id=? AND user_id=?",
+                                   (cid, uid)).fetchone()
                 if dup:
-                    conn.execute("DELETE FROM tracked_channels WHERE channel_id=?", (raw,))
+                    conn.execute("DELETE FROM tracked_channels WHERE channel_id=? AND user_id=?",
+                                 (raw, uid))
                 else:
-                    conn.execute(
-                        "UPDATE tracked_channels SET channel_id=? WHERE channel_id=?",
-                        (cid, raw))
+                    conn.execute("UPDATE tracked_channels SET channel_id=? WHERE channel_id=? "
+                                 "AND user_id=?", (cid, raw, uid))
         if apply:
-            for raw in unresolved:
-                conn.execute("DELETE FROM tracked_channels WHERE channel_id=?", (raw,))
             conn.commit()
         return {"applied": apply, "fixed": fixed, "removed": unresolved}
     finally:

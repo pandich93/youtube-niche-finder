@@ -37,7 +37,9 @@ Everything lives in the Postgres database you point the app at (by default the
 - **Accounts** (plan 15, only with `NF_MULTI_USER=1`) — each user's email, a
   scrypt hash of the password (never the password), and the SHA-256 of each
   sign-in session token with its expiry (`users`, `sessions`). Personal rows
-  carry the owner's `user_id`.
+  carry the owner's `user_id`: the watchlist, swipe file, drafts, transcript
+  queue and which alerts each user has read (`event_reads`) are visible only
+  to their owner.
 - **Your own channels** (plan 14, only if you connect one) — the channel id and
   title, the granted scopes, the OAuth refresh token **encrypted** with
   `OWN_TOKENS_KEY` from your `.env` (Fernet; the key is never in the database),

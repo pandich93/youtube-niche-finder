@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Per-user data** (plan 15, sub-stage 5.4) — with `NF_MULTI_USER=1` every
+  signed-in user has their own watchlist, swipe file, drafts, transcript queue
+  and alert read marks, through HTTP; someone else's saved item or draft id
+  answers 404. `tracked_channels` and `transcript_requests` are keyed by
+  `(user_id, …)`, so two users can track the same channel or ask for the same
+  transcript; the worker, the alert scan and thumbnail fingerprints handle
+  each tracked channel once. Events stay shared facts with a new
+  `events.channel_id` (filled from the payload for older rows): a user sees
+  the events of their own watchlist, and "read" moved from `events.seen_at` to
+  the personal `event_reads` (existing marks kept for the local user). A pasted
+  transcript answers every user's request for it, and a new request for a video
+  that already has one is ready at once. Isolation tests cover the application
+  and HTTP layers. Single-user mode behaves as before.
+
 - **Multi-user groundwork** (plan 15, sub-stages 5.1–5.3, experimental) —
   `NF_MULTI_USER` (off by default: nothing changes). When on, `/api` needs a
   sign-in: invited accounts (`cli.py create-user` / `set-password` / `users`,

@@ -7,6 +7,7 @@ PRIVACY.md.
 """
 import infrastructure.postgres as db
 from domain import transcripts as TR
+from domain.users import LOCAL_USER_ID
 
 _EMB = None
 
@@ -20,39 +21,36 @@ def _embeddings():
 
 
 def request_transcript(video_id: str, reason: str = None, compare_group: str = None,
-                       requested_by: str = None) -> dict:
+                       requested_by: str = None, user_id: int = LOCAL_USER_ID) -> dict:
     """Queue a video for manual transcript paste -- shows up in
     list_transcript_queue(status='pending') until someone calls
     save_transcript() for it."""
     conn = db.get_conn()
     conn.execute(
-        "INSERT INTO transcript_requests (video_id, reason, compare_group, requested_by, "
-        "status, created_at) VALUES (?,?,?,?,'pending',?) "
-        "ON CONFLICT (video_id) DO UPDATE SET "
+        "INSERT INTO transcript_requests (user_id, video_id, reason, compare_group, requested_by, "
+        "status, created_at) VALUES (?,?,?,?,?,"
+        "CASE WHEN EXISTS (SELECT 1 FROM transcripts t WHERE t.video_id = ?) "
+        "THEN 'ready' ELSE 'pending' END, ?) "
+        "ON CONFLICT (user_id, video_id) DO UPDATE SET "
         "reason=COALESCE(excluded.reason, transcript_requests.reason), "
         "compare_group=COALESCE(excluded.compare_group, transcript_requests.compare_group)",
-        (video_id, reason, compare_group, requested_by, db.now_iso()))
+        (user_id, video_id, reason, compare_group, requested_by, video_id, db.now_iso()))
     conn.commit()
     conn.close()
     return {"videoId": video_id, "status": "pending"}
 
 
-def list_transcript_queue(status: str = None) -> list:
+def list_transcript_queue(status: str = None, user_id: int = LOCAL_USER_ID) -> list:
     conn = db.get_conn()
+    base = ("SELECT tr.*, v.title, v.view_count, v.channel_id, c.title AS channel_title "
+            "FROM transcript_requests tr "
+            "LEFT JOIN videos v ON v.video_id = tr.video_id "
+            "LEFT JOIN channels c ON c.channel_id = v.channel_id WHERE tr.user_id = ?")
     if status:
-        rows = conn.execute(
-            "SELECT tr.*, v.title, v.view_count, v.channel_id, c.title AS channel_title "
-            "FROM transcript_requests tr "
-            "LEFT JOIN videos v ON v.video_id = tr.video_id "
-            "LEFT JOIN channels c ON c.channel_id = v.channel_id "
-            "WHERE tr.status = ? ORDER BY tr.created_at DESC", (status,)).fetchall()
+        rows = conn.execute(base + " AND tr.status = ? ORDER BY tr.created_at DESC",
+                            (user_id, status)).fetchall()
     else:
-        rows = conn.execute(
-            "SELECT tr.*, v.title, v.view_count, v.channel_id, c.title AS channel_title "
-            "FROM transcript_requests tr "
-            "LEFT JOIN videos v ON v.video_id = tr.video_id "
-            "LEFT JOIN channels c ON c.channel_id = v.channel_id "
-            "ORDER BY tr.created_at DESC").fetchall()
+        rows = conn.execute(base + " ORDER BY tr.created_at DESC", (user_id,)).fetchall()
     conn.close()
     return [{
         "videoId": r["video_id"], "status": r["status"], "reason": r["reason"],
@@ -63,16 +61,17 @@ def list_transcript_queue(status: str = None) -> list:
     } for r in rows]
 
 
-def save_transcript(video_id: str, raw_text: str, language: str = None) -> dict:
+def save_transcript(video_id: str, raw_text: str, language: str = None,
+                    user_id: int = LOCAL_USER_ID) -> dict:
     """Parse -> chunk -> embed -> store, all synchronous (fastembed is
     local, no network). Any failure writes status='error' with the message
     instead of raising, so a bad paste shows up in the queue with a
     "Повторить" button rather than a 500."""
     conn = db.get_conn()
     conn.execute(
-        "INSERT INTO transcript_requests (video_id, status, created_at) "
-        "VALUES (?, 'pending', ?) ON CONFLICT (video_id) DO NOTHING",
-        (video_id, db.now_iso()))
+        "INSERT INTO transcript_requests (user_id, video_id, status, created_at) "
+        "VALUES (?, ?, 'pending', ?) ON CONFLICT (user_id, video_id) DO NOTHING",
+        (user_id, video_id, db.now_iso()))
     conn.commit()
     conn.close()
 
@@ -103,6 +102,7 @@ def save_transcript(video_id: str, raw_text: str, language: str = None) -> dict:
                     "INSERT INTO transcript_chunks (video_id, idx, start_sec, text, embedding) "
                     "VALUES (?,?,?,?,?)",
                     (video_id, idx, c["startSec"], c["text"], emb.to_blob(vec)))
+            # the transcript is shared: every user who asked for it gets it
             conn.execute(
                 "UPDATE transcript_requests SET status='ready', error=NULL WHERE video_id=?",
                 (video_id,))
@@ -115,15 +115,15 @@ def save_transcript(video_id: str, raw_text: str, language: str = None) -> dict:
         conn = db.get_conn()
         try:
             conn.execute(
-                "UPDATE transcript_requests SET status='error', error=? WHERE video_id=?",
-                (str(e), video_id))
+                "UPDATE transcript_requests SET status='error', error=? WHERE video_id=? "
+                "AND user_id=?", (str(e), video_id, user_id))
             conn.commit()
         finally:
             conn.close()
         return {"videoId": video_id, "status": "error", "error": str(e)}
 
 
-def reindex_transcript(video_id: str) -> dict:
+def reindex_transcript(video_id: str, user_id: int = LOCAL_USER_ID) -> dict:
     """Re-chunk + re-embed an already-saved transcript -- for after a chunk
     size or embedding model change. No re-paste needed, the raw text is
     already stored."""
@@ -134,11 +134,11 @@ def reindex_transcript(video_id: str) -> dict:
     if not row:
         return {"videoId": video_id, "status": "error",
                "error": "no saved transcript for this video yet"}
-    return save_transcript(video_id, row["text"], language=row["language"])
+    return save_transcript(video_id, row["text"], language=row["language"], user_id=user_id)
 
 
 def search_transcripts(query: str, niche: str = None, compare_group: str = None,
-                       k: int = 10) -> dict:
+                       k: int = 10, user_id: int = LOCAL_USER_ID) -> dict:
     """Hybrid search: vector cosine (fastembed, local) + Postgres full-text
     (tsvector/websearch_to_tsquery, 'simple' config for multilingual text),
     merged by Reciprocal Rank Fusion (RRF, k=60 -- the standard constant,
@@ -156,8 +156,8 @@ def search_transcripts(query: str, niche: str = None, compare_group: str = None,
                 "WHERE vn.niche_slug = ?", (niche,)).fetchall()}
         if compare_group:
             cg_ids = {r["video_id"] for r in conn.execute(
-                "SELECT video_id FROM transcript_requests WHERE compare_group = ?",
-                (compare_group,)).fetchall()}
+                "SELECT video_id FROM transcript_requests WHERE compare_group = ? AND user_id = ?",
+                (compare_group, user_id)).fetchall()}
             video_ids = cg_ids if video_ids is None else (video_ids & cg_ids)
 
         where_sql, params = "", []

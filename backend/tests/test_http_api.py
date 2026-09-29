@@ -175,7 +175,7 @@ DELEGATIONS = [
      ("abc",), {"top_n": 2}, None),
     ("get", "/api/transcripts/queue?status=pending", "TR", "list_transcript_queue",
      (), {"status": "pending"}, "queue"),
-    ("post", "/api/transcripts/v1/reindex", "TR", "reindex_transcript", ("v1",), {},
+    ("post", "/api/transcripts/v1/reindex", "TR", "reindex_transcript", ("v1",), {"user_id": 1},
      None),
     ("get", "/api/niche-clusters", "NCL", "niche_map", (), {}, None),
     ("post", "/api/niche-clusters/recompute?k=4", "NCL", "compute_clusters", (),
@@ -229,13 +229,13 @@ def test_events_list_and_mark_seen(stub):
     stub("AL", "unseen_count", result=3)
     body = client.get("/api/events?unseen_only=true&kind=spike").json()
     assert body == {"events": [{"id": 1}], "unseenCount": 3}
-    assert events.kwargs == {"unseen_only": True, "kind": "spike", "limit": 100}
+    assert events.kwargs == {"unseen_only": True, "kind": "spike", "limit": 100, "user_id": 1}
 
     seen = stub("AL", "mark_seen")
     client.post("/api/events/seen", json={})
-    assert seen.kwargs == {"ids": None, "all_unseen": True}
+    assert seen.kwargs == {"ids": None, "all_unseen": True, "user_id": 1}
     client.post("/api/events/seen", json={"ids": [1, 2]})
-    assert seen.kwargs == {"ids": [1, 2], "all_unseen": False}
+    assert seen.kwargs == {"ids": [1, 2], "all_unseen": False, "user_id": 1}
 
 
 def test_overview_widens_short_periods_for_the_slow_panels(stub):
@@ -389,10 +389,12 @@ def test_briefs_route_passes_the_options_and_accepts_both_key_styles(stub):
                                             "useLlm": False, "save": False})
     assert resp.status_code == 200 and resp.json() == {"stub": True}
     assert br.args == ("v1",)
-    assert br.kwargs == {"niche": "n1", "use_llm": False, "save": False, "gap_topic": None}
+    assert br.kwargs == {"niche": "n1", "use_llm": False, "save": False, "gap_topic": None,
+                         "user_id": 1}
     client.post("/api/briefs", json={"video_id": "v2"})           # defaults: LLM on, saved
     assert br.args == ("v2",)
-    assert br.kwargs == {"niche": None, "use_llm": True, "save": True, "gap_topic": None}
+    assert br.kwargs == {"niche": None, "use_llm": True, "save": True, "gap_topic": None,
+                         "user_id": 1}
     client.post("/api/briefs", json={"videoId": "v3", "gapTopic": "how to X?"})
     assert br.kwargs["gap_topic"] == "how to X?"
     client.post("/api/briefs", json={"videoId": "v3", "gap_topic": "how to Y?"})
@@ -426,7 +428,7 @@ def test_valid_bodies_reach_the_application(stub):
     assert req.kwargs["compare_group"] == "a"
     save = stub("TR", "save_transcript")
     client.post("/api/transcripts/v1/save", json={"text": "hello", "language": "en"})
-    assert save.args == ("v1", "hello") and save.kwargs == {"language": "en"}
+    assert save.args == ("v1", "hello") and save.kwargs == {"language": "en", "user_id": 1}
     many = stub("I", "inspect_videos")
     client.post("/api/inspect/videos", json={"ids": ["a", "b"], "fetch": False})
     assert many.args == (None, ["a", "b"]) and many.kwargs == {"fetch": False}

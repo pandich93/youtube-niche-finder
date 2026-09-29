@@ -32,8 +32,8 @@ CREATE TABLE videos (
   contains_synthetic_media INTEGER, embedding BLOB, updated_at TEXT
 );
 CREATE TABLE tracked_channels (
-  channel_id TEXT PRIMARY KEY, note TEXT, added_at TEXT, last_refreshed_at TEXT,
-  active INTEGER DEFAULT 1
+  user_id INTEGER NOT NULL DEFAULT 1, channel_id TEXT, note TEXT, added_at TEXT,
+  last_refreshed_at TEXT, active INTEGER DEFAULT 1, PRIMARY KEY (user_id, channel_id)
 );
 CREATE TABLE video_stats_history (video_id TEXT, captured_at TEXT, view_count INTEGER);
 CREATE TABLE channel_stats_history (channel_id TEXT, captured_at TEXT, subscriber_count INTEGER,
@@ -44,7 +44,11 @@ CREATE TABLE video_changes (
 );
 CREATE TABLE events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, ref_id TEXT, payload TEXT,
-  created_at TEXT, seen_at TEXT
+  created_at TEXT, seen_at TEXT, channel_id TEXT
+);
+CREATE TABLE event_reads (
+  user_id INTEGER NOT NULL DEFAULT 1, event_id INTEGER NOT NULL, seen_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, event_id)
 );
 CREATE TABLE gone_items (
   kind TEXT, ref_id TEXT, first_missing_at TEXT, last_missing_at TEXT,

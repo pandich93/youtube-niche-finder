@@ -26,6 +26,7 @@ from application import maturity_curve as MC
 from application import monetization as MON
 from domain import metrics as M
 from domain import periods as P
+from domain.users import LOCAL_USER_ID
 
 # Насколько свежей считаем запись в базе. Видео меняет счётчики быстро,
 # канал — заметно медленнее, поэтому пороги разные.
@@ -81,11 +82,11 @@ def _channel_row(conn, channel_id):
     return dict(row) if row else None
 
 
-def _is_tracked(conn, channel_id) -> bool:
+def _is_tracked(conn, channel_id, user_id=LOCAL_USER_ID) -> bool:
     if not channel_id:
         return False
-    row = conn.execute("SELECT 1 FROM tracked_channels WHERE channel_id = ? AND active = 1",
-                       (channel_id,)).fetchone()
+    row = conn.execute("SELECT 1 FROM tracked_channels WHERE channel_id = ? AND active = 1 "
+                       "AND user_id = ?", (channel_id, user_id)).fetchone()
     return bool(row)
 
 
@@ -164,7 +165,8 @@ def _ensure_channel(conn, api_key, channel_id, fetch=True, refresh=False,
 # ------------------------------------------------------------------- видео
 
 def inspect_video(api_key: str, video_id: str, refresh: bool = False,
-                  fetch: bool = True, stale_hours: float = VIDEO_STALE_HOURS) -> dict:
+                  fetch: bool = True, stale_hours: float = VIDEO_STALE_HOURS,
+                  user_id: int = LOCAL_USER_ID) -> dict:
     conn = db.get_conn()
     try:
         MC.ensure_loaded(conn)
@@ -264,7 +266,7 @@ def inspect_video(api_key: str, video_id: str, refresh: bool = False,
                 "createdAt": ch.get("published_at"),
                 "thumbnail": ch.get("thumbnail"),
                 "country": ch.get("country"),
-                "tracked": _is_tracked(conn, channel_id),
+                "tracked": _is_tracked(conn, channel_id, user_id),
                 "videosStored": _stored_videos(conn, channel_id)["count"] if channel_id else 0,
             },
             "metrics": {
@@ -320,7 +322,7 @@ def _resolve_locally(conn, ref: str):
 
 
 def inspect_channel(api_key: str, ref: str, refresh: bool = False, fetch: bool = True,
-                    stale_hours: float = CHANNEL_STALE_HOURS) -> dict:
+                    stale_hours: float = CHANNEL_STALE_HOURS, user_id: int = LOCAL_USER_ID) -> dict:
     """`ref` — UC-id, @хэндл или ссылка на канал."""
     conn = db.get_conn()
     try:
@@ -410,7 +412,7 @@ def inspect_channel(api_key: str, ref: str, refresh: bool = False, fetch: bool =
                 "revenue": M.revenue_range(int(monthly_views or 0)),
             },
             "stored": stored,
-            "tracked": _is_tracked(conn, channel_id),
+            "tracked": _is_tracked(conn, channel_id, user_id),
             "snapshots": len(snaps),
             # ниже этого порога график выбросов и «лучшее время» бессмысленны
             "hasDeepAnalytics": stored["count"] >= 5,

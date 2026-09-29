@@ -14,6 +14,7 @@ from application import discovery as trends
 from domain import keywords as K
 from domain import metadata as MD
 from domain import periods as P
+from domain.users import LOCAL_USER_ID
 
 OUTLIER_THRESHOLD_DEFAULT = 3.0
 
@@ -189,15 +190,16 @@ def _shape_draft(r) -> dict:
 
 def save_draft(title: str, description: str = "", tags=None, niche: str = None,
               channel_id: str = None, is_short: bool = False, review: dict = None,
-              source_video_id: str = None) -> dict:
+              source_video_id: str = None, user_id: int = LOCAL_USER_ID) -> dict:
     conn = db.get_conn()
     now = db.now_iso()
     row = conn.execute(
         "INSERT INTO drafts (title, description, tags, niche, channel_id, is_short, review, "
-        "created_at, source_video_id) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
+        "created_at, source_video_id, user_id) VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id",
         (title, description, json.dumps(tags or [], ensure_ascii=False), niche, channel_id,
          1 if is_short else 0,
-         json.dumps(review, ensure_ascii=False) if review else None, now, source_video_id),
+         json.dumps(review, ensure_ascii=False) if review else None, now, source_video_id,
+         user_id),
     ).fetchone()
     conn.commit()
     conn.close()
@@ -205,8 +207,8 @@ def save_draft(title: str, description: str = "", tags=None, niche: str = None,
 
 
 def list_drafts(channel_id: str = None, unpublished_only: bool = False,
-                limit: int = 100) -> list:
-    where, params = [], []
+                limit: int = 100, user_id: int = LOCAL_USER_ID) -> list:
+    where, params = ["user_id = ?"], [user_id]
     if channel_id:
         where.append("channel_id = ?")
         params.append(channel_id)
@@ -223,18 +225,21 @@ def list_drafts(channel_id: str = None, unpublished_only: bool = False,
     return [_shape_draft(r) for r in rows]
 
 
-def link_draft(draft_id: int, video_id: str) -> dict:
+def link_draft(draft_id: int, video_id: str, user_id: int = LOCAL_USER_ID) -> dict:
     """Call once the draft has actually been published, so draft_outcomes()
-    can compare prediction to reality later."""
+    can compare prediction to reality later. Only the owner can link it:
+    someone else's draft id raises LookupError."""
     conn = db.get_conn()
-    conn.execute("UPDATE drafts SET video_id=?, published_at=? WHERE id=?",
-                (video_id, db.now_iso(), draft_id))
+    row = conn.execute("UPDATE drafts SET video_id=?, published_at=? WHERE id=? AND user_id=? "
+                       "RETURNING id", (video_id, db.now_iso(), draft_id, user_id)).fetchone()
     conn.commit()
     conn.close()
+    if not row:
+        raise LookupError(f"draft {draft_id} not found")
     return {"id": draft_id, "videoId": video_id}
 
 
-def draft_outcomes(min_age_days: float = 7.0) -> list:
+def draft_outcomes(min_age_days: float = 7.0, user_id: int = LOCAL_USER_ID) -> list:
     """For linked drafts old enough to have real numbers, surface what the
     review predicted next to what actually happened -- the only honest way
     to learn whether these signals are worth anything for THIS channel and
@@ -245,7 +250,7 @@ def draft_outcomes(min_age_days: float = 7.0) -> list:
     rows = conn.execute(
         "SELECT d.*, v.view_count, v.published_at AS video_published_at "
         "FROM drafts d JOIN videos v ON v.video_id = d.video_id "
-        "WHERE d.video_id IS NOT NULL").fetchall()
+        "WHERE d.video_id IS NOT NULL AND d.user_id = ?", (user_id,)).fetchall()
     conn.close()
     out = []
     for r in rows:
@@ -264,7 +269,7 @@ def draft_outcomes(min_age_days: float = 7.0) -> list:
         })
     # plan 14: the real numbers when the video is on a connected own channel
     from application import own_channels as OWN
-    own = OWN.metrics_for_videos([o["videoId"] for o in out])
+    own = OWN.metrics_for_videos([o["videoId"] for o in out], user_id=user_id)
     for o in out:
         o["ownMetrics"] = own.get(o["videoId"])
     return out

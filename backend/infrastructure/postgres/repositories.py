@@ -145,16 +145,19 @@ def upsert_niche(conn, slug: str, query: str, label: str):
     )
 
 
-def track_channel(conn, channel_id: str, note: str = None):
+def track_channel(conn, channel_id: str, note: str = None, user_id: int = 1):
+    """user_id: whose watchlist (plan 15; 1 = the local user)."""
     conn.execute(
-        "INSERT INTO tracked_channels (channel_id, note, added_at, active) VALUES (?,?,?,1) "
-        "ON CONFLICT(channel_id) DO UPDATE SET active=1, note=COALESCE(excluded.note, tracked_channels.note)",
-        (channel_id, note, now_iso()),
+        "INSERT INTO tracked_channels (user_id, channel_id, note, added_at, active) VALUES (?,?,?,?,1) "
+        "ON CONFLICT(user_id, channel_id) DO UPDATE SET active=1, "
+        "note=COALESCE(excluded.note, tracked_channels.note)",
+        (user_id, channel_id, note, now_iso()),
     )
 
 
-def untrack_channel(conn, channel_id: str):
-    conn.execute("UPDATE tracked_channels SET active=0 WHERE channel_id=?", (channel_id,))
+def untrack_channel(conn, channel_id: str, user_id: int = 1):
+    conn.execute("UPDATE tracked_channels SET active=0 WHERE channel_id=? AND user_id=?",
+                 (channel_id, user_id))
 
 
 def new_chart_snapshot(conn, region: str, category_id: str, source: str) -> int:

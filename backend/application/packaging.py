@@ -38,11 +38,12 @@ def fingerprint_thumbnails(period: str = "30d", limit: int = 500,
     `failed` and skipped, never raised. Zero YouTube API quota."""
     conn = db.get_conn()
     start, _ = P.window(period)
-    q = ("SELECT v.video_id FROM videos v JOIN tracked_channels t "
-         "ON t.channel_id = v.channel_id AND t.active = 1")
+    # any user's tracked channel, each video once (plan 15)
+    q = ("SELECT v.video_id FROM videos v WHERE EXISTS (SELECT 1 FROM tracked_channels t "
+         "WHERE t.channel_id = v.channel_id AND t.active = 1)")
     params = []
     if start:
-        q += " WHERE v.published_at >= ?"
+        q += " AND v.published_at >= ?"
         params.append(start)
     q += " ORDER BY v.published_at DESC LIMIT ?"
     params.append(limit)

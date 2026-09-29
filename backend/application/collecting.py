@@ -424,7 +424,7 @@ def discover_new_videos_via_rss(api_key: str, channel_ids=None, max_new_per_chan
         ids = list(dict.fromkeys(channel_ids))
     else:
         ids = [r["channel_id"] for r in conn.execute(
-            "SELECT channel_id FROM tracked_channels WHERE active=1").fetchall()]
+            "SELECT DISTINCT channel_id FROM tracked_channels WHERE active=1").fetchall()]
 
     channels_checked, channels_failed = 0, 0
     all_new_ids = []
@@ -481,7 +481,10 @@ def refresh_stats(api_key: str, scope: str = "recent", period: str = "30d",
     conn = db.get_conn()
     params, sql = [], "SELECT v.video_id FROM videos v"
     if scope == "tracked":
-        sql += " JOIN tracked_channels t ON t.channel_id = v.channel_id AND t.active = 1"
+        # any user's tracked channel, each video once (plan 15: several users
+        # may track the same channel)
+        sql += (" WHERE EXISTS (SELECT 1 FROM tracked_channels t WHERE t.channel_id = v.channel_id "
+                "AND t.active = 1)")
     elif scope == "niche" and niche:
         sql += " JOIN video_niches vn ON vn.video_id = v.video_id AND vn.niche_slug = ?"
         params.append(niche)
@@ -585,7 +588,7 @@ def refresh_channels(api_key: str, channel_ids=None, only_tracked=True) -> dict:
         ids = list(channel_ids)
     elif only_tracked:
         ids = [r["channel_id"] for r in conn.execute(
-            "SELECT channel_id FROM tracked_channels WHERE active=1").fetchall()]
+            "SELECT DISTINCT channel_id FROM tracked_channels WHERE active=1").fetchall()]
     else:
         ids = [r["channel_id"] for r in conn.execute(
             "SELECT channel_id FROM channels").fetchall()]
