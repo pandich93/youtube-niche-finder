@@ -9,6 +9,7 @@ import { viewCategories } from './screens/categories.js';
 import { viewKeywords } from './screens/keywords.js';
 import { viewTopTags } from './screens/tags.js';
 import { viewTracker } from './screens/tracker.js';
+import { viewAlerts } from './screens/alerts.js';
 import { viewIdeas } from './screens/ideas.js';
 import { viewTranscripts } from './screens/transcripts.js';
 import { viewNicheClusters } from './screens/clusters.js';
@@ -48,6 +49,7 @@ const ROUTES = {
   keywords: { title: 'Ключевые слова', run: viewKeywords },
   tags: { title: 'Топ теги по категориям', run: viewTopTags },
   tracker: { title: 'Трекер каналов', run: viewTracker },
+  alerts: { title: 'Алерты', run: viewAlerts },
   ideas: { title: 'Проверка идей', run: viewIdeas },
   transcripts: { title: 'Транскрипты', run: viewTranscripts },
   clusters: { title: 'Карта ниш', run: viewNicheClusters },

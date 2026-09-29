@@ -38,6 +38,18 @@ What the server does for you:
   - Changing a password ends every session of that user.
   - Without a session, `/api` answers 401. Only sign-in, `/api/health` and the
     Google OAuth return are open.
+- **No CSRF token, on purpose.** Two layers stand in for it:
+  - The browser never sends the `SameSite=Strict` session cookie on a request
+    that starts on another site.
+  - Every POST, PUT, PATCH or DELETE must be JSON or carry `X-NF-Client`. Both
+    force a CORS preflight, and CORS allows only `chrome-extension://`, so
+    another site cannot send such a request even if a browser mishandled the
+    cookie.
+
+  A token would guard against the same thing a third time. The API token
+  (`Authorization: Bearer`) is never sent by a browser on its own, so it
+  carries no CSRF risk. Keep this in mind if you add a route that accepts a
+  plain form or a GET that changes data: it would bypass both layers.
 - **Personal API tokens.** They are for the extension and for MCP over HTTP
   (`Authorization: Bearer nf_...`).
   - The token is shown once and stored as SHA-256.
@@ -100,8 +112,9 @@ Known limits (by design, worth knowing before you invite anyone):
   `mcp-https`, which listens on 127.0.0.1 only.
 - **Some global feeds can hint at what others watch.** Thumbnail fingerprints
   and swaps, and stats refreshes, run for every channel someone tracks, so the
-  repackaging feed and the tracked-channel total reflect other users'
-  watchlists.
+  repackaging feed on the dashboard and the tracked-channel total reflect
+  other users' watchlists. The daily digest lists only swaps on your own
+  watchlist.
 
 Security reviews: the plan-14 OAuth flow and each plan-15 sub-stage were
 reviewed. The review of sign-in found a way to attach someone else's channel

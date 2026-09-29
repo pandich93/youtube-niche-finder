@@ -541,7 +541,17 @@ function yppLine(e) {
     Это не статус монетизации — YouTube его не публикует; загрузки и Shorts считаются по собранным видео.</div>`;
 }
 
+/* Фильтр поиска по порогам YPP (plan 12): пороги, которые канал видимо прошёл. */
+const YPP_TIP = 'Не статус монетизации: YouTube его не публикует. Только пороги YPP, видимые по публичным данным; каналы со скрытым числом подписчиков не проходят';
+
+function yppSelect(id, cur) {
+  const opt = (v, l) => `<option value="${v}"${(cur || '') === v ? ' selected' : ''}>${l}</option>`;
+  return `<label class="field" data-tip="${YPP_TIP}"><span class="field-label">Пороги YPP</span>
+    <select id="${id}">${opt('', 'не важно')}${opt('subscribers-met', 'подписчики набраны')}${
+      opt('shorts-path-met', 'порог пройден по Shorts')}</select></label>`;
+}
+
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
          lineChart, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
-         nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock, yppLine };
+         nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock, yppLine, yppSelect };

@@ -27,6 +27,10 @@ TIERS = {
     "full": {"subscribers": 1_000, "uploads90d": None, "shortsViews90d": 10_000_000,
              "watchHours": 4_000},
 }
+# Filter order (plan 12): "at least this far". unknown never passes a filter --
+# a hidden subscriber count proves nothing.
+FILTER_STATUSES = ("subscribers-met", "shorts-path-met")
+_RANK = {"below-threshold": 0, "subscribers-met": 1, "shorts-path-met": 2}
 NOTE = ("Not a monetization status: YouTube does not publish it. Only the YPP thresholds this "
         "channel visibly meets; uploads and Shorts views are a lower bound from collected videos, "
         "watch hours are not available through the API, and meeting a threshold still needs an "
@@ -65,3 +69,15 @@ def ypp_eligibility(subscribers, hidden: bool, videos) -> dict:
         status = "subscribers-met"
     return {"status": status, "subscribers": subscribers if known else None,
             "tiers": tiers, "windowDays": WINDOW_DAYS, "note": NOTE}
+
+
+def check_filter(min_status):
+    """None passes through; anything outside FILTER_STATUSES is an error."""
+    if min_status is not None and min_status not in FILTER_STATUSES:
+        raise ValueError(f"min_ypp_status must be one of {', '.join(FILTER_STATUSES)}")
+    return min_status
+
+
+def meets(status: str, min_status: str) -> bool:
+    return status in _RANK and _RANK[status] >= _RANK[min_status]
+

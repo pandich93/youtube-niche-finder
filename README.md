@@ -56,6 +56,11 @@ database.
   payoff, intrigue, "you" and pace, minus filler like "welcome back" or "subscribe",
   in English and Russian; compares outliers' hooks with ordinary videos in a niche
   (needs 10+ transcripts per group). Text only, not visuals; zero quota, no LLM needed
+- RPM as a range, not one number: every niche RPM and niche-model revenue
+  estimate ships as low–high (half to double the NexLev-style middle), because
+  public RPM estimates for one niche disagree by up to 7x and YouTube publishes
+  none; revenue estimates are ads only, sponsorships are not counted — on the
+  dashboard and in the extension
 - Sponsor map: which brands pay creators in a niche or on a channel, read from
   the video descriptions already in the database — "sponsored by", promo codes
   and affiliate links (Amazon etc.) kept apart; a lower bound, only what is
@@ -92,7 +97,9 @@ database.
 - Alerts (new outliers, view acceleration, title changes, a channel
   breaking its silence, a tracked channel or an alerted outlier video that
   disappeared from YouTube), delivered to Telegram or a webhook one by one
-  or as one morning digest; a swipe file for saved videos and channels
+  or as one morning digest, and listed on the dashboard's "Алерты" screen with
+  a filter by type; a vanished channel is also marked on its channel screen;
+  a swipe file for saved videos and channels
 - Export a niche's videos to TSV/CSV
 - Similar thumbnails: CLIP image vectors (local, ONNX on CPU) find videos whose
   thumbnail looks like an outlier's, thumbnails matching a text description
@@ -109,8 +116,9 @@ database.
   not in the Analytics API, so it is not shown
 - YPP thresholds: which YouTube Partner Program bars a channel visibly meets
   (subscribers, uploads and Shorts views in 90 days), on the channel screen and
-  in the extension — deliberately not a "monetized" badge, since YouTube does
-  not publish that and the page signals for it proved unreliable
+  in the extension, and a filter that keeps only channels past them in outlier
+  search and outlier channels — deliberately not a "monetized" badge, since
+  YouTube does not publish that and the page signals for it proved unreliable
 - Seven ready-made scenarios for Claude (MCP prompts, under "+" in Claude
   Desktop): find a niche, analyse a competitor, validate an idea, outlier to
   your own video, weekly review, content gaps, niche health — each names the

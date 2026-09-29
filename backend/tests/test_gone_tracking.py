@@ -132,6 +132,26 @@ def test_channel_that_comes_back_is_cleared(monkeypatch):
     assert _gone_rows("channel") == {}
 
 
+def test_channel_screen_shows_a_confirmed_gone_channel_only(monkeypatch):
+    # plan 04: the dashboard's channel screen marks a channel the API stopped
+    # returning -- but not a first, unconfirmed miss
+    from application import channel_tracking as T
+    _clean()
+    conn = db.get_conn()
+    conn.execute("INSERT INTO channels (channel_id, title) VALUES (?, 'gone one') "
+                 "ON CONFLICT (channel_id) DO NOTHING", (CH_GONE,))
+    conn.commit()
+    conn.close()
+    monkeypatch.setattr(yt, "channels_list", lambda k, ids, **kw: [_api_channel(CH_ALIVE)])
+    collector.refresh_channels(KEY, channel_ids=[CH_ALIVE, CH_GONE])
+    assert T.channel_analytics(CH_GONE)["gone"] is None
+
+    _backdate_first_miss("channel", CH_GONE, hours=7)
+    collector.refresh_channels(KEY, channel_ids=[CH_ALIVE, CH_GONE])
+    gone = T.channel_analytics(CH_GONE)["gone"]
+    assert gone["missingSince"] and gone["confirmedAt"]
+
+
 def test_quota_exceeded_on_channels_records_nothing(monkeypatch):
     _clean()
     monkeypatch.setattr(yt, "channels_list", _quota_exceeded)

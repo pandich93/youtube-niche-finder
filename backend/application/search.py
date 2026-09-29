@@ -12,9 +12,11 @@ import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import collecting, llm_gateway, maturity_curve
 from application import discovery as trends
+from application import monetization as MON
 from application import saturation as SAT
 from domain import idea_verdicts as IV
 from domain import metrics as M
+from domain import monetization as MZ
 from infrastructure.categories import repository as C
 from infrastructure.llm import factory as llm_factory
 
@@ -28,7 +30,9 @@ def search_outliers(query: str = None, niche: str = None, languages: list = None
                     exclude_shorts: bool = False, only_shorts: bool = False,
                     min_video_length: int = None, max_video_length: int = None,
                     min_rpm: float = None, max_rpm: float = None,
-                    sort_by: str = "outlier", limit: int = 25) -> list:
+                    sort_by: str = "outlier", limit: int = 25,
+                    min_ypp_status: str = None) -> list:
+    MZ.check_filter(min_ypp_status)
     rows = trends.load_window(
         period=period, niche=niche, languages=languages, region=region,
         category_id=category_id, max_subscribers=max_subscribers,
@@ -52,6 +56,11 @@ def search_outliers(query: str = None, niche: str = None, languages: list = None
             rows = [r for r in rows if r["_rpm"] >= min_rpm]
         if max_rpm is not None:
             rows = [r for r in rows if r["_rpm"] <= max_rpm]
+
+    if min_ypp_status:
+        # plan 12: YPP thresholds the channel visibly meets, not a monetization status
+        keep = MON.keep_channels([r["channel_id"] for r in rows], min_ypp_status)
+        rows = [r for r in rows if r["channel_id"] in keep]
 
     q_vec = None
     if query:

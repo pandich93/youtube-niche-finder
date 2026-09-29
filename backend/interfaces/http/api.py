@@ -400,11 +400,14 @@ def top_tags_by_category(period: str = "7d", period_by: str = "published", niche
 def outlier_channels(period: str = "24h", period_by: str = "discovered",
                      min_multiplier: float = 2.0, max_subscribers: int = None,
                      min_subscribers: int = None,
-                     niche: str = None, limit: int = 25):
-    return T.recently_added_outlier_channels(
-        period=period, period_by=period_by, min_multiplier=min_multiplier,
-        max_subscribers=max_subscribers, min_subscribers=min_subscribers,
-        niche=niche, limit=limit)
+                     niche: str = None, limit: int = 25, min_ypp_status: str = None):
+    try:
+        return T.recently_added_outlier_channels(
+            period=period, period_by=period_by, min_multiplier=min_multiplier,
+            max_subscribers=max_subscribers, min_subscribers=min_subscribers,
+            niche=niche, limit=limit, min_ypp_status=min_ypp_status or None)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/competition")
@@ -418,14 +421,17 @@ def search(query: str = None, niche: str = None, period: str = "all",
            exclude_shorts: bool = False, only_shorts: bool = False,
            min_video_length: int = None, max_video_length: int = None,
            min_rpm: float = None, max_rpm: float = None,
-           sort_by: str = "outlier", limit: int = 30):
-    return {"results": Q.search_outliers(
-        query=query or None, niche=niche, period=period,
-        min_outlier_score=min_outlier_score, max_subscribers=max_subscribers,
-        exclude_shorts=exclude_shorts, only_shorts=only_shorts,
-        min_video_length=min_video_length, max_video_length=max_video_length,
-        min_rpm=min_rpm, max_rpm=max_rpm,
-        sort_by=sort_by, limit=limit)}
+           sort_by: str = "outlier", limit: int = 30, min_ypp_status: str = None):
+    try:
+        return {"results": Q.search_outliers(
+            query=query or None, niche=niche, period=period,
+            min_outlier_score=min_outlier_score, max_subscribers=max_subscribers,
+            exclude_shorts=exclude_shorts, only_shorts=only_shorts,
+            min_video_length=min_video_length, max_video_length=max_video_length,
+            min_rpm=min_rpm, max_rpm=max_rpm,
+            sort_by=sort_by, limit=limit, min_ypp_status=min_ypp_status or None)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/ideas/check")

@@ -177,6 +177,33 @@ def test_feed_lists_title_and_thumbnail_changes_with_images_and_effect(monkeypat
     assert other["count"] == 0
 
 
+def test_feed_for_a_user_lists_only_channels_on_their_active_watchlist():
+    # plan 15: a user's digest must not carry swaps from channels only
+    # somebody else tracks
+    _reset()
+    _title_change("pv_new2", 10, "Old", "New")
+    _title_change("pv_other", 10, "Old other", "New other")
+    conn = db.get_conn()
+    conn.execute("INSERT INTO users (id, email, password_hash, created_at) "
+                 "VALUES (2, 'pkg2@example.com', 'x', ?) ON CONFLICT DO NOTHING", (NOW.isoformat(),))
+    conn.execute("INSERT INTO tracked_channels (user_id, channel_id, added_at, active) "
+                 "VALUES (2, ?, ?, 1)", (CH_OTHER, NOW.isoformat()))
+    conn.commit()
+    conn.close()
+
+    assert PKG.packaging_feed(period="30d")["count"] == 2
+    mine = PKG.packaging_feed(period="30d", user_id=1)["changes"]
+    theirs = PKG.packaging_feed(period="30d", user_id=2)["changes"]
+    assert [c["videoId"] for c in mine] == ["pv_new2"]
+    assert [c["videoId"] for c in theirs] == ["pv_other"]
+
+    conn = db.get_conn()
+    conn.execute("UPDATE tracked_channels SET active = 0 WHERE user_id = 2")
+    conn.commit()
+    conn.close()
+    assert PKG.packaging_feed(period="30d", user_id=2)["count"] == 0
+
+
 def test_feed_ignores_url_based_thumbnail_rows():
     # record_video_stats' URL comparison may log field='thumbnail' -- that is
     # not an image change and must not show up as one.

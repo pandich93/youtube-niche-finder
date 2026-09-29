@@ -103,6 +103,17 @@ def test_build_groups_the_last_day_by_kind_and_ranks_by_strength(monkeypatch):
     assert "36.8M подп." in digest.format_digest(d)
 
 
+def test_repackaging_section_is_per_user_only_in_multi_user_mode(monkeypatch):
+    seen = []
+    monkeypatch.setattr(PKG, "packaging_feed",
+                        lambda **kw: seen.append(kw.get("user_id")) or {"changes": []})
+    monkeypatch.delenv("NF_MULTI_USER", raising=False)
+    digest.build_digest(user_id=1)
+    monkeypatch.setenv("NF_MULTI_USER", "1")
+    digest.build_digest(user_id=2)
+    assert seen == [None, 2]
+
+
 def test_empty_day_is_flagged():
     d = digest.build_digest()
     assert d["empty"] is True

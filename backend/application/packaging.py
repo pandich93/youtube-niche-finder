@@ -135,9 +135,11 @@ _SELECT = ("SELECT ch.video_id, ch.changed_at, ch.field, ch.old_value, ch.new_va
 
 
 def packaging_feed(period: str = "30d", channel_id: str = None, field: str = None,
-                   limit: int = 50) -> dict:
+                   limit: int = 50, user_id: int = None) -> dict:
     """Newest title/thumbnail swaps first, each with before/after (titles as
-    text, thumbnails as archive image paths) and the views-per-hour effect."""
+    text, thumbnails as archive image paths) and the views-per-hour effect.
+    user_id: only channels on that user's active watchlist (the digest in
+    multi-user mode); None keeps the shared feed."""
     if field and field not in FIELDS:
         raise ValueError(f"field must be one of {', '.join(FIELDS)}")
     conn = db.get_conn()
@@ -153,6 +155,10 @@ def packaging_feed(period: str = "30d", channel_id: str = None, field: str = Non
         if field:
             q += " AND ch.field = ?"
             params.append(field)
+        if user_id is not None:
+            q += (" AND EXISTS (SELECT 1 FROM tracked_channels t WHERE t.user_id = ? "
+                  "AND t.channel_id = v.channel_id AND t.active = 1)")
+            params.append(user_id)
         q += " ORDER BY ch.changed_at DESC LIMIT ?"
         params.append(limit)
         rows = [dict(r) for r in conn.execute(q, params).fetchall()]

@@ -91,6 +91,31 @@ def seed_packaging(conn):
                  ("avid001", after, "title", "My first AI agent", "AI agents just changed everything"))
 
 
+def seed_alerts(conn):
+    """Plan 04 demo: two tracked channels, one of them confirmed gone, and a
+    few events, so the "Алерты" screen and the channel's "gone" mark render."""
+    alive, gone = "UC0000000000000000000a", "UC0000000000000000000f"
+    missing = (NOW - timedelta(days=2)).isoformat()
+    for cid in (alive, gone):
+        conn.execute("INSERT INTO tracked_channels (user_id, channel_id, added_at, active) "
+                     "VALUES (1, ?, ?, 1) ON CONFLICT DO NOTHING", (cid, missing))
+    conn.execute("INSERT INTO gone_items (kind, ref_id, first_missing_at, last_missing_at, "
+                 "miss_count, confirmed_at) VALUES ('channel', ?, ?, ?, 2, ?) "
+                 "ON CONFLICT DO NOTHING", (gone, missing, NOW.isoformat(), NOW.isoformat()))
+    events = [
+        ("outlier", "avid000", alive, {"videoId": "avid000", "channelId": alive,
+                                        "title": "demo outlier", "outlierScore": 6.2,
+                                        "views": 120_000}),
+        ("channel_gone", gone, gone, {"channelId": gone, "title": "Cooking Shorts Co",
+                                      "subscribers": 15_000, "views": 22_000_000,
+                                      "videoCount": 320, "goneSince": missing}),
+    ]
+    for kind, ref, cid, payload in events:
+        conn.execute("INSERT INTO events (kind, ref_id, payload, created_at, channel_id) "
+                     "VALUES (?,?,?,?,?) ON CONFLICT DO NOTHING",
+                     (kind, ref, json.dumps(payload), NOW.isoformat(), cid))
+
+
 def description_for(t, i):
     """Plan 09 demo: every 7th video names a sponsor with a promo code, every
     11th carries an Amazon affiliate link. Deterministic -- no random calls, so
@@ -167,6 +192,7 @@ def seed(days_back=75, per_channel=34):
                         int(views * share * 0.04), int(views * share * 0.003), t, None,
                         (NOW - timedelta(hours=hours)).isoformat())
     seed_packaging(conn)
+    seed_alerts(conn)
     db.upsert_niche(conn, "demo", "synthetic demo corpus", "Demo")
     conn.commit()
     conn.close()

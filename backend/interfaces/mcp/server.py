@@ -544,19 +544,25 @@ def recently_added_outlier_channels(period: str = "24h",
                                     min_subscribers: int = None,
                                     niche: str = None, category_id: str = None,
                                     region: str = None, exclude_shorts: bool = True,
-                                    limit: int = 25) -> dict:
+                                    limit: int = 25, min_ypp_status: str = None) -> dict:
     """Channels that entered the corpus recently AND are outperforming. FREE.
 
     The channel-level counterpart to viral_videos_small_channels: instead of a
     single breakout video it ranks whole channels by their best age-adjusted
     multiplier, with a 0-4 strength band (<2x, 2-3x, 3-5x, 5-10x, >10x).
     Defaults to period_by="discovered" because "recently added" is about when we
-    first saw the channel, not when it last uploaded."""
+    first saw the channel, not when it last uploaded.
+
+    min_ypp_status keeps only channels past public YouTube Partner Program
+    thresholds they VISIBLY meet: "subscribers-met" (500+ subscribers) or
+    "shorts-path-met" (a tier fully met through Shorts views we collected).
+    This is NOT a monetization status -- YouTube does not publish one; watch
+    hours are not in the API, and channels with a hidden count never pass."""
     return T.recently_added_outlier_channels(
         period=period, period_by=period_by, min_multiplier=min_multiplier,
         max_subscribers=max_subscribers, min_subscribers=min_subscribers,
         niche=niche, category_id=category_id, region=region,
-        exclude_shorts=exclude_shorts, limit=limit)
+        exclude_shorts=exclude_shorts, limit=limit, min_ypp_status=min_ypp_status)
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -588,7 +594,8 @@ def search_outliers(query: str = None, niche: str = None, languages: list = None
                     exclude_shorts: bool = False, only_shorts: bool = False,
                     min_video_length: int = None, max_video_length: int = None,
                     min_rpm: float = None, max_rpm: float = None,
-                    sort_by: str = "outlier", limit: int = 25) -> list:
+                    sort_by: str = "outlier", limit: int = 25,
+                    min_ypp_status: str = None) -> list:
     """Search the local database for outlier videos. FREE, no quota, unlimited.
 
     Pass `query` for semantic ranking against local multilingual embeddings.
@@ -603,6 +610,12 @@ def search_outliers(query: str = None, niche: str = None, languages: list = None
     estimatedRpmRange (half to double it, low confidence: public estimates
     for one niche disagree by up to 7x); quote the range, not the middle.
     min_video_length/max_video_length are in seconds.
+
+    min_ypp_status keeps only channels past public YouTube Partner Program
+    thresholds they VISIBLY meet: "subscribers-met" (500+ subscribers) or
+    "shorts-path-met" (a tier fully met through Shorts views we collected).
+    This is NOT a monetization status -- YouTube does not publish one; watch
+    hours are not in the API, and channels with a hidden count never pass.
     """
     return q.search_outliers(
         query=query, niche=niche, languages=languages, max_subscribers=max_subscribers,
@@ -610,7 +623,8 @@ def search_outliers(query: str = None, niche: str = None, languages: list = None
         min_outlier_score=min_outlier_score, period=period, region=region,
         category_id=category_id, exclude_shorts=exclude_shorts, only_shorts=only_shorts,
         min_video_length=min_video_length, max_video_length=max_video_length,
-        min_rpm=min_rpm, max_rpm=max_rpm, sort_by=sort_by, limit=limit)
+        min_rpm=min_rpm, max_rpm=max_rpm, sort_by=sort_by, limit=limit,
+        min_ypp_status=min_ypp_status)
 
 
 @mcp.tool(annotations=ToolAnnotations(

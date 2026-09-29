@@ -58,14 +58,19 @@ def budget_blocked_today(conn) -> bool:
     return db.get_meta(conn, "llm_budget_blocked_until") == today_utc()
 
 
-def run(task: str, system: str, user: str, schema: dict, model: str = None) -> dict | None:
+def run(task: str, system: str, user: str, schema: dict, model: str = None,
+        private: bool = False) -> dict | None:
+    """private=True: the prompt carries the user's own text (draft titles, a
+    topic), so the answer skips llm_cache, which every user shares (plan 15,
+    rule 4). Budget and usage are counted as usual."""
     provider = factory.get_provider()
     model = model or factory.default_model()
     key = _cache_key(task, model, system, user, schema)
 
     conn = db.get_conn()
     try:
-        row = conn.execute("SELECT result FROM llm_cache WHERE key=?", (key,)).fetchone()
+        row = None if private else conn.execute(
+            "SELECT result FROM llm_cache WHERE key=?", (key,)).fetchone()
         if row:
             return json.loads(row["result"])
 
@@ -85,11 +90,12 @@ def run(task: str, system: str, user: str, schema: dict, model: str = None) -> d
         if result is None:
             return None
 
-        conn.execute(
-            "INSERT INTO llm_cache (key, task, model, result, created_at) "
-            "VALUES (?,?,?,?,?) ON CONFLICT(key) DO NOTHING",
-            (key, task, result.model, json.dumps(result.data),
-             datetime.now(timezone.utc).isoformat()))
+        if not private:
+            conn.execute(
+                "INSERT INTO llm_cache (key, task, model, result, created_at) "
+                "VALUES (?,?,?,?,?) ON CONFLICT(key) DO NOTHING",
+                (key, task, result.model, json.dumps(result.data),
+                 datetime.now(timezone.utc).isoformat()))
         conn.execute(
             "INSERT INTO llm_usage (user_id, day, model, calls, prompt_tokens, completion_tokens, "
             "cost_usd) VALUES (?,?,?,?,?,?,?) ON CONFLICT(user_id, day, model) DO UPDATE SET "

@@ -71,6 +71,14 @@ def test_the_answer_says_it_is_not_a_monetization_status():
     assert "not" in r["note"].lower() and "lower bound" in r["note"].lower()
 
 
+def test_meets_orders_statuses_and_never_passes_unknown():
+    assert MZ.meets("shorts-path-met", "subscribers-met")
+    assert MZ.meets("subscribers-met", "subscribers-met")
+    assert not MZ.meets("subscribers-met", "shorts-path-met")
+    assert not MZ.meets("below-threshold", "subscribers-met")
+    assert not MZ.meets("unknown", "subscribers-met")
+
+
 if __name__ == "__main__":
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))

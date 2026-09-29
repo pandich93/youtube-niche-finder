@@ -17,7 +17,7 @@ import infrastructure.postgres as db
 from application import channel_tracking as T
 from application import packaging as PKG
 from domain import periods as P
-from domain.users import LOCAL_USER_ID
+from domain.users import LOCAL_USER_ID, multi_user_enabled
 from infrastructure.notify.null import NullNotifier
 
 DIGEST_HOUR = int(os.environ.get("DIGEST_HOUR", "8"))
@@ -96,7 +96,10 @@ def build_digest(period: str = "24h", top_n: int = 5, user_id: int = LOCAL_USER_
     rising = rc.get("channels", [])
     out["risingChannels"] = {"total": rc.get("channelsMatched", len(rising)),
                              "items": rising[:top_n]}
-    swaps = PKG.packaging_feed(period=period, limit=top_n).get("changes", [])
+    # multi-user: only swaps on this user's watchlist, not everyone's
+    swaps = PKG.packaging_feed(period=period, limit=top_n,
+                               user_id=user_id if multi_user_enabled() else None
+                               ).get("changes", [])
     out["repackaging"] = {"total": len(swaps), "items": swaps[:top_n]}
 
     out["period"] = period

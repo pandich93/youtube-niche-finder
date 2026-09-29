@@ -33,6 +33,10 @@ async function viewChannel(id) {
         ${tile('Viral skew', a.performance.viralSkew ?? '—', 'среднее / медиана')}
         ${tile('Грейд', a.grade ?? '—', a.momentum ? `momentum ${a.momentum}` : 'нужна история')}
       </div>
+      ${a.gone ? notice(`<div><b>Канал больше не отвечает API</b> с ${
+        new Date(a.gone.missingSince).toLocaleDateString('ru-RU')}: его удалили, скрыли или заблокировали.
+        Цифры на экране — последние, что мы видели. Если в нише один за другим пропадают похожие каналы,
+        копировать их формат опасно.</div>`, 'error') : ''}
       ${!a.growthAvailable ? notice(`Роста пока нет: снимков ${a.snapshots}.
         Он появится, когда воркер поработает несколько дней — <code>docker compose up -d worker</code>.`) : ''}
     </div>

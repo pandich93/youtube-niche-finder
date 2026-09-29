@@ -156,6 +156,31 @@ def test_suggest_titles_with_llm_generates_and_scores(monkeypatch):
     assert {t["title"] for t in out["titles"]} == {"Generated Title One", "Generated Title Two"}
 
 
+def test_title_tools_keep_the_users_text_out_of_the_shared_cache(monkeypatch):
+    stub = _StubProvider([
+        LLMResult(data={"titles": ["Generated Title One"]},
+                  model="m/x", prompt_tokens=1, completion_tokens=1, cost_usd=0.001),
+        LLMResult(data={"titles": [{"title": "Generated Title One", "score": 60,
+                                    "strengths": [], "risks": [], "improved": "x"}]},
+                  model="m/x", prompt_tokens=1, completion_tokens=1, cost_usd=0.001),
+    ])
+    monkeypatch.setattr(factory, "get_provider", lambda: stub)
+    _seed_niche("n-title-private")
+    conn = db.get_conn()
+    conn.execute("DELETE FROM llm_cache WHERE task IN ('score_titles', 'suggest_titles')")
+    conn.commit()
+    conn.close()
+
+    EN.suggest_titles("my secret topic", niche_slug="n-title-private", n=1)
+
+    conn = db.get_conn()
+    cached = conn.execute("SELECT COUNT(*) FROM llm_cache "
+                          "WHERE task IN ('score_titles', 'suggest_titles')").fetchone()[0]
+    conn.close()
+    assert stub.calls == 2
+    assert cached == 0
+
+
 def test_suggest_titles_requires_a_topic():
     try:
         EN.suggest_titles("", niche_slug="n-title-notopic")

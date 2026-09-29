@@ -693,7 +693,7 @@ def score_titles(candidates: list, niche_slug: str = None, channel_id: str = Non
         + "\n\nCandidates to score:\n" + "\n".join(f"- {t}" for t in candidates)
     )
     data = gw.run("score_titles", _SCORE_TITLES_SYSTEM, user_input, SCORE_TITLES_SCHEMA,
-                  model=model)
+                  model=model, private=True)
     if data:
         llm_by_title = {t["title"]: t for t in data.get("titles") or []}
 
@@ -739,7 +739,7 @@ def suggest_titles(topic: str, niche_slug: str = None, channel_id: str = None,
         + f"\n\nGenerate up to {n} distinct title candidates for this topic."
     )
     data = gw.run("suggest_titles", _SUGGEST_TITLES_SYSTEM, user_input, SUGGEST_TITLES_SCHEMA,
-                  model=model)
+                  model=model, private=True)
     if not data or not data.get("titles"):
         return {"topic": topic, "niche": niche_slug, "channelId": channel_id, "titles": [],
                "hint": "LLM_PROVIDER is none, or the daily LLM budget is exhausted -- "

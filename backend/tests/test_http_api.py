@@ -98,6 +98,13 @@ DELEGATIONS = [
      {"niche": "n1", "period": "30d"}, None),
     ("get", "/api/search?query=&niche=n1&sort_by=views", "Q", "search_outliers", (),
      {"query": None, "niche": "n1", "sort_by": "views"}, "results"),
+    # plan 12: YPP-threshold filter reaches both searches; empty means off
+    ("get", "/api/search?min_ypp_status=subscribers-met", "Q", "search_outliers", (),
+     {"min_ypp_status": "subscribers-met"}, "results"),
+    ("get", "/api/search?min_ypp_status=", "Q", "search_outliers", (),
+     {"min_ypp_status": None}, "results"),
+    ("get", "/api/outlier-channels?min_ypp_status=shorts-path-met", "T",
+     "recently_added_outlier_channels", (), {"min_ypp_status": "shorts-path-met"}, None),
     ("get", "/api/niches", "Q", "list_niches", (), {}, "niches"),
     # plan 08: must not be taken for a niche slug by /api/niches/{slug}
     ("get", "/api/niches/saturation", "SAT", "all_niches_saturation", (), {}, None),

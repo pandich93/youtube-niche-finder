@@ -45,7 +45,8 @@
 
   function decimal(n, digits = 2) {
     if (n == null || Number.isNaN(n)) return '—';
-    return Number(n).toFixed(digits).replace('.', ',').replace(/,?0+$/, '') || '0';
+    // хвостовые нули срезаем только после запятой: 1000 -> «1000», 2,50 -> «2,5»
+    return Number(n).toFixed(digits).replace('.', ',').replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
   }
 
   function pct(n) { return n == null ? '—' : decimal(n, 2) + '%'; }
@@ -202,7 +203,7 @@
         <div class="nf-row">
           <span class="nf-muted">Доход, оценка:</span>
           <b>$${decimal(d.revenue.lifetime.low_usd, 0)}–$${decimal(d.revenue.lifetime.high_usd, 0)}</b>
-          <span class="nf-hint">за всё время, диапазон Social Blade</span>
+          <span class="nf-hint">за всё время, диапазон Social Blade · ${AD_ONLY}</span>
         </div>
 
         <div class="nf-channel">
@@ -437,6 +438,18 @@
         Эвристика, не решение YouTube.</span></div>`;
   }
 
+  // План 06: оценки дохода -- только реклама; вилка RPM ниши вместо одного числа.
+  const AD_ONLY = 'только реклама, без спонсорских интеграций';
+
+  function nicheRpmRow(nm) {
+    if (!nm || nm.monthly_usd_low == null || !nm.rpm_range) return '';
+    const r = nm.rpm_range;
+    return `<div class="nf-row"><span class="nf-muted">По RPM ниши:</span>
+      <b>$${decimal(nm.monthly_usd_low, 0)}–$${decimal(nm.monthly_usd_high, 0)}</b> в месяц
+      <span class="nf-hint" title="${esc(r.basis || '')}">RPM $${decimal(r.low, 1)}–$${decimal(r.high, 1)} ·
+        грубая вилка: оценки RPM одной ниши расходятся до 7 раз</span></div>`;
+  }
+
   // Пороги YPP (план 12) -- что видно по открытым данным, не статус монетизации.
   function yppRow(e) {
     if (!e) return '';
@@ -480,7 +493,9 @@
         ${yppRow(d.yppEligibility)}
 
         <div class="nf-row"><span class="nf-muted">Доход в месяц, оценка:</span>
-          <b>$${decimal(m.revenue.low_usd, 0)}–$${decimal(m.revenue.high_usd, 0)}</b></div>
+          <b>$${decimal(m.revenue.low_usd, 0)}–$${decimal(m.revenue.high_usd, 0)}</b>
+          <span class="nf-hint">диапазон Social Blade · ${AD_ONLY}</span></div>
+        ${nicheRpmRow(a?.revenue?.nicheModel)}
 
         ${a ? `<div class="nf-row"><span class="nf-muted">Ритм:</span>
           ${decimal(a.cadence.uploadsPerWeekLifetime, 1)} видео/нед. ·

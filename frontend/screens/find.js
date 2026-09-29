@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, esc, sectionHead, empty, videoCard } from '../ui.js';
+import { $, api, q, num, esc, sectionHead, empty, videoCard, yppSelect } from '../ui.js';
 import { view, base, collectForm, wireCollect, render } from '../shared.js';
 
 /* ------------------------------------------------- Найти нишу (бесплатно) */
@@ -24,13 +24,15 @@ function activeFindFilters(p) {
   if (p.min_length_min) active.push(`длина видео ≥ ${p.min_length_min} мин`);
   if (p.max_length_min) active.push(`длина видео ≤ ${p.max_length_min} мин`);
   if (p.shorts !== 'any') active.push(p.shorts === 'exclude' ? 'без Shorts' : 'только Shorts');
+  if (p.min_ypp_status) active.push('пороги YPP');
   return active;
 }
 
 async function viewFind() {
   const p = Object.assign(
     { query: '', min_outlier_score: 0, max_subscribers: '', sort_by: 'outlier',
-      min_rpm: '', max_rpm: '', min_length_min: '', max_length_min: '', shorts: 'any' },
+      min_rpm: '', max_rpm: '', min_length_min: '', max_length_min: '', shorts: 'any',
+      min_ypp_status: '' },
     JSON.parse(localStorage.getItem('nf.find') || '{}'));
   const d = await api(`/api/search${q({
     ...base(), query: p.query || null,
@@ -41,6 +43,7 @@ async function viewFind() {
     max_video_length: p.max_length_min ? p.max_length_min * 60 : null,
     exclude_shorts: p.shorts === 'exclude' || null,
     only_shorts: p.shorts === 'only' || null,
+    min_ypp_status: p.min_ypp_status || null,
     sort_by: p.sort_by, limit: 30,
   })}`);
 
@@ -74,6 +77,7 @@ async function viewFind() {
             <option value="exclude"${p.shorts === 'exclude' ? ' selected' : ''}>без Shorts</option>
             <option value="only"${p.shorts === 'only' ? ' selected' : ''}>только Shorts</option>
           </select></label>
+        ${yppSelect('fYpp', p.min_ypp_status)}
         <button class="btn" id="applyFind" type="button">Искать</button>
         <button class="btn btn-ghost" id="resetFind" type="button">Сбросить фильтры</button>
       </div>
@@ -104,6 +108,7 @@ async function viewFind() {
       min_length_min: $('#fMinLen').value ? +$('#fMinLen').value : '',
       max_length_min: $('#fMaxLen').value ? +$('#fMaxLen').value : '',
       shorts: $('#fShorts').value,
+      min_ypp_status: $('#fYpp').value,
       sort_by: $('#fFindSort').value,
     }));
     render();

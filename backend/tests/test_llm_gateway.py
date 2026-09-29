@@ -77,6 +77,27 @@ def test_cache_hit_never_calls_the_provider_again(monkeypatch):
     assert stub.calls == 1
 
 
+def test_private_call_never_reads_or_writes_the_shared_cache(monkeypatch):
+    # plan 15, rule 4: a user's own text (draft titles, a topic) must not land
+    # in llm_cache, which every user of the installation shares
+    _clear_llm_tables()
+    stub = _StubProvider(LLMResult(data={"ok": True}, model="m/p",
+                                    prompt_tokens=1, completion_tokens=1, cost_usd=0.001))
+    monkeypatch.setattr(factory, "get_provider", lambda: stub)
+
+    first = llm_gateway.run("private_task", "sys", "my draft title", SCHEMA, private=True)
+    second = llm_gateway.run("private_task", "sys", "my draft title", SCHEMA, private=True)
+
+    assert first == second == {"ok": True}
+    assert stub.calls == 2
+    conn = db.get_conn()
+    cached = conn.execute("SELECT COUNT(*) FROM llm_cache").fetchone()[0]
+    calls = conn.execute("SELECT calls FROM llm_usage WHERE model='m/p'").fetchone()["calls"]
+    conn.close()
+    assert cached == 0
+    assert calls == 2  # still counted against the budget
+
+
 def test_budget_exhausted_blocks_further_calls(monkeypatch):
     _clear_llm_tables()
     monkeypatch.setattr(llm_gateway, "DAILY_BUDGET_USD", 0.01)

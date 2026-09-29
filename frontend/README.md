@@ -74,7 +74,9 @@ Shorts (any / exclude / only); they're remembered in the browser, with a
 estimate from the YouTube category, not a measured payout, so it tops out
 around $8; cards show it as a range (half to double the model's value, since
 published RPM estimates disagree by up to 7x) and the filter compares the
-middle of that range. A quota-spending collection form sits underneath.
+middle of that range. A "YPP thresholds" filter keeps only channels past
+the YouTube Partner Program bars they visibly meet (not a monetization
+status). A quota-spending collection form sits underneath.
 
 ### Viral videos
 
@@ -88,7 +90,8 @@ the results, instead of just an empty list.
 
 The best age-adjusted multiplier among a channel's videos in the window,
 against the median of its previous uploads. Strength bands: <2x, 2–3x,
-3–5x, 5–10x, >10x.
+3–5x, 5–10x, >10x. Can be narrowed to channels past the visible YPP
+thresholds.
 
 ![Outlier channels](../assets/outliers.jpg)
 
@@ -121,6 +124,13 @@ by AI labels (faceless, content format, topic) once background enrichment
 has classified the channels.
 
 ![Channel tracker](../assets/tracker.jpg)
+
+### Alerts (`#/alerts`)
+
+The alert events of your watchlist (`/api/events`) — the same ones Telegram
+or a webhook gets: outliers, acceleration, title changes, a channel breaking
+its silence, and a channel or video that disappeared. Filter by type or "only
+new", and mark everything read. Zero quota.
 
 ### Idea checker (`#/ideas`)
 
@@ -243,7 +253,9 @@ only ever returns the state "right now" — the screenshot below shows the
 state with a single snapshot, before the chart has built up any history.
 A "template risk" card (`/api/channels/{id}/template-risk`) scores how much the last
 uploads look like one template repeated, with the reasons; a heuristic, not YouTube's
-verdict. Below that: similar channels by video embeddings
+verdict. A channel the API stopped returning (confirmed after two misses 6+ hours
+apart) gets a red note at the top: it was deleted, hidden or banned, and the numbers
+are the last ones seen. Below that: similar channels by video embeddings
 (`/api/channels/{id}/similar`), and per-video buttons for live comments
 (`POST /api/videos/{id}/comments`, 1 quota unit) and a "why did it take
 off" LLM explanation (`/api/video/{id}/why`, cached; shows a hint instead

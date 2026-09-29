@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **"Алерты" screen and a "gone" mark on the channel screen** (plan 04
+  follow-up) — the dashboard now lists the alert events of your watchlist
+  (`/api/events`) with a filter by type, "only new" and "mark all read", so a
+  channel or video that disappeared is visible without Telegram. A channel the
+  API stopped returning (confirmed after two misses 6+ hours apart) gets a red
+  note on its screen; `channel_analytics` returns `gone` for it. The demo seed
+  has a gone channel and two events, and the smoke test opens both screens.
+
+- **YPP-threshold filter in outlier search** (plan 12 follow-up) —
+  `search_outliers` and `recently_added_outlier_channels` (MCP, HTTP, the
+  "Найти нишу" and "Outlier-каналы" screens) take `min_ypp_status`
+  (`subscribers-met` or `shorts-path-met`) to keep only channels past the
+  YouTube Partner Program thresholds they visibly meet. Off by default; still
+  not a monetization status, and a hidden subscriber count never passes.
+
+- **Niche RPM range in the extension** (plan 06 follow-up) — the channel panel
+  shows the niche-model revenue with its RPM range next to the Social Blade
+  one, and both revenue lines say they are ads only, without sponsorships.
+  README and the help screen explain the range.
+
+- **SECURITY.md: why there is no CSRF token** — the `SameSite=Strict` session
+  cookie plus the JSON / `X-NF-Client` rule (which forces a CORS preflight that
+  only `chrome-extension://` passes) stand in for it; a new plain-form route
+  or a GET that changes data would bypass both.
+
 - **SECURITY.md** (plan 15, sub-stage 5.11) — how to report a problem, what
   protects single-user and multi-user mode, and the checklist before giving
   anyone an account: HTTPS with `NF_COOKIE_SECURE` and `NF_ALLOWED_HOSTS`,
@@ -565,6 +590,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `embed=True`.
 
 ### Fixed
+
+- **Draft titles no longer land in the shared LLM cache** (plan 15, rule 4) —
+  `score_titles` and `suggest_titles` carry the user's own titles and topic, so
+  `llm_gateway.run(..., private=True)` skips `llm_cache` for them; budget and
+  usage are still counted.
+- **The daily digest lists only your own repackaging** in multi-user mode —
+  it used the shared feed, so title and thumbnail swaps on channels only other
+  users track showed up in your digest. `packaging_feed(user_id=...)` limits
+  the feed to that user's active watchlist; single-user mode is unchanged.
+- **Extension numbers ending in zero** — the number formatter stripped zeros
+  from whole numbers too, so a $1000 revenue estimate read "$1" and 50% Shorts
+  read "5%". Only zeros after the decimal comma are stripped now.
 
 - **Plan 15 review notes** — untracking a channel now stops its Telegram/webhook
   alerts and digest lines (the feed keeps its history); the worker syncs every

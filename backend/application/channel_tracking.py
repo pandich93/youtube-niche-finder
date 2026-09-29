@@ -24,6 +24,7 @@ from application import maturity_curve as MC
 from application import monetization as MON
 from domain import keywords as K
 from domain import metrics as M
+from domain import monetization as MZ
 from domain import periods as P
 from domain.users import LOCAL_USER_ID
 from infrastructure.categories import repository as C
@@ -246,6 +247,10 @@ def channel_analytics(channel_id: str, period: str = "30d",
     ch = dict(ch)
     videos = _channel_videos(conn, channel_id)
     history = _channel_history(conn, channel_id)
+    gone = conn.execute(
+        "SELECT first_missing_at, confirmed_at FROM gone_items "
+        "WHERE kind = 'channel' AND ref_id = ? AND confirmed_at IS NOT NULL",
+        (channel_id,)).fetchone()
     conn.close()
 
     started = _dt(ch.get("published_at"))
@@ -317,6 +322,10 @@ def channel_analytics(channel_id: str, period: str = "30d",
         "found": True,
         # plan 12: YPP thresholds it visibly meets -- not a monetization status
         "yppEligibility": MON.for_channel(channel_id),
+        # plan 04: the API stopped returning it (deleted, private or banned);
+        # the numbers below are the last ones seen
+        "gone": ({"missingSince": gone["first_missing_at"], "confirmedAt": gone["confirmed_at"]}
+                 if gone else None),
         "profile": {
             "title": ch["title"], "handle": ch["custom_url"], "country": ch["country"],
             "subscribers": ch["subscriber_count"],
@@ -650,7 +659,8 @@ def recently_added_outlier_channels(period: str = "24h", period_by: str = "disco
                                     max_subscribers: int = None,
                                     min_subscribers: int = None, niche: str = None,
                                     category_id: str = None, region: str = None,
-                                    exclude_shorts: bool = True, limit: int = 25) -> dict:
+                                    exclude_shorts: bool = True, limit: int = 25,
+                                    min_ypp_status: str = None) -> dict:
     """Channels that showed up in the corpus recently AND are outperforming.
 
     The channel-level counterpart to viral_videos_small_channels. Defaults to
@@ -659,12 +669,17 @@ def recently_added_outlier_channels(period: str = "24h", period_by: str = "disco
     "Last 24 Hours" list is full of year-old videos.
     """
     from application import discovery as trends
+    MZ.check_filter(min_ypp_status)
     rows = trends.load_window(period=period, period_by=period_by, niche=niche,
                               category_id=category_id, region=region,
                               max_subscribers=max_subscribers,
                               min_subscribers=min_subscribers,
                               exclude_shorts=exclude_shorts)
     channels = _channel_rows_from_videos(rows)
+    if min_ypp_status:
+        # plan 12: YPP thresholds the channel visibly meets, not a monetization status
+        keep = MON.keep_channels([c["channelId"] for c in channels], min_ypp_status)
+        channels = [c for c in channels if c["channelId"] in keep]
     for ch in channels:
         ch.pop("_rows", None)
         ch["strength"] = _strength(ch["multiplier"])
@@ -682,7 +697,7 @@ def recently_added_outlier_channels(period: str = "24h", period_by: str = "disco
                 f"каналу нужно минимум 4 видео в базе.")
     return {
         "period": period, "periodBy": period_by,
-        "minMultiplier": min_multiplier, "hint": hint,
+        "minMultiplier": min_multiplier, "minYppStatus": min_ypp_status, "hint": hint,
         "channelsMatched": len(channels), "quotaUsed": 0,
         "legend": {"multiplier": "best age-adjusted outlier among the channel's "
                                  "videos in this window",
