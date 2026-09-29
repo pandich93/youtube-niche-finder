@@ -1,11 +1,13 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, esc, toast, sectionHead, notice, state } from '../ui.js';
 import { view } from '../shared.js';
+import { hookResultHtml } from '../hook_view.js';
 
 /* ---------------------------------------------------- Проверить заголовки (09) */
 
 let titleScoreResult = null;
 let titleSuggestResult = null;
+let hookDraftResult = null;   // the draft text itself is never kept, only its score
 
 function titleResultRow(t) {
   const cls = t.score >= 70 ? 'chip-good' : t.score < 40 ? 'chip-bad' : '';
@@ -48,6 +50,16 @@ async function viewTitleScoring() {
         ${titleSuggestResult.hint ? notice(esc(titleSuggestResult.hint)) : ''}
         <div class="rows">${(titleSuggestResult.titles || []).map(titleResultRow).join('')}</div>
       </div>` : ''}
+    </div>
+
+    <div class="card">
+      ${sectionHead('Проверить вступление', 'оценка текста вступления, не картинки и монтажа; текст нигде не сохраняется')}
+      <textarea id="hookDraftInput" rows="5" placeholder="вставьте первые 20–30 секунд сценария"
+        style="width:100%;font-family:inherit;resize:vertical"></textarea>
+      <div style="margin-top:10px">
+        <button class="btn" id="hookScoreBtn">Оценить</button>
+      </div>
+      ${hookDraftResult ? `<div style="margin-top:12px">${hookResultHtml(hookDraftResult)}</div>` : ''}
     </div>`;
 
   $('#titleScoreBtn').addEventListener('click', async () => {
@@ -57,6 +69,15 @@ async function viewTitleScoring() {
     try {
       titleScoreResult = await api('/api/titles/score', { method: 'POST',
         body: { candidates, niche: state.niche } });
+      viewTitleScoring();
+    } catch (e) { toast(e.message, 'err'); }
+  });
+  $('#hookScoreBtn').addEventListener('click', async () => {
+    const text = $('#hookDraftInput').value.trim();
+    if (!text) { toast('Вставьте текст вступления', 'err'); return; }
+    try {
+      hookDraftResult = await api('/api/hooks/score', { method: 'POST',
+        body: { text, niche: state.niche || undefined } });
       viewTitleScoring();
     } catch (e) { toast(e.message, 'err'); }
   });

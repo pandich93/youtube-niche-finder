@@ -1,6 +1,7 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, compact, esc, toast, sectionHead, notice, empty } from '../ui.js';
+import { $, api, q, compact, esc, toast, sectionHead, notice, empty, state } from '../ui.js';
 import { view } from '../shared.js';
+import { hookResultHtml, HOOK_FEATURE_LABEL } from '../hook_view.js';
 
 /* ------------------------------------------------------- Транскрипты (19) */
 
@@ -23,8 +24,19 @@ function transcriptQueueCard(item, tab) {
         ${tab === 'pending' || tab === 'error'
           ? `<button class="btn btn-ghost btn-sm transcript-paste-btn" data-video-id="${esc(item.videoId)}">
               ${tab === 'error' ? 'Повторить' : 'Вставить транскрипт'}</button>`
-          : `<button class="btn btn-ghost btn-sm transcript-reindex-btn" data-video-id="${esc(item.videoId)}">Переиндексировать</button>`}
+          : `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+              <button class="btn btn-ghost btn-sm transcript-hook-btn" data-video-id="${esc(item.videoId)}">Крючок</button>
+              <button class="btn btn-ghost btn-sm transcript-reindex-btn" data-video-id="${esc(item.videoId)}">Переиндексировать</button>
+            </div>`}
       </div>
+      ${tab === 'ready' ? `
+      <div class="transcript-hook-box" data-video-id="${esc(item.videoId)}" hidden style="width:100%">
+        <label class="row-sub" style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+          <input type="checkbox" class="transcript-hook-llm">
+          LLM-разбор (может стоить денег, отправляет текст провайдеру)
+        </label>
+        <div class="transcript-hook-result"></div>
+      </div>` : ''}
       <div class="transcript-paste-form" data-video-id="${esc(item.videoId)}" ${transcriptPasteOpenFor === item.videoId ? '' : 'hidden'}
         style="width:100%">
         <textarea class="transcript-paste-input" rows="8" placeholder="Вставьте текст транскрипта с YouTube (со таймкодами или без)"
@@ -36,6 +48,24 @@ function transcriptQueueCard(item, tab) {
         </div>
       </div>
     </div>`;
+}
+
+function hookBenchmarkHtml(b) {
+  const head = sectionHead('Бенчмарк ниши: крючок',
+    'первые ~30 секунд у outliers и у обычных видео — только по вставленным транскриптам; оценка текста, не картинки');
+  if (!b) return `<div class="card">${head}<div class="section-sub">Выберите нишу в фильтре сверху.</div></div>`;
+  if (!b.found) return `<div class="card">${head}<div class="section-sub">Мало данных: 0 из 10 —
+    у видео этой ниши нет сохранённых транскриптов.</div></div>`;
+  if (!b.reliable) {
+    return `<div class="card">${head}<div class="section-sub">Мало данных: outliers ${b.have.outliers} из ${b.need},
+      обычных видео ${b.have.regular} из ${b.need}. Серая зона (${b.greyZone}) и видео без базы (${b.withoutOutlierScore}) не считаются.</div></div>`;
+  }
+  const more = b.moreCommonInOutliers.length
+    ? b.moreCommonInOutliers.map((n) => `${esc(HOOK_FEATURE_LABEL[n] || n)} (+${b.features[n].diffPp} п.п.)`).join(', ')
+    : 'заметной разницы нет';
+  return `<div class="card">${head}
+    <div class="section-sub">Средний балл: outliers ${b.outliers.meanScore}, обычные ${b.regular.meanScore}
+      (по ${b.outliers.n} и ${b.regular.n} видео). Чаще у outliers: ${more}. Это корреляция, не причинность.</div></div>`;
 }
 
 function transcriptSearchResultsHtml(result) {
@@ -54,9 +84,10 @@ function transcriptSearchResultsHtml(result) {
 }
 
 async function viewTranscripts() {
-  const [queueRes, searchRes] = await Promise.all([
+  const [queueRes, searchRes, hookBench] = await Promise.all([
     api('/api/transcripts/queue'),
     transcriptSearchQuery ? api(`/api/transcripts/search${q({ query: transcriptSearchQuery })}`) : null,
+    state.niche ? api(`/api/niches/${encodeURIComponent(state.niche)}/hook-benchmark`) : null,
   ]);
   transcriptSearchResult = searchRes;
   const queue = queueRes.queue || [];
@@ -76,6 +107,8 @@ async function viewTranscripts() {
       </div>
       ${transcriptSearchQuery ? `<div style="margin-top:12px">${transcriptSearchResultsHtml(transcriptSearchResult)}</div>` : ''}
     </div>
+
+    ${hookBenchmarkHtml(hookBench)}
 
     <div class="card">
       ${sectionHead('Очередь транскриптов', 'субтитры не скачиваются автоматически — только вручную')}
@@ -122,6 +155,20 @@ async function viewTranscripts() {
       await api(`/api/transcripts/${encodeURIComponent(b.dataset.videoId)}/reindex`, { method: 'POST' });
       toast('Переиндексировано', 'ok');
     } catch (e) { toast(e.message, 'err'); }
+    finally { b.disabled = false; }
+  }));
+  view.querySelectorAll('.transcript-hook-btn').forEach((b) => b.addEventListener('click', async () => {
+    const box = view.querySelector(`.transcript-hook-box[data-video-id="${CSS.escape(b.dataset.videoId)}"]`);
+    const out = box.querySelector('.transcript-hook-result');
+    box.hidden = false;
+    b.disabled = true;
+    out.innerHTML = '<div class="row-sub">считаю…</div>';
+    try {
+      const llm = box.querySelector('.transcript-hook-llm').checked;
+      const r = await api(`/api/videos/${encodeURIComponent(b.dataset.videoId)}/hook${q({
+        niche: state.niche || undefined, llm: llm ? 'true' : undefined })}`);
+      out.innerHTML = hookResultHtml(r);
+    } catch (e) { out.innerHTML = `<div class="row-sub" style="color:var(--critical)">${esc(e.message)}</div>`; }
     finally { b.disabled = false; }
   }));
   view.querySelectorAll('.transcript-save-btn').forEach((b) => b.addEventListener('click', async () => {

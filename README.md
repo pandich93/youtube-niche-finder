@@ -10,7 +10,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](backend/interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](docker-compose.yml)
 [![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-68%20tools-8A2BE2?style=flat-square)](backend/interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-71%20tools-8A2BE2?style=flat-square)](backend/interfaces/mcp/server.py)
 [![Last commit](https://img.shields.io/github/last-commit/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/commits/main)
 [![Open issues](https://img.shields.io/github/issues/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/issues)
 [![Open PRs](https://img.shields.io/github/issues-pr/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/pulls)
@@ -26,7 +26,7 @@ topic" is done by the model calling these tools, not the server.
 
 The project has three parts that together make up the "product":
 
-- **`backend/`** — Python: an MCP server (68 tools for Claude), an HTTP API
+- **`backend/`** — Python: an MCP server (71 tools for Claude), an HTTP API
   for the dashboard, and a background worker that logs view/subscriber
   history on a schedule (without this, "growth rate over 24 hours" doesn't
   exist — the YouTube API only ever returns "right now").
@@ -51,6 +51,11 @@ database.
 - Repackaging: title and thumbnail swaps after publishing, before/after
   side by side and views per hour around the swap (thumbnails are
   fingerprinted from the image itself — the API URL never changes)
+- Hook score: rates the text of a video's first ~30 seconds (a pasted transcript, or your
+  own draft intro) 0-100 from a question to the viewer, a concrete number, a promised
+  payoff, intrigue, "you" and pace, minus filler like "welcome back" or "subscribe",
+  in English and Russian; compares outliers' hooks with ordinary videos in a niche
+  (needs 10+ transcripts per group). Text only, not visuals; zero quota, no LLM needed
 - Sponsor map: which brands pay creators in a niche or on a channel, read from
   the video descriptions already in the database — "sponsored by", promo codes
   and affiliate links (Amazon etc.) kept apart; a lower bound, only what is
@@ -228,7 +233,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of notable changes, in
 
 ## Read next
 
-- [backend/README.md](backend/README.md) — YouTube API quotas, all 68 tools
+- [backend/README.md](backend/README.md) — YouTube API quotas, all 71 tools
   with descriptions, how to read `period_by`, running with and without
   Docker, the DDD layer structure.
 - [frontend/README.md](frontend/README.md) — dashboard screens, where the

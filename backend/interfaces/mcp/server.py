@@ -25,6 +25,7 @@ from application import channel_tracking as T
 from application import collecting as collector
 from application import discovery as trends
 from application import enrichment as enrich_uc
+from application import hook_score as hook_uc
 from application import niche_clusters as clusters_uc
 from application import search as q
 from application import tags as tags_uc
@@ -250,6 +251,50 @@ def search_transcripts(query: str, niche: str = None, compare_group: str = None,
     try:
         return transcripts_uc.search_transcripts(query, niche=niche,
                                                   compare_group=compare_group, k=k)
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def hook_report(video_id: str, niche: str = None, llm: bool = False,
+                force_refresh: bool = False) -> dict:
+    """Score 0-100 of the first ~30 seconds of a saved transcript -- an
+    assessment of the intro's TEXT, not of the visual hook. Deterministic:
+    question to the viewer, concrete number, promised payoff, intrigue,
+    addressing "you", first-sentence length, pace, minus filler
+    ("welcome back", "subscribe"); returns what hit, the penalties and up to
+    3 tips. With `niche`, compares with that niche's outlier hooks (or says
+    there is too little data). Zero YouTube quota. llm=True sends the intro
+    text to the LLM provider and costs money (cached 30 days in
+    video_insights, the only reason this tool is not read-only); with the
+    default llm=False nothing is written. A correlation, not a cause."""
+    return hook_uc.hook_report(video_id, niche=niche, llm=llm, force_refresh=force_refresh)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def niche_hook_benchmark(niche: str) -> dict:
+    """How the intros (first ~30 seconds, text only -- not the visual hook)
+    of a niche's outliers differ from its ordinary videos: mean score and
+    the features more common among outliers. Uses only videos with a pasted
+    transcript, so it usually reports "insufficient-data" until 10 outlier
+    and 10 ordinary transcripts exist. Zero quota, no LLM."""
+    return hook_uc.niche_hook_benchmark(niche)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def score_hook_text(text: str, niche: str = None) -> dict:
+    """Score a draft intro the author is writing (text of the first ~30
+    seconds, not the visual hook), optionally against a niche's benchmark.
+    Zero quota; the draft is scored in memory and is NOT stored, logged or
+    sent to any LLM."""
+    try:
+        return hook_uc.score_hook_text(text, niche=niche)
     except ValueError as e:
         return {"error": str(e)}
 

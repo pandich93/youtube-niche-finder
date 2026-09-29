@@ -64,6 +64,15 @@ the same local `fastembed` model everything else in this project uses (see
 "Optional LLM enrichment" above for the one-time model download, the only
 network call in this whole feature).
 
+*One exception, opt-in and per video:* `hook_report(llm=true)` (the
+"LLM-разбор" checkbox next to the "Крючок" button) sends the text of the
+first ~30 seconds of ONE transcript to your configured LLM provider. It
+never happens automatically, and it is a no-op with `LLM_PROVIDER=none`.
+The cache (`video_insights`, task `hook`) stores only the model's answer and a
+hash of that text, not the text itself. `score_hook_text` (the "Проверить
+вступление" card) scores a draft intro in memory: it does not save it, log
+it, or send it anywhere.
+
 ## Where network traffic goes
 
 By default — `LLM_PROVIDER=none`, the setting nothing changes out of the

@@ -132,6 +132,12 @@ can be exported to CSV client-side.
 
 ### Transcripts (`#/transcripts`)
 
+A ready transcript has a "Крючок" button: the first ~30 seconds scored 0-100 by text rules
+(question, number, promise, intrigue, "you", first sentence, pace, minus filler), with an
+opt-in LLM review checkbox; above the queue, a niche benchmark of outliers' vs ordinary
+hooks ("мало данных: N из 10" until there are enough transcripts). The rendering is shared
+with the title screen in `hook_view.js`.
+
 Transcripts are never downloaded automatically — this screen is the manual
 queue. Request one by video ID (`POST /api/transcripts/request`), paste the
 text copied from YouTube (with or without timestamps) into a pending item
@@ -150,6 +156,10 @@ subscribers. "Recompute" (`POST /api/niche-clusters/recompute`) re-runs
 k-means and names clusters via the LLM (tags-based fallback without one).
 
 ### Title check (`#/titles`)
+
+A second card, "Проверить вступление": paste your intro (the first 20-30 seconds of a
+script), get the score, penalties and tips (`POST /api/hooks/score`); the text is never
+stored or sent to an LLM, and the niche comparison uses the global filter.
 
 Needs a niche selected in the global filter. **Score** (`POST
 /api/titles/score`) rates candidate titles 0–100 against the niche's own

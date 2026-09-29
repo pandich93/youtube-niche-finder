@@ -35,6 +35,7 @@ from application import collecting as collector
 from application import digest as DG
 from application import discovery as trends
 from application import enrichment as EN
+from application import hook_score as HK
 from application import inspection as I
 from application import library as L
 from application import maturity_curve
@@ -817,6 +818,26 @@ def reindex_transcript(video_id: str):
 def search_transcripts(query: str, niche: str = None, compare_group: str = None, k: int = 10):
     try:
         return TR.search_transcripts(query, niche=niche, compare_group=compare_group, k=k)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/videos/{video_id}/hook")
+def video_hook(video_id: str, niche: str = None, llm: bool = False,
+               force_refresh: bool = False):
+    return HK.hook_report(video_id, niche=niche or None, llm=llm, force_refresh=force_refresh)
+
+
+@app.get("/api/niches/{slug}/hook-benchmark")
+def niche_hook_benchmark(slug: str):
+    return HK.niche_hook_benchmark(slug)
+
+
+@app.post("/api/hooks/score")
+def score_hook_text(payload: dict = Body(...)):
+    # the draft travels in the body, never in the URL, and is not stored
+    try:
+        return HK.score_hook_text(payload.get("text") or "", niche=payload.get("niche") or None)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

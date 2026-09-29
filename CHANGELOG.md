@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Hook score** (plan 10) — MCP `hook_report` / `niche_hook_benchmark` /
+  `score_hook_text`, `/api/videos/{id}/hook`, `/api/niches/{slug}/hook-benchmark`,
+  `/api/hooks/score`, a "Крючок" button on the Transcripts screen and an
+  intro checker on the title screen. Rates the text of the first ~30 seconds of
+  a pasted transcript (or your own draft) 0-100 by rules, English and Russian:
+  question to the viewer, concrete number, promised payoff, intrigue, "you",
+  first-sentence length and pace, minus filler such as greetings and
+  "subscribe", with up to three cautious tips. The niche benchmark contrasts
+  outliers' hooks with ordinary videos and says "not enough data" until there
+  are 10+ transcripts in each group. An optional LLM review (`llm=true`) is
+  opt-in and cached in `video_insights`; a draft is never stored, logged or
+  sent to an LLM. Text only, not the visual hook. No schema change, zero
+  quota; `PRIVACY.md` updated.
+
 - **Sponsor map** (plan 09) — MCP `sponsor_map` / `channel_sponsors`,
   `/api/niches/{slug}/sponsors`, `/api/channels/{id}/sponsors` and "Спонсоры"
   cards on the niche and channel screens. Finds sponsor mentions, promo codes

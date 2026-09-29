@@ -5,7 +5,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-68%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-71%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -420,6 +420,9 @@ Delivery to Telegram or a webhook is optional -- see [Configuration](#configurat
 |---|---|
 | `request_transcript` | queue a video; the text is pasted by hand on the dashboard's transcripts screen — subtitles are never fetched automatically |
 | `list_transcript_queue` | the queue, by status `pending` / `ready` / `error` |
+| `hook_report` | `video_id, niche?, llm=false, force_refresh=false` -- score 0-100 of the first ~30 s of a saved transcript (text only): features hit, filler penalties, up to 3 tips; optional niche comparison. `llm=true` sends the intro text to the LLM provider (costs money, cached 30 days in `video_insights`, task `hook`). Zero quota |
+| `niche_hook_benchmark` | `niche` -- hooks of a niche's outliers (outlierScore >= 3) vs ordinary videos (< 1.5): mean scores, features more common in outliers; `insufficient-data` below 10 transcripts per group. Zero quota |
+| `score_hook_text` | `text, niche?` -- score a draft intro against the rules and a niche benchmark; the draft is never stored, logged or sent to an LLM. Zero quota |
 | `search_transcripts` | hybrid search (vector + Postgres full-text, RRF-merged) over saved transcript chunks, with timestamped links |
 
 ### LLM features (optional, need `LLM_PROVIDER`)
@@ -596,6 +599,7 @@ youtube-niche-finder/
     │   ├── packaging.py        thumbnail fingerprint distance, before/after views effect
     │   ├── sponsors.py         sponsor / promo-code / affiliate extraction from descriptions, brand normalisation
     │   ├── template_risk.py    title similarity / shared skeleton / length + cadence -> template score
+    │   ├── hook_scoring.py     rule-based hook score, hook text extraction, niche aggregation
     │   ├── title_scoring.py    deterministic title scoring
     │   ├── idea_verdicts.py    free / recent / proven / flopped for check_ideas
     │   ├── niche_clusters.py   plain numpy k-means
@@ -629,12 +633,13 @@ youtube-niche-finder/
     │   ├── packaging.py        thumbnail fingerprinting, repackaging feed and history
     │   ├── sponsors.py         sponsor scan (worker step + backfill), sponsor_map, channel_sponsors
     │   ├── template_risk.py    per-channel and per-niche template risk
+    │   ├── hook_score.py       hook_report, niche_hook_benchmark, score_hook_text (LLM review cached in video_insights)
     │   ├── briefs.py           outlier -> brief for your own video (+ draft)
     │   ├── transcripts.py      manual transcript queue and hybrid search
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 68 tools
+    │   ├── mcp/server.py       MCP server, 71 tools
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
     │   └── worker/main.py      background collector's entry point
