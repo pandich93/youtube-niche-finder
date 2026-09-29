@@ -23,6 +23,7 @@ import { viewBrief } from './screens/brief.js';
 import { viewData } from './screens/data.js';
 import { viewHelp } from './screens/help.js';
 import { viewMcp } from './screens/mcp.js';
+import { viewOwn } from './screens/own.js';
 
 async function guard(fn) {
   view.innerHTML = '<div class="skeleton-page"></div>';
@@ -55,6 +56,7 @@ const ROUTES = {
   packaging: { title: 'Перепаковки', run: viewPackaging },
   metadata: { title: 'Разбор метаданных', run: viewMetadata },
   niches: { title: 'Ниши', run: viewNiches },
+  own: { title: 'Мои каналы', run: viewOwn },
   data: { title: 'Данные', run: viewData },
   help: { title: 'Справка и FAQ', run: viewHelp },
   mcp: { title: 'MCP-подключение', run: viewMcp },
@@ -67,7 +69,10 @@ function setActive(href) {
 
 async function render() {
   const raw = (location.hash || '#/overview').slice(2);
-  const [name, arg] = raw.split('/');
+  // «?…» после экрана -- его параметры (#/brief/<id>?gap=…, #/own?connected=…),
+  // имя экрана и аргумент берём без них.
+  const [path, query] = raw.split('?');
+  const [name, arg] = path.split('/');
   if (name === 'channel' && arg) {
     $('#crumbSection').textContent = 'Канал'; setActive(null);
     return guard(() => viewChannel(decodeURIComponent(arg)));
@@ -75,9 +80,8 @@ async function render() {
   if (name === 'brief' && arg) {
     $('#crumbSection').textContent = 'Бриф'; setActive(null);
     // #/brief/<videoId>?gap=<вопрос зрителей> -- бриф под пробел (план 03).
-    const [vid, query] = arg.split('?');
     const gap = new URLSearchParams(query || '').get('gap');
-    return guard(() => viewBrief(decodeURIComponent(vid), gap));
+    return guard(() => viewBrief(decodeURIComponent(arg), gap));
   }
   if (name === 'niche' && arg) {
     $('#crumbSection').textContent = 'Ниша'; setActive('#/niches');

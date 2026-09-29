@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Your own channels** (plan 14) — connect your channels through Google OAuth
+  (your own "Desktop app" client, read-only scopes, loopback redirect with PKCE
+  and a single-use 10-minute state) and get their real YouTube Analytics
+  numbers: per video views, watch time, retention, subscribers gained and, on a
+  monetized channel, revenue, CPM and RPM, for the last 28 days and lifetime.
+  A "Мои каналы" screen (setup steps, connect, sync, disconnect), MCP
+  `own_channels`, `own_vs_niche`, `rpm_calibration`, `sync_own_channels` (80
+  tools), `/api/own/*` routes, a daily worker step (`WORKER_OWN_SYNC`) and real
+  numbers in `draft_outcomes` (`ownMetrics`). `rpm_calibration` sets your real
+  RPM against the plan-06 range. The refresh token is Fernet-encrypted with
+  `OWN_TOKENS_KEY` from the environment and never returned or logged;
+  disconnecting revokes it at Google and deletes everything. New personal
+  tables `own_channels`, `own_video_metrics`, `own_oauth_pending` with
+  `user_id` (plan 15 rules; `domain/users.py`). Thumbnail CTR is not in the
+  Analytics API and is not shown. `cryptography` is now a direct dependency
+  (it was already installed). `PRIVACY.md` updated; a security review of the
+  flow found no issues.
+
 - **Similar thumbnails** (plan 13) — MCP `similar_thumbnails`,
   `search_thumbnails`, `thumbnail_styles`, `embed_thumbnails` (76 tools),
   `/api/videos/{id}/similar-thumbnails`, `/api/thumbnails/search`,

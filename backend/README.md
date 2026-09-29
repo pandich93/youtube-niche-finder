@@ -5,7 +5,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-76%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-80%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -490,6 +490,59 @@ With the Docker setup above (or `scripts/mcp-docker.sh`) the code is mounted
 from the repository, so new scenarios appear after a Claude Desktop restart.
 Only a config without the `backend:/app:ro` mount needs `docker compose build`.
 
+### Your own channels (plan 14, OAuth)
+
+Connect your own channels to see their real YouTube Analytics numbers next to
+the niche: views, watch time, retention (average view percentage),
+subscribers gained and, on a monetized channel, revenue, CPM and RPM (revenue
+per 1,000 views, as in YouTube Studio). Impressions and thumbnail
+click-through rate are not in the Analytics API — only YouTube Studio shows
+them.
+
+One-time setup (each user brings their own OAuth client; nothing is shared):
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) create a project
+   and enable **YouTube Data API v3** and **YouTube Analytics API**.
+2. OAuth consent screen: user type External, publishing status **Testing**, add
+   your own Google account as a test user. Testing mode is enough for yourself
+   (Google does not verify apps used only by their test users); consent in
+   testing mode expires after 7 days, so reconnect when a sync reports
+   `invalid_grant`.
+3. Credentials → Create credentials → OAuth client ID → **Desktop app**. Put
+   the Client ID and secret into `.env`:
+   `OWN_OAUTH_CLIENT_ID=...` and `OWN_OAUTH_CLIENT_SECRET=...`.
+4. Generate the key that encrypts the stored refresh token and put it into
+   `.env` as `OWN_TOKENS_KEY=...`:
+   `docker compose run --rm web python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+   Keep it only in `.env`; losing or changing it means reconnecting.
+5. `docker compose up -d web worker`, open the dashboard → **Мои каналы** →
+   **Подключить канал**, sign in and allow read-only access.
+
+Google sends you back to `http://127.0.0.1:8080/api/own/oauth/callback`
+(`OWN_OAUTH_REDIRECT_URI` if the dashboard runs on another port); a Desktop app
+client accepts any loopback address, so there is nothing to register. The
+consent asks only for read-only scopes (`youtube.readonly`,
+`yt-analytics.readonly`, `yt-analytics-monetary.readonly`); the flow uses PKCE
+and a single-use state that expires in 10 minutes.
+
+The refresh token is stored Fernet-encrypted (`own_channels.token_enc`) and is
+never returned by the API, logged or put in an error. The worker syncs
+connected channels once a day (`WORKER_OWN_SYNC`), per video, for the last 28
+days and lifetime, ending 3 days ago because Analytics data arrives late; this
+uses your OAuth project's Analytics quota, not the Data API key's. **Отключить**
+revokes the token at Google (best effort) and deletes everything stored for the
+channel; access can also be removed at https://myaccount.google.com/permissions.
+
+| Tool | What it gives you |
+|---|---|
+| `own_channels` | connection status and your channels with their last-28-day views, revenue, RPM, median retention |
+| `own_vs_niche` | your videos' real lifetime views and retention against a niche's collected videos |
+| `rpm_calibration` | your real 28-day RPM next to the low / mid / high range niche-finder estimates from public data |
+| `sync_own_channels` | pull fresh Analytics numbers now (the worker does it daily) |
+
+`draft_outcomes` also shows the real numbers (`ownMetrics`) of a linked draft's
+video when it is on a connected channel.
+
 ---
 
 ## Configuration
@@ -698,7 +751,7 @@ youtube-niche-finder/
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 76 tools
+    │   ├── mcp/server.py       MCP server, 80 tools
     │   ├── mcp/prompts.py      7 ready-made scenarios (MCP prompts)
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)

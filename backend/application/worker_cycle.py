@@ -14,6 +14,7 @@ Default daily budget (well inside the free tier):
   thumbnails   every 6h   tracked channels' last 30d        0 units (i.ytimg.com)
   sponsors     every 1h   new/changed video descriptions    0 units (local DB only)
   thumb_embed  every 1h   thumbnail CLIP vectors, opt-in     0 units (i.ytimg.com)
+  own_sync     once a day your connected channels            Analytics API quota only
 
 Configure with env vars (see .env.example). Set WORKER_QUERIES to keep a set of
 topics continuously fresh, e.g. "ai automation,faceless history,нейросети".
@@ -33,6 +34,7 @@ from application import digest as digest_mod
 from application import enrichment as enrich_mod
 from application import maturity_curve as curve_mod
 from application import niche_clusters as clusters_mod
+from application import own_channels as own_mod
 from application import packaging as packaging_mod
 from application import sponsors as sponsors_mod
 from application import thumbnail_search as thumbsearch_mod
@@ -88,6 +90,11 @@ SPONSORS_LIMIT = int(os.environ.get("WORKER_SPONSORS_LIMIT", "5000"))
 DO_THUMB_EMBED = os.environ.get("WORKER_THUMB_EMBED", "0") not in ("0", "false", "no")
 THUMB_EMBED_INTERVAL_MIN = int(os.environ.get("WORKER_THUMB_EMBED_INTERVAL_MIN", "60"))
 THUMB_EMBED_LIMIT = int(os.environ.get("WORKER_THUMB_EMBED_LIMIT", "200"))
+# Own channels (plan 14): YouTube Analytics numbers of channels you connected
+# through OAuth. Runs only when OAuth is configured and a channel is connected;
+# it uses the Analytics API quota, not the Data API key's.
+DO_OWN_SYNC = os.environ.get("WORKER_OWN_SYNC", "1") not in ("0", "false", "no")
+OWN_SYNC_INTERVAL_MIN = int(os.environ.get("WORKER_OWN_SYNC_INTERVAL_MIN", "1440"))
 # Daily digest (plan 07): only when NOTIFY_MODE is digest/both. Checked this
 # often; application/digest.py itself decides whether today's is due.
 DIGEST_CHECK_INTERVAL_MIN = int(os.environ.get("WORKER_DIGEST_CHECK_INTERVAL_MIN", "10"))
@@ -238,6 +245,12 @@ def cycle():
     if DO_THUMB_EMBED and _due("thumb_embed", THUMB_EMBED_INTERVAL_MIN):
         _safe("thumbnail vectors", lambda: thumbsearch_mod.embed_thumbnails(limit=THUMB_EMBED_LIMIT))
         _mark("thumb_embed")
+
+    if DO_OWN_SYNC and _due("own_sync", OWN_SYNC_INTERVAL_MIN):
+        st = _safe("own channels status", own_mod.status) or {}
+        if st.get("configured") and st.get("connectedChannels"):
+            _safe("own channels sync", own_mod.sync)
+        _mark("own_sync")
 
 
 def main():

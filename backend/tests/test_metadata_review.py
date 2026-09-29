@@ -38,6 +38,12 @@ CREATE TABLE drafts (
   tags TEXT, niche TEXT, channel_id TEXT, is_short INTEGER, review TEXT,
   created_at TEXT, published_at TEXT, source_video_id TEXT
 );
+-- plan 14: draft_outcomes looks up real numbers of your own channels here
+CREATE TABLE own_video_metrics (
+  user_id INTEGER, channel_id TEXT, video_id TEXT, window_name TEXT, views INTEGER,
+  avg_view_pct REAL, avg_view_duration REAL, subscribers_gained INTEGER, revenue REAL,
+  fetched_at TEXT, PRIMARY KEY (user_id, video_id, window_name)
+);
 """
 
 RAW = None

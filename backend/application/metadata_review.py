@@ -262,4 +262,9 @@ def draft_outcomes(min_age_days: float = 7.0) -> list:
             "summaryAtReviewTime": review.get("summary"),
             "keyPhraseAtReviewTime": review.get("keyPhrase"),
         })
+    # plan 14: the real numbers when the video is on a connected own channel
+    from application import own_channels as OWN
+    own = OWN.metrics_for_videos([o["videoId"] for o in out])
+    for o in out:
+        o["ownMetrics"] = own.get(o["videoId"])
     return out

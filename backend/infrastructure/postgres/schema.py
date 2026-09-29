@@ -343,6 +343,59 @@ CREATE TABLE IF NOT EXISTS niche_clusters (
     model TEXT,
     created_at TEXT
 );
+
+-- ---------- plan 14: your own channels (PERSONAL, plan 15 rules) ----------
+-- Every row belongs to one user (user_id, 1 = the local user until plan 15).
+-- token_enc is the OAuth refresh token, Fernet-encrypted with OWN_TOKENS_KEY
+-- from the environment; the plaintext is never stored, logged or returned.
+
+CREATE TABLE IF NOT EXISTS own_channels (
+    user_id BIGINT NOT NULL DEFAULT 1,
+    channel_id TEXT NOT NULL,
+    title TEXT,
+    published_at TEXT,
+    scopes TEXT,
+    token_enc BYTEA,
+    connected_at TEXT,
+    last_synced_at TEXT,
+    last_error TEXT,
+    PRIMARY KEY (user_id, channel_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_own_channels_user ON own_channels(user_id);
+
+-- One row per video and window ('28d' or 'lifetime') from the Analytics API.
+CREATE TABLE IF NOT EXISTS own_video_metrics (
+    user_id BIGINT NOT NULL DEFAULT 1,
+    channel_id TEXT NOT NULL,
+    video_id TEXT NOT NULL,
+    window_name TEXT NOT NULL,
+    start_date TEXT,
+    end_date TEXT,
+    views BIGINT,
+    minutes_watched BIGINT,
+    avg_view_duration REAL,
+    avg_view_pct REAL,
+    subscribers_gained BIGINT,
+    revenue REAL,
+    cpm REAL,
+    playback_cpm REAL,
+    fetched_at TEXT,
+    PRIMARY KEY (user_id, video_id, window_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_own_video_metrics_user ON own_video_metrics(user_id, channel_id);
+
+-- An OAuth consent in progress: the state is single-use and expires, the PKCE
+-- verifier never leaves the server.
+CREATE TABLE IF NOT EXISTS own_oauth_pending (
+    state TEXT PRIMARY KEY,
+    user_id BIGINT NOT NULL DEFAULT 1,
+    code_verifier TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_own_oauth_pending_user ON own_oauth_pending(user_id);
 """
 
 # columns added to pre-existing tables (name -> DDL type)

@@ -1249,6 +1249,57 @@ def embed_thumbnails(limit: int = 200, niche: str = None) -> dict:
     return ts.embed_thumbnails(limit=limit, niche=niche)
 
 
+# --------------------------------------------------------- own channels (plan 14)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def own_channels() -> dict:
+    """Your own channels connected through Google OAuth (dashboard: "Мои
+    каналы" -> connect) with their real last-28-day numbers from YouTube
+    Analytics: views, revenue, RPM, median retention. `status` says whether
+    OAuth is configured and what is missing. Impressions and thumbnail CTR are
+    not in the Analytics API. Zero Data API quota."""
+    from application import own_channels as own
+    return {"status": own.status(), **own.list_channels()}
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def own_vs_niche(channel_id: str, niche: str) -> dict:
+    """Your connected channel's videos (real lifetime views and retention)
+    against the videos of a niche we collected: median views both sides, the
+    ratio, the share of your videos above the niche median, your top videos
+    with their RPM."""
+    from application import own_channels as own
+    return own.own_vs_niche(channel_id, niche)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def rpm_calibration() -> dict:
+    """Your real 28-day RPM (revenue per 1,000 views, as in YouTube Studio)
+    next to the low / mid / high range niche-finder estimates for the same
+    channel from public data -- below, inside or above, and real/mid.
+    Unknown without the monetary scope or on an unmonetized channel."""
+    from application import own_channels as own
+    return own.rpm_calibration()
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=True))
+def sync_own_channels(channel_id: str = None) -> dict:
+    """Pull fresh YouTube Analytics numbers for your connected channels (or
+    one): per video, the last 28 days and lifetime, ending 3 days ago (the
+    Analytics lag). Uses the Analytics API quota of your own OAuth client, not
+    the Data API key's; the worker does this daily."""
+    from application import own_channels as own
+    return own.sync(channel_id=channel_id)
+
+
 # Ready-made scenarios (plan 11) -- registered after every tool they name.
 from interfaces.mcp import prompts as _prompts  # noqa: E402
 

@@ -1,0 +1,18 @@
+{
+  "kind": "youtubeAnalytics#resultTable",
+  "columnHeaders": [
+    {"name": "video", "columnType": "DIMENSION", "dataType": "STRING"},
+    {"name": "views", "columnType": "METRIC", "dataType": "INTEGER"},
+    {"name": "estimatedMinutesWatched", "columnType": "METRIC", "dataType": "INTEGER"},
+    {"name": "averageViewDuration", "columnType": "METRIC", "dataType": "INTEGER"},
+    {"name": "averageViewPercentage", "columnType": "METRIC", "dataType": "FLOAT"},
+    {"name": "subscribersGained", "columnType": "METRIC", "dataType": "INTEGER"},
+    {"name": "estimatedRevenue", "columnType": "METRIC", "dataType": "FLOAT"},
+    {"name": "cpm", "columnType": "METRIC", "dataType": "FLOAT"},
+    {"name": "playbackBasedCpm", "columnType": "METRIC", "dataType": "FLOAT"}
+  ],
+  "rows": [
+    ["ownvid00001", 12000, 30000, 150, 41.5, 30, 24.0, 6.1, 4.2],
+    ["ownvid00002", 3000, 5000, 100, 33.0, 4, 4.5, 5.0, 3.1]
+  ]
+}

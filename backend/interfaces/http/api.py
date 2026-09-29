@@ -14,10 +14,11 @@ import os
 import time
 from collections import defaultdict, deque
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import Body, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 try:
@@ -43,6 +44,7 @@ from application import maturity_curve
 from application import metadata_review as MR
 from application import niche_clusters as NCL
 from application import niche_export as NE
+from application import own_channels as OWN
 from application import packaging as PKG
 from application import saturation as SAT
 from application import search as Q
@@ -704,6 +706,71 @@ def niche_template_risk(slug: str, last_n: int = 30, top_n: int = 10):
 @app.get("/api/videos/{video_id}/packaging")
 def packaging_history(video_id: str):
     return PKG.packaging_history(video_id)
+
+
+# ------------------------------------------------------ own channels (plan 14)
+# Personal data of the local user. The refresh token never leaves
+# application/own_channels.py; nothing below returns or logs it.
+
+def _own_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except OWN.NotConfigured as e:
+        raise HTTPException(status_code=428, detail=str(e))
+    except OWN.NotConnected:
+        raise HTTPException(status_code=404, detail="this channel is not connected")
+
+
+@app.get("/api/own/status")
+def own_status():
+    return OWN.status()
+
+
+@app.post("/api/own/connect")
+def own_connect():
+    """A Google consent URL; the browser opens it and Google sends the user
+    back to /api/own/oauth/callback."""
+    return _own_call(OWN.start_connect)
+
+
+@app.get("/api/own/oauth/callback")
+def own_oauth_callback(state: str = "", code: str = "", error: str = ""):
+    """Google's redirect after consent. Always lands on the dashboard's "Мои
+    каналы" screen with a short result -- never a stack trace or a token."""
+    if error or not code:
+        return RedirectResponse(f"/#/own?error={quote(error or 'no code from Google', safe='')}",
+                                status_code=303)
+    try:
+        out = OWN.finish_connect(state, code)
+    except (OWN.ConnectError, OWN.NotConfigured) as e:
+        return RedirectResponse(f"/#/own?error={quote(str(e)[:200], safe='')}", status_code=303)
+    return RedirectResponse(f"/#/own?connected={quote(out.get('title') or out['channelId'], safe='')}",
+                            status_code=303)
+
+
+@app.get("/api/own/channels")
+def own_channels_list():
+    return OWN.list_channels()
+
+
+@app.post("/api/own/sync")
+def own_sync(channel_id: str = None):
+    return _own_call(OWN.sync, channel_id=channel_id)
+
+
+@app.get("/api/own/rpm-calibration")
+def own_rpm_calibration():
+    return OWN.rpm_calibration()
+
+
+@app.get("/api/own/channels/{channel_id}/vs-niche")
+def own_vs_niche(channel_id: str, niche: str):
+    return _own_call(OWN.own_vs_niche, channel_id, niche)
+
+
+@app.delete("/api/own/channels/{channel_id}")
+def own_disconnect(channel_id: str):
+    return _own_call(OWN.disconnect, channel_id)
 
 
 @app.get("/api/thumbnails/search")

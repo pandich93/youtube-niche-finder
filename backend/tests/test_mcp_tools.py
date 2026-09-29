@@ -721,3 +721,20 @@ def test_thumbnail_tools_route_to_the_application_layer(monkeypatch):
         ("thumbnail_styles", ("n1",), {"k": None}),
         ("embed_thumbnails", (), {"limit": 50, "niche": "n1"}),
     ]
+
+
+# --------------------------------------------------- own channels (plan 14)
+
+def test_own_channel_tools_route_to_the_application_layer(monkeypatch):
+    from application import own_channels as own
+    calls = []
+    monkeypatch.setattr(own, "status", lambda: {"configured": True})
+    monkeypatch.setattr(own, "list_channels", lambda: calls.append("list") or {"channels": []})
+    monkeypatch.setattr(own, "own_vs_niche", lambda cid, niche: calls.append(("vs", cid, niche)) or {"v": 1})
+    monkeypatch.setattr(own, "rpm_calibration", lambda: calls.append("rpm") or {"r": 1})
+    monkeypatch.setattr(own, "sync", lambda **kw: calls.append(("sync", kw)) or {"s": 1})
+    assert srv.own_channels() == {"status": {"configured": True}, "channels": []}
+    assert srv.own_vs_niche("UC1", "n1") == {"v": 1}
+    assert srv.rpm_calibration() == {"r": 1}
+    assert srv.sync_own_channels(channel_id="UC1") == {"s": 1}
+    assert calls == ["list", ("vs", "UC1", "n1"), "rpm", ("sync", {"channel_id": "UC1"})]

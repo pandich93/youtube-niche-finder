@@ -10,7 +10,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](backend/interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](docker-compose.yml)
 [![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-76%20tools-8A2BE2?style=flat-square)](backend/interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-80%20tools-8A2BE2?style=flat-square)](backend/interfaces/mcp/server.py)
 [![Last commit](https://img.shields.io/github/last-commit/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/commits/main)
 [![Open issues](https://img.shields.io/github/issues/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/issues)
 [![Open PRs](https://img.shields.io/github/issues-pr/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/pulls)
@@ -26,7 +26,7 @@ topic" is done by the model calling these tools, not the server.
 
 The project has three parts that together make up the "product":
 
-- **`backend/`** — Python: an MCP server (76 tools for Claude), an HTTP API
+- **`backend/`** — Python: an MCP server (80 tools for Claude), an HTTP API
   for the dashboard, and a background worker that logs view/subscriber
   history on a schedule (without this, "growth rate over 24 hours" doesn't
   exist — the YouTube API only ever returns "right now").
@@ -102,6 +102,11 @@ database.
   ~0.7 GB of RAM while embedding, ~60 ms of CPU per thumbnail (about a second
   with the polite download pace); only the
   vector is kept, and search takes milliseconds with pgvector
+- Your own channels: connect them through Google OAuth (your own client, read-only)
+  and see their real YouTube Analytics numbers — views, retention, revenue, CPM,
+  RPM — next to a niche, and your real RPM against niche-finder's estimate; the
+  refresh token is stored encrypted and the worker syncs daily. Thumbnail CTR is
+  not in the Analytics API, so it is not shown
 - YPP thresholds: which YouTube Partner Program bars a channel visibly meets
   (subscribers, uploads and Shorts views in 90 days), on the channel screen and
   in the extension — deliberately not a "monetized" badge, since YouTube does
@@ -261,7 +266,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of notable changes, in
 
 ## Read next
 
-- [backend/README.md](backend/README.md) — YouTube API quotas, all 76 tools
+- [backend/README.md](backend/README.md) — YouTube API quotas, all 80 tools
   with descriptions, how to read `period_by`, running with and without
   Docker, the DDD layer structure.
 - [frontend/README.md](frontend/README.md) — dashboard screens, where the

@@ -24,6 +24,7 @@ from application import digest as digest_mod  # noqa: E402
 from application import enrichment as enrich_mod  # noqa: E402
 from application import maturity_curve as curve_mod  # noqa: E402
 from application import niche_clusters as clusters_mod  # noqa: E402
+from application import own_channels as own_mod  # noqa: E402
 from application import packaging as packaging_mod  # noqa: E402
 from application import sponsors as sponsors_mod  # noqa: E402
 from application import thumbnail_search as thumbsearch_mod  # noqa: E402
@@ -31,7 +32,7 @@ from application import worker_cycle as worker  # noqa: E402
 from domain import periods as P  # noqa: E402
 
 SCHEDULE_KEYS = ("rss", "hot", "alerts", "embed", "enrich", "daily", "clusters",
-                 "calibrate", "thumbs", "sponsors", "thumb_embed", "digest")
+                 "calibrate", "thumbs", "sponsors", "thumb_embed", "own_sync", "digest")
 
 
 def setup_module(_=None):
@@ -73,6 +74,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(worker, "DO_THUMBS", True)
     monkeypatch.setattr(worker, "DO_SPONSORS", True)
     monkeypatch.setattr(worker, "DO_THUMB_EMBED", True)
+    monkeypatch.setattr(worker, "DO_OWN_SYNC", True)
     monkeypatch.setattr(alerts_mod, "NOTIFY_MODE", "digest")
     monkeypatch.setattr(worker, "_llm_enrichment_enabled", lambda: True)
     monkeypatch.setattr(collector, "discover_new_videos_via_rss", rec("rss"))
@@ -92,6 +94,8 @@ def calls(monkeypatch):
     monkeypatch.setattr(packaging_mod, "fingerprint_thumbnails", rec("thumbs"))
     monkeypatch.setattr(sponsors_mod, "scan_sponsors", rec("sponsors"))
     monkeypatch.setattr(thumbsearch_mod, "embed_thumbnails", rec("thumb_embed"))
+    monkeypatch.setattr(own_mod, "status", lambda: {"configured": True, "connectedChannels": 1})
+    monkeypatch.setattr(own_mod, "sync", rec("own_sync"))
     return seen
 
 
@@ -109,6 +113,7 @@ ALL_STEPS = [
     "thumbs",
     "sponsors",
     "thumb_embed",
+    "own_sync",
 ]
 
 
@@ -141,13 +146,14 @@ def test_optional_steps_are_skipped_when_switched_off(calls, monkeypatch):
     monkeypatch.setattr(worker, "DO_THUMBS", False)
     monkeypatch.setattr(worker, "DO_SPONSORS", False)
     monkeypatch.setattr(worker, "DO_THUMB_EMBED", False)
+    monkeypatch.setattr(worker, "DO_OWN_SYNC", False)
     monkeypatch.setattr(alerts_mod, "NOTIFY_MODE", "instant")
     monkeypatch.setattr(worker, "DO_TRENDING", False)
     monkeypatch.setattr(worker, "QUERIES", [])
     monkeypatch.setattr(worker, "_llm_enrichment_enabled", lambda: False)
     worker.cycle()
     for step in ("embed", "enrich_channels", "enrich_videos", "collect_trending",
-                 "collect:q1", "collect:q2", "thumbs", "sponsors", "thumb_embed", "digest"):
+                 "collect:q1", "collect:q2", "thumbs", "sponsors", "thumb_embed", "own_sync", "digest"):
         assert step not in calls, step
     # enrich is still marked, so it does not re-check the provider every cycle
     assert worker._get_meta("worker_last_enrich")
@@ -226,3 +232,10 @@ def test_thumbnail_vectors_are_off_unless_asked_for(monkeypatch):
     assert importlib.reload(worker).DO_THUMB_EMBED is True
     monkeypatch.delenv("WORKER_THUMB_EMBED")
     importlib.reload(worker)
+
+
+def test_own_sync_waits_for_oauth_and_a_connected_channel(calls, monkeypatch):
+    monkeypatch.setattr(own_mod, "status", lambda: {"configured": False, "connectedChannels": 0})
+    worker.cycle()
+    assert "own_sync" not in calls
+    assert worker._get_meta("worker_last_own_sync")      # marked, so it does not re-check every cycle

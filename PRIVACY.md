@@ -34,6 +34,16 @@ Everything lives in the Postgres database you point the app at (by default the
   512-number CLIP vector per thumbnail for "similar thumbnails" and thumbnail
   styles. Only the vector is kept, never the image (plan-05 archived images are
   reused when present).
+- **Your own channels** (plan 14, only if you connect one) — the channel id and
+  title, the granted scopes, the OAuth refresh token **encrypted** with
+  `OWN_TOKENS_KEY` from your `.env` (Fernet; the key is never in the database),
+  and per-video YouTube Analytics numbers (views, watch time, retention,
+  subscribers gained, revenue, CPM) for the last 28 days and lifetime
+  (`own_channels`, `own_video_metrics`). This is private data about you. It
+  never leaves your database except as the read requests to Google below; the
+  token is never logged or returned by the API. **Отключить** on the "Мои
+  каналы" screen revokes the token at Google and deletes all of it; you can
+  also remove access at https://myaccount.google.com/permissions.
 
 The YouTube metadata is public information about other people's channels,
 retrieved through YouTube's official API. It is not private data about you,
@@ -99,6 +109,8 @@ box — the application contacts exactly three external hosts:
 | `www.youtube.com` | Channel RSS feeds (`/feeds/videos.xml`), used by the free upload watcher | No |
 | `i.ytimg.com` | Thumbnail images of tracked channels' videos from the last `WORKER_FULL_PERIOD`, every `WORKER_THUMBS_INTERVAL_MIN`, to notice thumbnail swaps (the API cannot). Plain image GETs — Google sees which videos you check. `WORKER_THUMBS=0` turns it off | No |
 | `i.ytimg.com` | Plan 13, **off by default**: with `WORKER_THUMB_EMBED=1` (or the "Посчитать векторы превью" button / `embed_thumbnails`) the thumbnails of any collected videos, to compute their CLIP vectors locally; the image is dropped after that | No |
+| `accounts.google.com`, `oauth2.googleapis.com` | Plan 14, only when you connect your own channel: the sign-in page, then the code-for-token exchange, token refresh before each sync, and the revoke on disconnect | Your OAuth client id/secret and refresh token, to Google only |
+| `youtubeanalytics.googleapis.com`, `www.googleapis.com` | Plan 14: your channel's Analytics reports (daily, and on "Обновить цифры") and which channel the token belongs to | The OAuth access token, to Google only |
 | `huggingface.co` | Plan 13: the CLIP image model (~0.34 GB) the first time a thumbnail is embedded, and the CLIP text model (~0.25 GB) the first time thumbnails are searched by text; cached in the models volume after that | No |
 
 Two more appear the first time you set the project up, and are not the running

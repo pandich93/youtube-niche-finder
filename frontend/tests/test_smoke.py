@@ -29,12 +29,12 @@ ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
 SHOTS = Path(__file__).resolve().parent / "screenshots"
 
-# 19 ключей ROUTES из router.js (до разбивки -- из app.js) + три глубокие ссылки
+# 20 ключей ROUTES из router.js (до разбивки -- из app.js) + три глубокие ссылки
 # на объекты из seed_demo.py.
 ROUTES = [
     "overview", "find", "viral", "channels", "categories", "keywords", "tags",
     "tracker", "ideas", "transcripts", "clusters", "titles", "saved", "packaging", "metadata",
-    "niches", "data", "help", "mcp",
+    "niches", "own", "data", "help", "mcp",
     "niche/demo", "channel/UC0000000000000000000a", "brief/avid000",
     "brief/avid000?gap=how%20to%20start%20a%20tiny%20AI%20lab%3F",
 ]
@@ -178,6 +178,9 @@ def test_screen_renders_without_errors(browser, base_url, route):
     ("niche/demo", ["Пробелы в контенте", "Прочитать комментарии"]),
     # Стили превью (план 13): без векторов -- кнопка посчитать, квота не тратится.
     ("niche/demo", ["Стили превью", "Посчитать векторы превью"]),
+    # Мои каналы (план 14): без OAuth-клиента -- пошаговая настройка, а не ошибка.
+    ("own", ["Подключение не настроено", "OWN_TOKENS_KEY"]),
+    ("own?error=access_denied", ["Подключить не удалось", "access_denied"]),
     # Сценарии MCP (план 11): раздел на экране подключения.
     ("mcp", ["Сценарии", "find_niche", "niche_health"]),
     # Тренд ниши (план 08): блок на экране ниши и колонка в списке ниш.

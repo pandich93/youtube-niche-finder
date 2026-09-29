@@ -165,6 +165,12 @@ DELEGATIONS = [
     ("get", "/api/niches/abc/thumbnail-styles", "TS", "thumbnail_styles", ("abc",), {"k": None}, None),
     ("post", "/api/thumbnails/embed?limit=30&niche=n1", "TS", "embed_thumbnails", (),
      {"limit": 30, "niche": "n1"}, None),
+    ("get", "/api/own/status", "OWN", "status", (), {}, None),
+    ("get", "/api/own/channels", "OWN", "list_channels", (), {}, None),
+    ("get", "/api/own/rpm-calibration", "OWN", "rpm_calibration", (), {}, None),
+    ("get", "/api/own/channels/UC1/vs-niche?niche=n1", "OWN", "own_vs_niche", ("UC1", "n1"), {}, None),
+    ("post", "/api/own/sync", "OWN", "sync", (), {"channel_id": None}, None),
+    ("delete", "/api/own/channels/UC1", "OWN", "disconnect", ("UC1",), {}, None),
     ("get", "/api/niches/abc/insights?top_n=2", "EN", "niche_comment_insights",
      ("abc",), {"top_n": 2}, None),
     ("get", "/api/transcripts/queue?status=pending", "TR", "list_transcript_queue",
@@ -483,3 +489,40 @@ def test_thumbnail_search_without_query_is_400(stub):
     stub("TS", "search_thumbnails", raises=ValueError("query is required"))
     resp = client.get("/api/thumbnails/search?q=")
     assert resp.status_code == 400 and "query" in resp.json()["detail"]
+
+
+# --------------------------------------------------- own channels (plan 14)
+
+def test_own_connect_returns_the_consent_url(stub):
+    stub("OWN", "start_connect", result={"authUrl": "https://accounts.google.com/x"})
+    resp = client.post("/api/own/connect")
+    assert resp.status_code == 200 and resp.json()["authUrl"].startswith("https://accounts.google.com")
+
+
+def test_own_connect_without_setup_is_428(stub):
+    from application import own_channels as own
+    stub("OWN", "start_connect", raises=own.NotConfigured("set OWN_TOKENS_KEY"))
+    resp = client.post("/api/own/connect")
+    assert resp.status_code == 428 and "OWN_TOKENS_KEY" in resp.json()["detail"]
+
+
+def test_oauth_callback_redirects_to_the_screen(stub):
+    fin = stub("OWN", "finish_connect", result={"channelId": "UC1", "title": "My Channel"})
+    resp = client.get("/api/own/oauth/callback?state=s&code=c", follow_redirects=False)
+    assert resp.status_code == 303 and resp.headers["location"] == "/#/own?connected=My%20Channel"
+    assert fin.args == ("s", "c")
+
+
+def test_oauth_callback_errors_become_a_message_not_a_trace(stub):
+    from application import own_channels as own
+    stub("OWN", "finish_connect", raises=own.ConnectError("the sign-in link expired"))
+    resp = client.get("/api/own/oauth/callback?state=s&code=c", follow_redirects=False)
+    assert resp.status_code == 303 and "error=the%20sign-in%20link%20expired" in resp.headers["location"]
+    resp = client.get("/api/own/oauth/callback?error=access_denied", follow_redirects=False)
+    assert "error=access_denied" in resp.headers["location"]
+
+
+def test_own_channel_you_did_not_connect_is_404(stub):
+    from application import own_channels as own
+    stub("OWN", "own_vs_niche", raises=own.NotConnected("UC9"))
+    assert client.get("/api/own/channels/UC9/vs-niche?niche=n1").status_code == 404
