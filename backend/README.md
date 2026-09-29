@@ -436,6 +436,28 @@ Delivery to Telegram or a webhook is optional -- see [Configuration](#configurat
 | `enrich_channels` | label channels: faceless, content format, topic, language, ... (the worker also does this) | LLM budget |
 | `tag_new_videos` | auto-tag videos in niches whose taxonomy has ≥ `LLM_MIN_MANUAL_TAGS` manual tags | LLM budget |
 
+### Scenarios (MCP prompts)
+
+Ready-made workflows in [`interfaces/mcp/prompts.py`](interfaces/mcp/prompts.py).
+A client lists them (Claude Desktop: "+" → niche-finder); picking one puts a
+step-by-step instruction into the chat, in Russian, naming the tools above in
+order. The client's model runs the steps; the prompt itself costs nothing.
+Scenarios that collect call `db_stats` first and stop when the quota is short.
+`tests/test_mcp_prompts.py` fails if a scenario names a tool that no longer exists.
+
+| Prompt | Arguments | Steps | Quota |
+|---|---|---|---|
+| `find_niche` | `topic`, `pages=1` (1-3) | `list_niches` → `db_stats` → `collect_niche` (only if not collected) → `niche_overview` → `viral_videos_small_channels` → `niche_template_risk` | `pages` of the 100 daily searches, only if not collected |
+| `analyze_competitor` | `channel` | `db_stats` → `collect_channel` → `channel_analytics` → `title_patterns` → `best_time_to_publish` → `similar_channels` | ~2-3 units |
+| `validate_idea` | `idea`, `niche` | `check_ideas` → `score_titles` → `high_future_competition` | 0 |
+| `outlier_to_video` | `video_id`, `use_llm=yes` | `build_brief` (preview, saved only on consent) | 0 |
+| `weekly_review` | `period=7d` | `daily_digest` → `list_events` → `packaging_changes` → `recently_added_outlier_channels` | 0 |
+| `find_content_gaps` | `niche` | `content_gaps` from cache → on consent `db_stats` + `content_gaps(fetch=true)` → `build_brief(gap_topic)` | 0, or 1 unit per unread video |
+| `niche_health` | `niche` | `niche_overview` → `niche_template_risk` → `sponsor_map` → `niche_hook_benchmark` | 0 |
+
+If Claude Desktop runs the server from the Docker image, rebuild it
+(`docker compose build`) after an update, or the new scenarios will not appear.
+
 ---
 
 ## Configuration
@@ -645,6 +667,7 @@ youtube-niche-finder/
     │
     ├── interfaces/         thin adapters facing outward
     │   ├── mcp/server.py       MCP server, 72 tools
+    │   ├── mcp/prompts.py      7 ready-made scenarios (MCP prompts)
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
     │   └── worker/main.py      background collector's entry point

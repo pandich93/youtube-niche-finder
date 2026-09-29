@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Scenarios for Claude** (plan 11) — seven MCP prompts in
+  `interfaces/mcp/prompts.py`, listed by the client (Claude Desktop: "+" →
+  niche-finder): `find_niche`, `analyze_competitor`, `validate_idea`,
+  `outlier_to_video`, `weekly_review`, `find_content_gaps`, `niche_health`.
+  Each puts a Russian step-by-step instruction into the chat with the exact
+  tools in order, its quota cost and the shape of the answer; the ones that
+  collect call `db_stats` first and stop when the quota is short, and reading
+  comments or saving a draft waits for the user's consent. Arguments carry
+  descriptions for the client menu. A "Сценарии" section on the dashboard's
+  MCP screen. `tests/test_mcp_prompts.py` fails if a scenario names a tool that
+  does not exist. The tool count stays 72.
+
 - **Niche trend** (plan 08) — `saturation_v2` in `niche_overview` /
   `niche_overview_from_channel` (MCP and `/api/niches/{slug}`), a new
   `GET /api/niches/saturation` for every niche at once, a "Тренд ниши" block

@@ -94,6 +94,11 @@ database.
   disappeared from YouTube), delivered to Telegram or a webhook one by one
   or as one morning digest; a swipe file for saved videos and channels
 - Export a niche's videos to TSV/CSV
+- Seven ready-made scenarios for Claude (MCP prompts, under "+" in Claude
+  Desktop): find a niche, analyse a competitor, validate an idea, outlier to
+  your own video, weekly review, content gaps, niche health — each names the
+  tools in order, states its quota cost and checks the remaining quota before
+  collecting anything
 - Only the free YouTube Data API v3 and local PostgreSQL — no paid
   subscriptions and no LLM key required. An LLM (via OpenRouter or a local
   Ollama) is opt-in and off by default — see [Privacy](#privacy)

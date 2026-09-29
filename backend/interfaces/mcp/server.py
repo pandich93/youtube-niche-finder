@@ -1195,6 +1195,12 @@ def mark_events_seen(ids: list = None, all_unseen: bool = False) -> dict:
     return alerts_mod.mark_seen(ids=ids, all_unseen=all_unseen)
 
 
+# Ready-made scenarios (plan 11) -- registered after every tool they name.
+from interfaces.mcp import prompts as _prompts  # noqa: E402
+
+_prompts.register(mcp)
+
+
 def run():
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport == "stdio":
