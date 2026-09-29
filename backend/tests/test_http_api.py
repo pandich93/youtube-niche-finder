@@ -158,6 +158,13 @@ DELEGATIONS = [
      {"niche": "n1", "top_n": 4}, None),
     ("get", "/api/niches/abc/content-gaps?top_videos=5&limit=7", "CG", "content_gaps",
      (None, "abc"), {"top_videos": 5, "limit": 7, "fetch": False, "use_llm": None}, None),
+    ("get", "/api/videos/v1/similar-thumbnails?limit=5&exclude_same_channel=true", "TS",
+     "similar_thumbnails", ("v1",), {"limit": 5, "exclude_same_channel": True, "niche": None}, None),
+    ("get", "/api/thumbnails/search?q=red%20arrow&niche=n1", "TS", "search_thumbnails",
+     ("red arrow",), {"niche": "n1", "limit": 12}, None),
+    ("get", "/api/niches/abc/thumbnail-styles", "TS", "thumbnail_styles", ("abc",), {"k": None}, None),
+    ("post", "/api/thumbnails/embed?limit=30&niche=n1", "TS", "embed_thumbnails", (),
+     {"limit": 30, "niche": "n1"}, None),
     ("get", "/api/niches/abc/insights?top_n=2", "EN", "niche_comment_insights",
      ("abc",), {"top_n": 2}, None),
     ("get", "/api/transcripts/queue?status=pending", "TR", "list_transcript_queue",
@@ -470,3 +477,9 @@ def test_static_files_are_not_cached_but_api_is_untouched():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
+
+
+def test_thumbnail_search_without_query_is_400(stub):
+    stub("TS", "search_thumbnails", raises=ValueError("query is required"))
+    resp = client.get("/api/thumbnails/search?q=")
+    assert resp.status_code == 400 and "query" in resp.json()["detail"]

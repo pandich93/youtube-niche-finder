@@ -79,6 +79,8 @@ function briefHtml(b, llm) {
         <div class="vcard-meta">${compact(r.views)} просмотров · сходство ${Math.round((r.similarity || 0) * 100)}%</div>
       </article>`).join('')}</div></div>` : ''}
 
+    <div id="briefThumbs"></div>
+
     ${skippedBlock(b.skipped)}
 
     <div class="card" id="briefActions">
@@ -91,11 +93,31 @@ function briefHtml(b, llm) {
     </div>`;
 }
 
+/* Похожие по картинке (план 13): у кого ещё превью выглядит так же, чужие каналы.
+   Без векторов превью блок просто не показывается. */
+async function fillSimilarThumbs(videoId) {
+  const box = $('#briefThumbs');
+  if (!box) return;
+  try {
+    const d = await api(`/api/videos/${encodeURIComponent(videoId)}/similar-thumbnails?limit=6&exclude_same_channel=true`);
+    if (!d.similar || !d.similar.length) return;
+    box.innerHTML = `<div class="card">${sectionHead('Похожие по картинке', 'чьи превью выглядят так же — стоит ли повторять этот вид')}
+      <div class="cards">${d.similar.map((r) => `<article class="vcard">
+        <a class="thumb" href="https://www.youtube.com/watch?v=${esc(r.videoId)}" target="_blank" rel="noopener">
+          ${r.thumbnail ? `<img src="${esc(r.thumbnail)}" alt="" loading="lazy">` : '<div class="thumb-fallback">без обложки</div>'}</a>
+        <div class="vcard-title">${esc(r.title)}</div>
+        <div class="vcard-meta">${esc(r.channelTitle || '')} · сходство ${Math.round(r.similarity * 100)}%</div>
+      </article>`).join('')}</div>
+      <div class="section-sub">CLIP сравнивает стиль и содержимое картинки, а не надписи.</div></div>`;
+  } catch { /* не критично: бриф и без этого блока полный */ }
+}
+
 async function viewBrief(videoId, gapTopic = null) {
   let useLlm = false;
   const load = async (save) => api('/api/briefs', { method: 'POST', body: { videoId, save, useLlm, gapTopic } });
   const draw = (b) => {
     view.innerHTML = briefHtml(b, useLlm);
+    fillSimilarThumbs(videoId);
     const saveBtn = $('#saveBrief');
     if (saveBtn) saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = true;

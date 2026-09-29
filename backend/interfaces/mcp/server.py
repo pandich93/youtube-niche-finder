@@ -1195,6 +1195,60 @@ def mark_events_seen(ids: list = None, all_unseen: bool = False) -> dict:
     return alerts_mod.mark_seen(ids=ids, all_unseen=all_unseen)
 
 
+# --------------------------------------------------------- thumbnails (plan 13)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def similar_thumbnails(video_id: str, niche: str = None, limit: int = 12,
+                       exclude_same_channel: bool = False) -> dict:
+    """Videos whose THUMBNAIL looks most like this one's (CLIP image vectors,
+    cosine; HNSW in pgvector): who else packages a video like this outlier,
+    and whether a look is already overused. Compares style and content, not
+    the words on the thumbnail. Needs thumbnail vectors (WORKER_THUMB_EMBED or
+    embed_thumbnails). Zero quota."""
+    from application import thumbnail_search as ts
+    return ts.similar_thumbnails(video_id, niche=niche, limit=limit,
+                                 exclude_same_channel=exclude_same_channel)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def search_thumbnails(query: str, niche: str = None, limit: int = 12) -> dict:
+    """Find thumbnails by a short visual description ("red arrow, shocked
+    face", "dark map with a glowing route") -- CLIP puts text and images in
+    one space. English works best. The text model (~0.25 GB) downloads on
+    first use. Zero quota."""
+    from application import thumbnail_search as ts
+    return ts.search_thumbnails(query, niche=niche, limit=limit)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def thumbnail_styles(niche: str, k: int = None) -> dict:
+    """The visual styles of a niche's thumbnails (k-means over their CLIP
+    vectors) and how each performs: videos, share, median outlier score and
+    views, best examples -- "which look works here". Needs 12+ thumbnail
+    vectors in the niche. A correlation, not a cause. Zero quota."""
+    from application import thumbnail_search as ts
+    return ts.thumbnail_styles(niche, k=k)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=True))
+def embed_thumbnails(limit: int = 200, niche: str = None) -> dict:
+    """Turn up to `limit` thumbnails without a vector (newest first, or one
+    niche's) into CLIP vectors -- what WORKER_THUMB_EMBED does in the
+    background. Downloads thumbnails from i.ytimg.com (not the Data API, zero
+    quota; plan-05 archived images are reused), keeps only the vector. The
+    image model (~0.34 GB) downloads on first use; ~1 s per thumbnail."""
+    from application import thumbnail_search as ts
+    return ts.embed_thumbnails(limit=limit, niche=niche)
+
+
 # Ready-made scenarios (plan 11) -- registered after every tool they name.
 from interfaces.mcp import prompts as _prompts  # noqa: E402
 

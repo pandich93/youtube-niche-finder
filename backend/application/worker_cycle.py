@@ -13,6 +13,7 @@ Default daily budget (well inside the free tier):
   queries      once a day WORKER_QUERIES, if set            1 search call each
   thumbnails   every 6h   tracked channels' last 30d        0 units (i.ytimg.com)
   sponsors     every 1h   new/changed video descriptions    0 units (local DB only)
+  thumb_embed  every 1h   thumbnail CLIP vectors, opt-in     0 units (i.ytimg.com)
 
 Configure with env vars (see .env.example). Set WORKER_QUERIES to keep a set of
 topics continuously fresh, e.g. "ai automation,faceless history,нейросети".
@@ -34,6 +35,7 @@ from application import maturity_curve as curve_mod
 from application import niche_clusters as clusters_mod
 from application import packaging as packaging_mod
 from application import sponsors as sponsors_mod
+from application import thumbnail_search as thumbsearch_mod
 from domain import periods as P
 from infrastructure.llm import factory as llm_factory
 from infrastructure.llm.null import NullProvider
@@ -80,6 +82,12 @@ THUMBS_LIMIT = int(os.environ.get("WORKER_THUMBS_LIMIT", "500"))
 DO_SPONSORS = os.environ.get("WORKER_SPONSORS", "1") not in ("0", "false", "no")
 SPONSORS_INTERVAL_MIN = int(os.environ.get("WORKER_SPONSORS_INTERVAL_MIN", "60"))
 SPONSORS_LIMIT = int(os.environ.get("WORKER_SPONSORS_LIMIT", "5000"))
+# Thumbnail vectors (plan 13): CLIP embeddings of thumbnails for "similar
+# thumbnails" and thumbnail styles. OFF by default: the model is ~0.34 GB on
+# disk and the step downloads thumbnails from i.ytimg.com (no API quota).
+DO_THUMB_EMBED = os.environ.get("WORKER_THUMB_EMBED", "0") not in ("0", "false", "no")
+THUMB_EMBED_INTERVAL_MIN = int(os.environ.get("WORKER_THUMB_EMBED_INTERVAL_MIN", "60"))
+THUMB_EMBED_LIMIT = int(os.environ.get("WORKER_THUMB_EMBED_LIMIT", "200"))
 # Daily digest (plan 07): only when NOTIFY_MODE is digest/both. Checked this
 # often; application/digest.py itself decides whether today's is due.
 DIGEST_CHECK_INTERVAL_MIN = int(os.environ.get("WORKER_DIGEST_CHECK_INTERVAL_MIN", "10"))
@@ -226,6 +234,10 @@ def cycle():
     if DO_SPONSORS and _due("sponsors", SPONSORS_INTERVAL_MIN):
         _safe("sponsor scan", lambda: sponsors_mod.scan_sponsors(limit=SPONSORS_LIMIT))
         _mark("sponsors")
+
+    if DO_THUMB_EMBED and _due("thumb_embed", THUMB_EMBED_INTERVAL_MIN):
+        _safe("thumbnail vectors", lambda: thumbsearch_mod.embed_thumbnails(limit=THUMB_EMBED_LIMIT))
+        _mark("thumb_embed")
 
 
 def main():

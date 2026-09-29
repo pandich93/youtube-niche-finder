@@ -49,6 +49,7 @@ from application import search as Q
 from application import sponsors as SP
 from application import tags as TG
 from application import template_risk as TRK
+from application import thumbnail_search as TS
 from application import transcripts as TR
 from infrastructure.categories import repository as C
 
@@ -703,6 +704,34 @@ def niche_template_risk(slug: str, last_n: int = 30, top_n: int = 10):
 @app.get("/api/videos/{video_id}/packaging")
 def packaging_history(video_id: str):
     return PKG.packaging_history(video_id)
+
+
+@app.get("/api/thumbnails/search")
+def search_thumbnails(q: str = "", niche: str = None, limit: int = 12):
+    """Plan 13: thumbnails matching a short visual description (CLIP). Zero quota."""
+    try:
+        return TS.search_thumbnails(q, niche=niche, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/thumbnails/embed")
+def embed_thumbnails(limit: int = 200, niche: str = None):
+    """Plan 13: vectors for thumbnails that have none -- by click, like the
+    WORKER_THUMB_EMBED step. Downloads from i.ytimg.com, zero API quota."""
+    return TS.embed_thumbnails(limit=limit, niche=niche)
+
+
+@app.get("/api/videos/{video_id}/similar-thumbnails")
+def similar_thumbnails(video_id: str, niche: str = None, limit: int = 12,
+                       exclude_same_channel: bool = False):
+    return TS.similar_thumbnails(video_id, niche=niche, limit=limit,
+                                 exclude_same_channel=exclude_same_channel)
+
+
+@app.get("/api/niches/{slug}/thumbnail-styles")
+def thumbnail_styles(slug: str, k: int = None):
+    return TS.thumbnail_styles(slug, k=k)
 
 
 @app.get("/api/thumbnails/{video_id}/{captured_at}.jpg")

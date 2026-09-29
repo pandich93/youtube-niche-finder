@@ -26,11 +26,12 @@ from application import maturity_curve as curve_mod  # noqa: E402
 from application import niche_clusters as clusters_mod  # noqa: E402
 from application import packaging as packaging_mod  # noqa: E402
 from application import sponsors as sponsors_mod  # noqa: E402
+from application import thumbnail_search as thumbsearch_mod  # noqa: E402
 from application import worker_cycle as worker  # noqa: E402
 from domain import periods as P  # noqa: E402
 
 SCHEDULE_KEYS = ("rss", "hot", "alerts", "embed", "enrich", "daily", "clusters",
-                 "calibrate", "thumbs", "sponsors", "digest")
+                 "calibrate", "thumbs", "sponsors", "thumb_embed", "digest")
 
 
 def setup_module(_=None):
@@ -71,6 +72,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(worker, "DO_EMBED", True)
     monkeypatch.setattr(worker, "DO_THUMBS", True)
     monkeypatch.setattr(worker, "DO_SPONSORS", True)
+    monkeypatch.setattr(worker, "DO_THUMB_EMBED", True)
     monkeypatch.setattr(alerts_mod, "NOTIFY_MODE", "digest")
     monkeypatch.setattr(worker, "_llm_enrichment_enabled", lambda: True)
     monkeypatch.setattr(collector, "discover_new_videos_via_rss", rec("rss"))
@@ -89,6 +91,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(curve_mod, "apply_calibration", rec("calibrate"))
     monkeypatch.setattr(packaging_mod, "fingerprint_thumbnails", rec("thumbs"))
     monkeypatch.setattr(sponsors_mod, "scan_sponsors", rec("sponsors"))
+    monkeypatch.setattr(thumbsearch_mod, "embed_thumbnails", rec("thumb_embed"))
     return seen
 
 
@@ -105,6 +108,7 @@ ALL_STEPS = [
     "calibrate",
     "thumbs",
     "sponsors",
+    "thumb_embed",
 ]
 
 
@@ -136,13 +140,14 @@ def test_optional_steps_are_skipped_when_switched_off(calls, monkeypatch):
     monkeypatch.setattr(worker, "DO_EMBED", False)
     monkeypatch.setattr(worker, "DO_THUMBS", False)
     monkeypatch.setattr(worker, "DO_SPONSORS", False)
+    monkeypatch.setattr(worker, "DO_THUMB_EMBED", False)
     monkeypatch.setattr(alerts_mod, "NOTIFY_MODE", "instant")
     monkeypatch.setattr(worker, "DO_TRENDING", False)
     monkeypatch.setattr(worker, "QUERIES", [])
     monkeypatch.setattr(worker, "_llm_enrichment_enabled", lambda: False)
     worker.cycle()
     for step in ("embed", "enrich_channels", "enrich_videos", "collect_trending",
-                 "collect:q1", "collect:q2", "thumbs", "sponsors", "digest"):
+                 "collect:q1", "collect:q2", "thumbs", "sponsors", "thumb_embed", "digest"):
         assert step not in calls, step
     # enrich is still marked, so it does not re-check the provider every cycle
     assert worker._get_meta("worker_last_enrich")
@@ -211,3 +216,13 @@ def test_due_respects_the_interval_with_naive_and_aware_timestamps():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
+
+
+def test_thumbnail_vectors_are_off_unless_asked_for(monkeypatch):
+    import importlib
+    monkeypatch.delenv("WORKER_THUMB_EMBED", raising=False)
+    assert importlib.reload(worker).DO_THUMB_EMBED is False
+    monkeypatch.setenv("WORKER_THUMB_EMBED", "1")
+    assert importlib.reload(worker).DO_THUMB_EMBED is True
+    monkeypatch.delenv("WORKER_THUMB_EMBED")
+    importlib.reload(worker)

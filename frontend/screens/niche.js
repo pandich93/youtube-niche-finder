@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, sponsorBlock, state, nicheTemplateRiskBlock } from '../ui.js';
+import { $, api, q, num, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, sponsorBlock, state, nicheTemplateRiskBlock } from '../ui.js';
 import { view, plabel, nicheOverviewBlock, render } from '../shared.js';
 
 /* Доля хитов по тегам одной группы -- barList из tag_stats. Группа вводится
@@ -166,6 +166,66 @@ function wireGaps() {
   });
 }
 
+/* Стили превью (план 13): k-means по CLIP-векторам превью ниши и как каждый
+   стиль заходит; поиск превью по описанию. Векторы считает воркер
+   (WORKER_THUMB_EMBED) или кнопка здесь -- превью качаются с i.ytimg.com. */
+function thumbCard(e, sub) {
+  return `<article class="vcard">
+    <a class="thumb" href="https://www.youtube.com/watch?v=${esc(e.videoId)}" target="_blank" rel="noopener">
+      ${e.thumbnail ? `<img src="${esc(e.thumbnail)}" alt="" loading="lazy">` : '<div class="thumb-fallback">без обложки</div>'}</a>
+    <div class="vcard-title">${esc(e.title || e.videoId)}</div>
+    <div class="vcard-meta">${sub}</div>
+  </article>`;
+}
+
+function thumbStylesBlock(d, slug) {
+  if (!d) return '';
+  const head = sectionHead('Стили превью', 'похожие по картинке превью ниши, сгруппированные, и как каждая группа заходит',
+    `<input type="text" id="thumbQuery" placeholder="найти превью: red arrow, shocked face" style="width:260px">`);
+  const embedBtn = `<button class="btn btn-ghost btn-sm" id="thumbEmbed" data-slug="${esc(slug)}" type="button">
+    Посчитать векторы превью ниши (до 100, квота не тратится)</button>`;
+  const body = d.found
+    ? d.styles.map((s) => `<div style="margin-bottom:14px">
+        <div class="row-sub"><b>Стиль ${s.style}</b> · ${num(s.videos)} видео (${Math.round(s.share * 100)}%)
+          · медиана множителя ${s.medianOutlierScore != null ? mult(s.medianOutlierScore) : '—'}
+          · медиана просмотров ${compact(s.medianViews)}</div>
+        <div class="cards">${s.examples.map((e) => thumbCard(e,
+          `${compact(e.views)} просмотров${e.outlierScore != null ? ` · ${mult(e.outlierScore)}` : ''}`)).join('')}</div>
+      </div>`).join('')
+      + `<div class="section-sub">Группы — это похожий вид превью, а не правило. Медиана множителя — связь, не причина.
+          CLIP сравнивает стиль и содержимое картинки, а не надписи на ней.</div>`
+    : `${empty(`векторы есть у ${num(d.embedded)} из ${num(d.videos)} превью, нужно хотя бы 12`)}${embedBtn}`;
+  return `<div class="card" id="thumbStylesCard">${head}<div id="thumbSearchOut"></div>${body}</div>`;
+}
+
+function wireThumbStyles(slug) {
+  const input = $('#thumbQuery');
+  if (input) input.addEventListener('change', async () => {
+    const out = $('#thumbSearchOut');
+    const query = input.value.trim();
+    if (!query) { out.innerHTML = ''; return; }
+    out.innerHTML = empty('Ищу… (первый поиск скачивает текстовую модель, ~0.25 ГБ)');
+    try {
+      const r = await api(`/api/thumbnails/search${q({ q: query, niche: slug, limit: 8 })}`);
+      out.innerHTML = r.results.length
+        ? `<div class="cards" style="margin-bottom:14px">${r.results.map((e) => thumbCard(e,
+            `сходство ${Math.round(e.similarity * 100)}% · ${compact(e.views)} просмотров`)).join('')}</div>`
+        : empty(r.hint || 'ничего похожего');
+    } catch (e) { out.innerHTML = notice(esc(e.message)); }
+  });
+  const btn = $('#thumbEmbed');
+  if (btn) btn.addEventListener('click', async () => {
+    btn.disabled = true; btn.textContent = 'Считаю… (около секунды на превью)';
+    try {
+      const r = await api(`/api/thumbnails/embed${q({ limit: 100, niche: btn.dataset.slug })}`, { method: 'POST' });
+      toast(`Готово: ${r.embedded} векторов, не прочитано ${r.failed}`, 'ok');
+      const d = await api(`/api/niches/${encodeURIComponent(slug)}/thumbnail-styles`);
+      $('#thumbStylesCard').outerHTML = thumbStylesBlock(d, slug);
+      wireThumbStyles(slug);
+    } catch (e) { btn.disabled = false; btn.textContent = 'Повторить'; toast(e.message, 'err'); }
+  });
+}
+
 function nicheVideoTagsSection(videos, tagsByVideo, tagGroup, nicheSlug) {
   if (!videos.length) return '';
   return `
@@ -305,7 +365,7 @@ function wireScatterFilters(rerender) {
 
 async function viewNiche(slug) {
   const tagGroup = localStorage.getItem('nf.tagGroup') || 'theme';
-  const [d, stats, videoTags, proposed, scatter, risk, sponsors, gaps] = await Promise.all([
+  const [d, stats, videoTags, proposed, scatter, risk, sponsors, gaps, thumbStyles] = await Promise.all([
     api(`/api/niches/${encodeURIComponent(slug)}${q({ period: state.period, top_n: 30 })}`),
     api(`/api/tags/stats${q({ niche: slug, tag_group: tagGroup })}`),
     api(`/api/tags${q({ niche: slug })}`),
@@ -319,6 +379,7 @@ async function viewNiche(slug) {
     api(`/api/niches/${encodeURIComponent(slug)}/sponsors${q({ period: state.period })}`)
       .catch(() => null),
     api(`/api/niches/${encodeURIComponent(slug)}/content-gaps`).catch(() => null),
+    api(`/api/niches/${encodeURIComponent(slug)}/thumbnail-styles`).catch(() => null),
   ]);
   if (!d.found) { view.innerHTML = notice(esc(d.hint || 'ниша не найдена')); return; }
 
@@ -336,6 +397,7 @@ async function viewNiche(slug) {
     + scatterSection(scatter.videos || [], scatterFilters)
     + sponsorBlock(sponsors, 'Спонсоры ниши', plabel(state.period))
     + gapsBlock(gaps, slug)
+    + thumbStylesBlock(thumbStyles, slug)
     + tagStatsSection(stats, tagGroup)
     + nicheVideoTagsSection(d.top_videos_by_outlier_score || [], tagsByVideo, tagGroup, slug)
     + proposedTagsSection(proposed.proposed || []);
@@ -345,6 +407,7 @@ async function viewNiche(slug) {
   wireScatterFilters(() => viewNiche(slug));
   wireCommentInsights();
   wireGaps();
+  wireThumbStyles(slug);
 }
 
 export { viewNiche };

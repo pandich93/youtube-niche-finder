@@ -355,6 +355,11 @@ MIGRATIONS = {
         "first_seen_at": "TEXT",
         "live_content": "TEXT",
         "contains_synthetic_media": "INTEGER",
+        # plan 13: CLIP vector of the thumbnail (float32 BYTEA, the fallback
+        # when pgvector is missing) and when it was taken, so a thumbnail swap
+        # logged after it (video_changes, field='thumbnail_image') re-embeds it
+        "thumb_embedding": "BYTEA",
+        "thumb_embedded_at": "TEXT",
     },
     "channels": {
         "published_at": "TEXT",
@@ -389,6 +394,8 @@ def now_iso():
 
 # sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (fastembed_provider.py)
 EMBEDDING_DIM = 384
+# Qdrant/clip-ViT-B-32-vision (image_provider.py, plan 13)
+THUMB_EMBEDDING_DIM = 512
 
 _pgvector_available = None  # None = not checked yet this process; else bool, cached
 
@@ -419,6 +426,12 @@ def _ensure_pgvector(conn) -> bool:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_videos_embedding_v ON videos "
             "USING hnsw (embedding_v vector_cosine_ops)")
+        if "thumb_embedding_v" not in _existing_columns(conn, "videos"):
+            conn.execute(
+                f"ALTER TABLE videos ADD COLUMN thumb_embedding_v vector({THUMB_EMBEDDING_DIM})")
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_videos_thumb_embedding_v ON videos "
+            "USING hnsw (thumb_embedding_v vector_cosine_ops)")
         conn.commit()
         return True
     except Exception:

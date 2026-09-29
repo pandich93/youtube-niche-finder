@@ -702,3 +702,22 @@ if __name__ == "__main__":
             mp.undo()
     print(f"\n{len(fns) - failed}/{len(fns)} passed")
     sys.exit(1 if failed else 0)
+
+
+# --------------------------------------------------- thumbnails (plan 13)
+
+def test_thumbnail_tools_route_to_the_application_layer(monkeypatch):
+    from application import thumbnail_search as ts
+    calls = []
+    for name in ("similar_thumbnails", "search_thumbnails", "thumbnail_styles", "embed_thumbnails"):
+        monkeypatch.setattr(ts, name, (lambda n: lambda *a, **kw: calls.append((n, a, kw)) or {n: 1})(name))
+    assert srv.similar_thumbnails("v1", limit=5) == {"similar_thumbnails": 1}
+    assert srv.search_thumbnails("red arrow", niche="n1") == {"search_thumbnails": 1}
+    assert srv.thumbnail_styles("n1") == {"thumbnail_styles": 1}
+    assert srv.embed_thumbnails(limit=50, niche="n1") == {"embed_thumbnails": 1}
+    assert calls == [
+        ("similar_thumbnails", ("v1",), {"niche": None, "limit": 5, "exclude_same_channel": False}),
+        ("search_thumbnails", ("red arrow",), {"niche": "n1", "limit": 12}),
+        ("thumbnail_styles", ("n1",), {"k": None}),
+        ("embed_thumbnails", (), {"limit": 50, "niche": "n1"}),
+    ]

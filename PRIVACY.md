@@ -30,6 +30,10 @@ Everything lives in the Postgres database you point the app at (by default the
 - **Thumbnail versions** (`thumbnail_archive`) — the 320x180 thumbnail image of
   tracked channels' recent videos, one copy per distinct version, so a
   replaced thumbnail can still be shown as "before".
+- **Thumbnail vectors** (`videos.thumb_embedding`, plan 13, opt-in) — a
+  512-number CLIP vector per thumbnail for "similar thumbnails" and thumbnail
+  styles. Only the vector is kept, never the image (plan-05 archived images are
+  reused when present).
 
 The YouTube metadata is public information about other people's channels,
 retrieved through YouTube's official API. It is not private data about you,
@@ -94,6 +98,8 @@ box — the application contacts exactly three external hosts:
 | `www.googleapis.com` | YouTube Data API v3 — every quota-spending call | Yes |
 | `www.youtube.com` | Channel RSS feeds (`/feeds/videos.xml`), used by the free upload watcher | No |
 | `i.ytimg.com` | Thumbnail images of tracked channels' videos from the last `WORKER_FULL_PERIOD`, every `WORKER_THUMBS_INTERVAL_MIN`, to notice thumbnail swaps (the API cannot). Plain image GETs — Google sees which videos you check. `WORKER_THUMBS=0` turns it off | No |
+| `i.ytimg.com` | Plan 13, **off by default**: with `WORKER_THUMB_EMBED=1` (or the "Посчитать векторы превью" button / `embed_thumbnails`) the thumbnails of any collected videos, to compute their CLIP vectors locally; the image is dropped after that | No |
+| `huggingface.co` | Plan 13: the CLIP image model (~0.34 GB) the first time a thumbnail is embedded, and the CLIP text model (~0.25 GB) the first time thumbnails are searched by text; cached in the models volume after that | No |
 
 Two more appear the first time you set the project up, and are not the running
 application:

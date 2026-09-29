@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Similar thumbnails** (plan 13) — MCP `similar_thumbnails`,
+  `search_thumbnails`, `thumbnail_styles`, `embed_thumbnails` (76 tools),
+  `/api/videos/{id}/similar-thumbnails`, `/api/thumbnails/search`,
+  `/api/niches/{slug}/thumbnail-styles`, `POST /api/thumbnails/embed`, a
+  "Стили превью" block with text search on the niche screen and "Похожие по
+  картинке" in the brief. Thumbnails become local CLIP vectors (fastembed, ONNX
+  on CPU, `Qdrant/clip-ViT-B-32-vision`; text search with
+  `Qdrant/clip-ViT-B-32-text`): visually similar thumbnails, thumbnails matching
+  a description, and a niche's k-means style groups with their median outlier
+  score. New columns `videos.thumb_embedding` / `thumb_embedded_at` and, with
+  pgvector, `thumb_embedding_v` with an HNSW index (search ~1 ms on a real
+  database). An opt-in worker step (`WORKER_THUMB_EMBED`, off by default)
+  reuses plan-05 archived images, downloads the rest from i.ytimg.com (zero API
+  quota), keeps only the vector, re-embeds after a thumbnail swap and retries an
+  unreadable image after 7 days. Models: ~0.6 GB of disk; the process peaks
+  at ~0.7 GB RAM while embedding, ~60 ms of CPU per thumbnail (measured).
+  `PRIVACY.md` updated.
+
 - **YPP thresholds** (plan 12) — `yppEligibility` in `channel_analytics` (MCP,
   channel screen) and `inspect_channel` (the extension's channel panel): which
   YouTube Partner Program thresholds a channel visibly meets — 500 / 1,000

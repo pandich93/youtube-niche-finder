@@ -5,7 +5,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-72%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-76%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -418,6 +418,26 @@ Delivery to Telegram or a webhook is optional -- see [Configuration](#configurat
 | `build_brief` | `gap_topic` (from `content_gaps`) makes the overlap check and title candidates about that viewer question. One outlier -> a brief for your own video: hook (first ~75 words of a pasted transcript), why it worked (LLM), niche title patterns and best time, whether the topic is already covered (source excluded), title candidates (LLM) and thumbnail references; unavailable parts are listed in `skipped`; `save=true` stores a draft (`drafts.source_video_id`) and queues a missing transcript, `save=false` writes nothing |
 | `draft_outcomes` | the review snapshot next to the actual outcome, for linked drafts old enough to have views |
 
+### Thumbnails (plan 13, zero quota)
+
+CLIP vectors of thumbnails (`infrastructure/embeddings/image_provider.py`, ONNX on
+CPU): the worker fills them with `WORKER_THUMB_EMBED=1` (off by default), or
+`embed_thumbnails` does it on demand. Thumbnails come from the plan-05 archive or
+`i.ytimg.com` (not the Data API); only the 512-d vector is kept, in
+`videos.thumb_embedding` and `thumb_embedding_v` (HNSW) when pgvector is there. A
+thumbnail swap re-embeds the video. Disk: ~0.34 GB image model + ~0.25 GB text
+model in the models volume; the process peaks at ~0.7 GB RAM while embedding;
+~60 ms of CPU per thumbnail, ~1 s with the download and its polite pause.
+
+| Tool | What it gives you |
+|---|---|
+| `similar_thumbnails` | videos whose thumbnail looks most like this one's (optionally one niche, other channels only) |
+| `search_thumbnails` | thumbnails matching a short visual description, e.g. "red arrow, shocked face" |
+| `thumbnail_styles` | a niche's thumbnails in k-means style groups with videos, share, median outlier score and views, best examples (12+ vectors needed) |
+| `embed_thumbnails` | vectors for up to `limit` thumbnails without one, newest first or one niche's |
+
+CLIP compares style and content, not the words written on a thumbnail.
+
 ### Swipe file
 
 | Tool | What it gives you |
@@ -678,7 +698,7 @@ youtube-niche-finder/
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 72 tools
+    │   ├── mcp/server.py       MCP server, 76 tools
     │   ├── mcp/prompts.py      7 ready-made scenarios (MCP prompts)
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
