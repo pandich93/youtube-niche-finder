@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, toast, tile, sectionHead, notice, state } from '../ui.js';
+import { $, api, q, num, esc, toast, tile, sectionHead, notice, state } from '../ui.js';
 import { view, plabel, collectForm, wireCollect, render } from '../shared.js';
 
 /* ----------------------------------------------------------------- Данные */
@@ -29,6 +29,7 @@ async function viewData() {
       <button class="btn btn-ghost" id="refreshBtn" type="button">Обновить сейчас</button>
     </div>`;
   wireCollect(render);
+  loadNotifySettings();
   $('#refreshBtn')?.addEventListener('click', async (e) => {
     e.target.disabled = true;
     try {
@@ -36,6 +37,52 @@ async function viewData() {
       toast(`Обновлено ${r.videos.refreshed} видео и ${r.channels.refreshed} каналов`, 'ok');
       render();
     } catch (err) { toast(err.message, 'err'); } finally { e.target.disabled = false; }
+  });
+}
+
+/* План 15 (5.9): свои уведомления -- Telegram или webhook и режим. Секреты
+   уходят на сервер один раз и обратно не показываются. Без сохранённых
+   настроек у локального пользователя работают NOTIFY_* из .env. */
+async function loadNotifySettings() {
+  let st;
+  try { st = await api('/api/settings/notifications'); } catch { return; }
+  const box = document.createElement('div');
+  box.className = 'card';
+  box.id = 'notifyCard';
+  const src = { env: 'из .env', settings: 'свои настройки', none: 'не настроены' }[st.source] || st.source;
+  box.innerHTML = `${sectionHead('Уведомления', `сейчас: ${esc(src)} · Telegram ${st.telegram ? 'да' : 'нет'}
+      · webhook ${st.webhook ? 'да' : 'нет'} · режим ${esc(st.mode)}`)}
+    <div style="display:grid;gap:8px;max-width:520px">
+      <input type="password" id="nfBot" placeholder="${st.telegram ? 'токен бота сохранён — введите новый, чтобы заменить' : 'токен Telegram-бота'}" autocomplete="off">
+      <input type="text" id="nfChat" placeholder="chat id" value="${esc(st.telegramChatId || '')}">
+      <input type="password" id="nfHook" placeholder="${st.webhook ? 'webhook сохранён — введите новый, чтобы заменить' : 'или https-адрес webhook'}" autocomplete="off">
+      <select id="nfMode">${['instant', 'digest', 'both', 'off'].map((m) =>
+        `<option value="${m}"${m === st.mode ? ' selected' : ''}>${{ instant: 'сразу', digest: 'утренний дайджест', both: 'и то и другое', off: 'выключены' }[m]}</option>`).join('')}</select>
+      <div><button class="btn btn-sm" id="nfSave" type="button">Сохранить</button>
+        <button class="btn btn-ghost btn-sm" id="nfTest" type="button">Тестовое сообщение</button>
+        ${st.source === 'settings' ? '<button class="btn btn-ghost btn-sm" id="nfClear" type="button">Сбросить</button>' : ''}</div>
+    </div>
+    <div class="section-sub">Алерты приходят только по вашим отслеживаемым каналам. Токен и адрес хранятся зашифрованными
+      (нужен <code>OWN_TOKENS_KEY</code> в <code>.env</code>); webhook — только https на публичный адрес.</div>`;
+  view.appendChild(box);
+  const body = () => {
+    const b = { telegramChatId: $('#nfChat').value, mode: $('#nfMode').value };
+    if ($('#nfBot').value.trim()) b.telegramBotToken = $('#nfBot').value.trim();
+    if ($('#nfHook').value.trim()) b.webhookUrl = $('#nfHook').value.trim();
+    return b;
+  };
+  $('#nfSave').addEventListener('click', async () => {
+    try { await api('/api/settings/notifications', { method: 'PUT', body: body() }); toast('Сохранено', 'ok'); box.remove(); loadNotifySettings(); }
+    catch (e) { toast(e.message, 'err'); }
+  });
+  $('#nfTest').addEventListener('click', async () => {
+    try { const r = await api('/api/settings/notifications/test', { method: 'POST' }); toast(r.sent ? 'Отправлено' : 'Не отправилось', r.sent ? 'ok' : 'err'); }
+    catch (e) { toast(e.message, 'err'); }
+  });
+  const clear = $('#nfClear');
+  if (clear) clear.addEventListener('click', async () => {
+    try { await api('/api/settings/notifications', { method: 'PUT', body: { clear: true } }); box.remove(); loadNotifySettings(); }
+    catch (e) { toast(e.message, 'err'); }
   });
 }
 

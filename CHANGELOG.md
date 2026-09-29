@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Per-user notifications** (plan 15, sub-stage 5.9) — each user sets their
+  own Telegram bot and chat or webhook and mode (instant / digest / both / off)
+  on the "Данные" screen or `/api/settings/notifications`, with a test button.
+  Alerts and the digest cover only that user's watchlist; `alert_deliveries`
+  is keyed by `(user_id, alert_key)`, so every user gets each alert once. The
+  bot token and webhook address are encrypted with `OWN_TOKENS_KEY` and never
+  read back. A user's webhook must be https to a public address, checked when
+  saved and again right before every send, with redirects off (no SSRF into the
+  server's own network). The local user without saved settings keeps
+  `NOTIFY_*` from `.env`; the worker delivers and sends digests per user.
+
 - **Personal API tokens for the extension and MCP over HTTP** (plan 15,
   sub-stages 5.7–5.8) — with `NF_MULTI_USER=1`, `Authorization: Bearer nf_...`
   signs in like the session cookie. Tokens are created on the dashboard's MCP

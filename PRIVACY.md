@@ -41,7 +41,9 @@ Everything lives in the Postgres database you point the app at (by default the
   queue and which alerts each user has read (`event_reads`) are visible only
   to their owner. Personal API tokens (`api_tokens`) are stored as SHA-256
   only; the extension keeps its token in `chrome.storage.local` and sends it
-  only to the backend address you set.
+  only to the backend address you set. Each user's notification settings
+  (`user_settings`): the Telegram chat id in clear, the bot token and webhook
+  address encrypted with `OWN_TOKENS_KEY`.
 - **Your own channels** (plan 14, only if you connect one) — the channel id and
   title, the granted scopes, the OAuth refresh token **encrypted** with
   `OWN_TOKENS_KEY` from your `.env` (Fernet; the key is never in the database),

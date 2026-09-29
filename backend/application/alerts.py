@@ -13,7 +13,6 @@ from application import channel_tracking as T
 from application import discovery as trends
 from domain import alerts as A
 from domain.users import LOCAL_USER_ID
-from infrastructure.notify import factory as notify_factory
 from infrastructure.notify.null import NullNotifier
 
 DEFAULT_SILENCE_DAYS = A.SILENCE_DAYS_DEFAULT
@@ -263,7 +262,7 @@ def _format_message(ev: dict) -> str:
     return text
 
 
-def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE) -> dict:
+def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, user_id: int = LOCAL_USER_ID) -> dict:
     """Stage 07: send every event not yet delivered to Telegram/webhook, up
     to max_per_cycle individually plus one summary line for the rest.
     Skips entirely (no DB read at all) when no notifier is configured --
@@ -272,11 +271,15 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE) -> dict:
     undelivered for the next cycle to retry; it never raises, so a bad
     token/URL cannot take the worker down (mirrors _safe() in
     worker_cycle.py, which also wraps this call)."""
-    if NOTIFY_MODE == "digest":
+    from application import notify_settings as NS
+    mode = NS.mode_for(user_id)
+    if mode == "off":
+        return {"skipped": True, "hint": "notifications are off for this user"}
+    if mode == "digest":
         return {"skipped": True,
                "hint": "NOTIFY_MODE=digest -- events go out in the daily digest "
                        "(application/digest.py), not one by one"}
-    notifier = notify_factory.get_notifier()
+    notifier = NS.notifier_for(user_id)
     if isinstance(notifier, NullNotifier):
         return {"skipped": True,
                "hint": "no NOTIFY_TELEGRAM_BOT_TOKEN/NOTIFY_TELEGRAM_CHAT_ID or "
@@ -284,26 +287,25 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE) -> dict:
 
     conn = db.get_conn()
     try:
-        # instant delivery goes to the channel configured in .env, i.e. the
-        # local user's (per-user notification settings: plan 15, 5.9)
+        # this user's channels only, to this user's own Telegram/webhook (plan 15, 5.9)
         rows = conn.execute(
             "SELECT e.id, e.kind, e.ref_id, e.payload, e.created_at, NULL AS seen_at FROM events e "
-            "WHERE " + VISIBLE_TO_USER + " ORDER BY e.created_at ASC", (LOCAL_USER_ID,)
+            "WHERE " + VISIBLE_TO_USER + " ORDER BY e.created_at ASC", (user_id,)
         ).fetchall()
         events = [_shape_event(r) for r in rows]
         keys = [str(e["id"]) for e in events]
-        delivered_keys = db.already_delivered_alert_keys(conn, keys)
+        delivered_keys = db.already_delivered_alert_keys(conn, keys, user_id=user_id)
         pending = [e for e in events if str(e["id"]) not in delivered_keys]
         if not pending:
             return {"sent": 0, "summarized": 0, "failed": 0}
 
-        channel = notify_factory.display_target()
+        channel = NS.target_name(user_id)
         to_send, rest = pending[:max_per_cycle], pending[max_per_cycle:]
 
         sent = failed = 0
         for ev in to_send:
             if notifier.send(_format_message(ev)):
-                db.mark_alert_delivered(conn, str(ev["id"]), channel)
+                db.mark_alert_delivered(conn, str(ev["id"]), channel, user_id=user_id)
                 sent += 1
             else:
                 failed += 1
@@ -319,7 +321,7 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE) -> dict:
             lines.append(f'<a href="{DASHBOARD_URL}/#/data">открыть дашборд</a>')
             if notifier.send("\n".join(lines)):
                 for ev in rest:
-                    db.mark_alert_delivered(conn, str(ev["id"]), channel)
+                    db.mark_alert_delivered(conn, str(ev["id"]), channel, user_id=user_id)
                 summarized = len(rest)
             else:
                 failed += len(rest)
@@ -328,3 +330,10 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE) -> dict:
         return {"sent": sent, "summarized": summarized, "failed": failed}
     finally:
         conn.close()
+
+
+def deliver_all(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE) -> dict:
+    """plan 15 (5.9): instant alerts for every user with a notifier -- the
+    local user (.env or saved settings) and whoever saved their own."""
+    from application import notify_settings as NS
+    return {str(uid): deliver(max_per_cycle, user_id=uid) for uid in NS.recipients()}

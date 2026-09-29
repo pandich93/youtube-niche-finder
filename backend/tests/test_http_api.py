@@ -147,7 +147,7 @@ DELEGATIONS = [
      {"period": "all", "top_n": 10}, None),
     ("get", "/api/digest?period=48h", "DG", "build_digest", (), {"period": "48h", "top_n": 5},
      None),
-    ("post", "/api/digest/send", "DG", "send_digest", (), {"force": True}, None),
+    ("post", "/api/digest/send", "DG", "send_digest", (), {"force": True, "user_id": 1}, None),
     ("get", "/api/channels/UC1/template-risk?last_n=20", "TRK", "template_risk", ("UC1",),
      {"last_n": 20}, None),
     ("get", "/api/niches/abc/template-risk?top_n=3", "TRK", "niche_template_risk", ("abc",),
@@ -555,3 +555,17 @@ def test_own_connect_returns_to_the_host_the_dashboard_is_open_on(stub):
     s = stub("OWN", "start_connect", result={"authUrl": "https://accounts.google.com/x", "state": "st"})
     TestClient(api.app, headers={"X-NF-Client": "tests", "Host": "localhost:8080"}).post("/api/own/connect")
     assert s.kwargs["redirect_uri"] == "http://localhost:8080/api/own/oauth/callback"
+
+
+
+def test_notification_settings_routes(stub):
+    got = stub("NS", "get", result={"source": "env"})
+    assert client.get("/api/settings/notifications").json() == {"source": "env"}
+    assert got.args == (1,)
+    saved = stub("NS", "save", result={"source": "settings"})
+    client.put("/api/settings/notifications", json={"telegramChatId": "42", "mode": "digest"})
+    assert saved.args == (1,) and saved.kwargs["mode"] == "digest"
+    assert saved.kwargs["telegram_chat_id"] == "42"
+    from application import notify_settings as ns
+    stub("NS", "save", raises=ns.SettingsError("mode must be one of"))
+    assert client.put("/api/settings/notifications", json={"mode": "x"}).status_code == 400

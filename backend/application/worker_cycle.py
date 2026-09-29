@@ -180,16 +180,16 @@ def cycle():
 
     if _due("alerts", ALERTS_INTERVAL_MIN):
         _safe("alerts scan", lambda: alerts_mod.scan())
-        _safe("alerts deliver", lambda: alerts_mod.deliver())
+        _safe("alerts deliver", lambda: alerts_mod.deliver_all())
         _mark("alerts")
 
-    if alerts_mod.NOTIFY_MODE in ("digest", "both") and _due("digest", DIGEST_CHECK_INTERVAL_MIN):
+    if _due("digest", DIGEST_CHECK_INTERVAL_MIN) and digest_mod.digest_wanted():
         # Not _safe(): "too early" / "already sent today" every 10 minutes
         # would drown the log -- only a real outcome is worth a line.
         try:
-            res = digest_mod.send_digest()
-            if res.get("sent") or res.get("reason") in ("send failed", "empty"):
-                log(f"daily digest: {res}")
+            for uid, res in digest_mod.send_all_digests().items():
+                if res.get("sent") or res.get("reason") in ("send failed", "empty"):
+                    log(f"daily digest (user {uid}): {res}")
         except Exception:
             log(f"daily digest: FAILED\n{traceback.format_exc()}")
         _mark("digest")

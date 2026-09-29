@@ -226,7 +226,7 @@ def save_video_insights(conn, video_id: str, task: str, result: dict, model: str
         (video_id, task, json.dumps(result), model, now_iso()))
 
 
-def already_delivered_alert_keys(conn, alert_keys: list) -> set:
+def already_delivered_alert_keys(conn, alert_keys: list, user_id: int = 1) -> set:
     """Stage 07: which of these events already went to Telegram/webhook --
     checked before attempting delivery so a restart mid-cycle never re-sends
     one that already succeeded."""
@@ -235,17 +235,17 @@ def already_delivered_alert_keys(conn, alert_keys: list) -> set:
     out = set()
     for i in range(0, len(alert_keys), 400):
         chunk = alert_keys[i:i + 400]
-        q = ("SELECT alert_key FROM alert_deliveries WHERE alert_key IN (%s)"
+        q = ("SELECT alert_key FROM alert_deliveries WHERE user_id = ? AND alert_key IN (%s)"
              % ",".join("?" * len(chunk)))
-        out.update(r["alert_key"] for r in conn.execute(q, chunk).fetchall())
+        out.update(r["alert_key"] for r in conn.execute(q, [user_id, *chunk]).fetchall())
     return out
 
 
-def mark_alert_delivered(conn, alert_key: str, channel: str):
+def mark_alert_delivered(conn, alert_key: str, channel: str, user_id: int = 1):
     conn.execute(
-        "INSERT INTO alert_deliveries (alert_key, channel, sent_at) VALUES (?,?,?) "
-        "ON CONFLICT (alert_key) DO NOTHING",
-        (alert_key, channel, now_iso()))
+        "INSERT INTO alert_deliveries (user_id, alert_key, channel, sent_at) VALUES (?,?,?,?) "
+        "ON CONFLICT (user_id, alert_key) DO NOTHING",
+        (user_id, alert_key, channel, now_iso()))
 
 
 def upsert_category(conn, category_id, region, title, assignable):

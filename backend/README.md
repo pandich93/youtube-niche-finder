@@ -258,9 +258,17 @@ With `NF_MULTI_USER=1`, the HTTP MCP services (`mcp-http`/`mcp-https`) require
 such a token (401 without one; set `MCP_PUBLIC_URL` to the address clients use);
 MCP over stdio stays local and acts as user 1.
 
-**Not ready for other people yet.** Still shared: Telegram/webhook alerts and
-the digest (they follow the local user's watchlist; per-user settings in 5.9)
-and the LLM budget and rate limit (5.10).
+Notifications (sub-stage 5.9): each user sets their own Telegram bot and chat
+or webhook and the mode — instant, digest, both or off — on the dashboard's
+"Данные" screen (`/api/settings/notifications`). Alerts and the digest cover
+only that user's watchlist, and "already delivered" is kept per user. The bot
+token and webhook address are encrypted with `OWN_TOKENS_KEY` and never read
+back; a user's webhook must be https to a public address, checked when saved
+and again before every send (no requests into your own network). The local
+user without saved settings keeps `NOTIFY_*` from `.env`.
+
+**Not ready for other people yet.** Still shared: the LLM budget and the rate
+limit (5.10).
 
 ### CLI: everything, without Claude Desktop
 

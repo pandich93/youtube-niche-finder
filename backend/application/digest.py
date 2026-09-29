@@ -18,7 +18,6 @@ from application import channel_tracking as T
 from application import packaging as PKG
 from domain import periods as P
 from domain.users import LOCAL_USER_ID
-from infrastructure.notify import factory as notify_factory
 from infrastructure.notify.null import NullNotifier
 
 DIGEST_HOUR = int(os.environ.get("DIGEST_HOUR", "8"))
@@ -173,14 +172,21 @@ def format_digest(d: dict) -> str:
 
 # ------------------------------------------------------------ sending
 
-def send_digest(now: datetime = None, force: bool = False, period: str = "24h") -> dict:
+def _last_sent_key(user_id):
+    # the local user keeps the key digests always used, others get their own
+    return LAST_SENT_KEY if user_id == LOCAL_USER_ID else f"{LAST_SENT_KEY}_u{user_id}"
+
+
+def send_digest(now: datetime = None, force: bool = False, period: str = "24h",
+                user_id: int = LOCAL_USER_ID) -> dict:
     """Send today's digest if it is due. Due = a notifier is configured, the
     local hour is >= DIGEST_HOUR and nothing was sent yet today (force skips
     both time checks). An empty day counts as done when DIGEST_SKIP_EMPTY is
     on; a failed send does not, so the next worker cycle retries. Every
     event the digest covered is marked delivered, so switching NOTIFY_MODE
     back to instant does not replay them one by one."""
-    notifier = notify_factory.get_notifier()
+    from application import notify_settings as NS
+    notifier = NS.notifier_for(user_id)
     if isinstance(notifier, NullNotifier):
         return {"sent": False, "reason": "no notifier",
                 "hint": "set NOTIFY_TELEGRAM_BOT_TOKEN + NOTIFY_TELEGRAM_CHAT_ID "
@@ -193,21 +199,34 @@ def send_digest(now: datetime = None, force: bool = False, period: str = "24h") 
         if not force:
             if now.hour < DIGEST_HOUR:
                 return {"sent": False, "reason": "too early", "digestHour": DIGEST_HOUR}
-            if db.get_meta(conn, LAST_SENT_KEY) == today:
+            if db.get_meta(conn, _last_sent_key(user_id)) == today:
                 return {"sent": False, "reason": "already sent today"}
 
-        d = build_digest(period=period)
+        d = build_digest(period=period, user_id=user_id)
         if d["empty"] and DIGEST_SKIP_EMPTY and not force:
-            db.set_meta(conn, LAST_SENT_KEY, today)
+            db.set_meta(conn, _last_sent_key(user_id), today)
             conn.commit()
             return {"sent": False, "reason": "empty"}
 
         if not notifier.send(format_digest(d)):
             return {"sent": False, "reason": "send failed"}
         for event_id in d["eventIds"]:
-            db.mark_alert_delivered(conn, str(event_id), "digest")
-        db.set_meta(conn, LAST_SENT_KEY, today)
+            db.mark_alert_delivered(conn, str(event_id), "digest", user_id=user_id)
+        db.set_meta(conn, _last_sent_key(user_id), today)
         conn.commit()
         return {"sent": True, "events": len(d["eventIds"]), "date": today}
     finally:
         conn.close()
+
+
+def digest_wanted() -> bool:
+    """Whether anyone gets a digest at all (the worker's cheap pre-check)."""
+    from application import notify_settings as NS
+    return any(NS.mode_for(uid) in ("digest", "both") for uid in NS.recipients())
+
+
+def send_all_digests(now: datetime = None) -> dict:
+    """plan 15 (5.9): the digest for every user who asked for one."""
+    from application import notify_settings as NS
+    return {str(uid): send_digest(now=now, user_id=uid) for uid in NS.recipients()
+            if NS.mode_for(uid) in ("digest", "both")}

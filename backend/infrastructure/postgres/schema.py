@@ -420,6 +420,18 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
+-- plan 15 (5.9): each user's own alert delivery. Secrets (bot token, webhook
+-- URL) are Fernet-encrypted with OWN_TOKENS_KEY. No row for user 1 = the
+-- NOTIFY_* settings from .env, as before.
+CREATE TABLE IF NOT EXISTS user_settings (
+    user_id BIGINT PRIMARY KEY,
+    telegram_token_enc BYTEA,
+    telegram_chat_id TEXT,
+    webhook_url_enc BYTEA,
+    notify_mode TEXT,
+    updated_at TEXT
+);
+
 -- plan 15 (5.7-5.8): personal API tokens for the browser extension and MCP
 -- over HTTP ("Authorization: Bearer nf_..."); only the SHA-256 is stored and
 -- the plaintext is shown once, when the token is created.
@@ -642,7 +654,8 @@ def migrate(conn):
 # plan 15 (5.4): a row is unique per owner, so two users can track the same
 # channel or ask for the same transcript. Swapped once, on the first start.
 _OWNER_KEYS = {"tracked_channels": ("user_id", "channel_id"),
-               "transcript_requests": ("user_id", "video_id")}
+               "transcript_requests": ("user_id", "video_id"),
+               "alert_deliveries": ("user_id", "alert_key")}   # plan 15 (5.9)
 
 
 def _primary_key(conn, table):

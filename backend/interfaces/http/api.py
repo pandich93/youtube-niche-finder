@@ -47,6 +47,7 @@ from application import maturity_curve
 from application import metadata_review as MR
 from application import niche_clusters as NCL
 from application import niche_export as NE
+from application import notify_settings as NS
 from application import own_channels as OWN
 from application import packaging as PKG
 from application import saturation as SAT
@@ -734,10 +735,39 @@ def digest_preview(request: Request, period: str = "24h", top_n: int = 5):
 
 
 @app.post("/api/digest/send")
-def digest_send():
+def digest_send(request: Request):
     """Send the digest now, ignoring DIGEST_HOUR and "already sent today" --
-    for checking the Telegram/webhook setup."""
-    return DG.send_digest(force=True)
+    for checking the Telegram/webhook setup. To the caller's own notifier."""
+    return DG.send_digest(force=True, user_id=_uid(request))
+
+
+# ------------------------------------------------------ notification settings (plan 15, 5.9)
+
+@app.get("/api/settings/notifications")
+def notification_settings(request: Request):
+    """Whether Telegram/webhook are set and the mode -- never the secrets."""
+    return NS.get(_uid(request))
+
+
+@app.put("/api/settings/notifications")
+def save_notification_settings(request: Request, payload: dict = Body(...)):
+    try:
+        return NS.save(_uid(request),
+                       telegram_bot_token=payload.get("telegramBotToken"),
+                       telegram_chat_id=payload.get("telegramChatId"),
+                       webhook_url=payload.get("webhookUrl"),
+                       mode=payload.get("mode"), clear=bool(payload.get("clear")))
+    except NS.SettingsError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/settings/notifications/test")
+def test_notification(request: Request):
+    notifier = NS.notifier_for(_uid(request))
+    if NS.target_name(_uid(request)) == "none":
+        raise HTTPException(status_code=409, detail="no Telegram or webhook set up yet")
+    return {"sent": bool(notifier.send("\U0001F9EA niche-finder: тестовое сообщение. "
+                                       "Если вы это видите, уведомления настроены верно."))}
 
 
 @app.post("/api/briefs")

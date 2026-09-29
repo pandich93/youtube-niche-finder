@@ -249,8 +249,9 @@ Off by default: niche-finder is a single-user tool on your own machine.
 `NF_MULTI_USER=1` adds sign-in with invited accounts (`cli.py create-user`), and
 each user gets their own watchlist, swipe file, drafts, transcript queue,
 alerts and a daily share of the YouTube quota; the extension and MCP over HTTP
-sign in with personal tokens. Notifications and the LLM budget are still
-shared, so do not give accounts to other people yet. Details: [backend/README.md](backend/README.md#multi-user-mode-plan-15-experimental-off-by-default).
+sign in with personal tokens, and each user sets up their own Telegram or
+webhook alerts. The LLM budget and rate limit are still shared, so do not give
+accounts to other people yet. Details: [backend/README.md](backend/README.md#multi-user-mode-plan-15-experimental-off-by-default).
 
 ## Privacy
 
