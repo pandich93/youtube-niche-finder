@@ -138,7 +138,9 @@ Claude Desktop connection — in
       "args": ["run", "--rm", "-i",
                "--network", "niche-finder_default",
                "--env-file", "/path/to/youtube-niche-finder/.env",
+               "-e", "NICHE_DATABASE_URL=",
                "-e", "POSTGRES_HOST=postgres",
+               "-v", "/path/to/youtube-niche-finder/backend:/app:ro",
                "-v", "niche-finder-models:/models",
                "niche-finder:latest", "python", "server.py"]
     }
@@ -148,6 +150,15 @@ Claude Desktop connection — in
 
 Use the absolute path to `docker` (`which docker`), not just `"docker"` —
 Claude Desktop's MCP launcher doesn't always inherit your shell's `PATH`.
+
+`-e NICHE_DATABASE_URL=` matters once `.env` has the host DSN for `make
+local-run` (`localhost:5433`): it outranks `POSTGRES_HOST`, and inside the
+container `localhost` is the container itself, so without the blank the server
+exits with "Connection refused" and Claude Desktop shows it as disconnected
+(compose blanks it the same way for `web` and `worker`). The `backend:/app:ro`
+mount runs the repository's current code, so an update needs only a Claude
+Desktop restart, not an image rebuild. `--env-file` takes values literally:
+keep them unquoted in `.env`.
 
 There's also a `scripts/mcp-docker.sh` launcher that fills in `--env-file`
 and the volumes for you, so you can point `command` at it directly instead
@@ -455,8 +466,9 @@ Scenarios that collect call `db_stats` first and stop when the quota is short.
 | `find_content_gaps` | `niche` | `content_gaps` from cache → on consent `db_stats` + `content_gaps(fetch=true)` → `build_brief(gap_topic)` | 0, or 1 unit per unread video |
 | `niche_health` | `niche` | `niche_overview` → `niche_template_risk` → `sponsor_map` → `niche_hook_benchmark` | 0 |
 
-If Claude Desktop runs the server from the Docker image, rebuild it
-(`docker compose build`) after an update, or the new scenarios will not appear.
+With the Docker setup above (or `scripts/mcp-docker.sh`) the code is mounted
+from the repository, so new scenarios appear after a Claude Desktop restart.
+Only a config without the `backend:/app:ro` mount needs `docker compose build`.
 
 ---
 

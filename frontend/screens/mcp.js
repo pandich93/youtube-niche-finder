@@ -115,8 +115,9 @@ cp .env.example .env   # впишите YOUTUBE_API_KEY</code></pre>
           <li><b>Здоровье ниши</b> (<code>niche_health</code>: ниша) — тренд, шаблонность, спонсоры,
             крючки outlier'ов. Квота: 0.</li>
         </ul>
-        <p>Если Claude Desktop запускает сервер из Docker-образа, после обновления пересоберите его
-          (<code>docker compose build</code>) — иначе новых сценариев в меню не будет.</p>
+        <p>Новые сценарии появятся после полного перезапуска Claude Desktop: скрипт монтирует код из
+          репозитория. Пересобирать образ (<code>docker compose build</code>) нужно, только если в вашем
+          конфиге нет монтирования <code>backend/</code>.</p>
       </div>
     </div>
 
