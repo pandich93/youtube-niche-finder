@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **SECURITY.md** (plan 15, sub-stage 5.11) — how to report a problem, what
+  protects single-user and multi-user mode, and the checklist before giving
+  anyone an account: HTTPS with `NF_COOKIE_SECURE` and `NF_ALLOWED_HOSTS`,
+  `OWN_TOKENS_KEY`, backups, and YouTube's one-project and 30-day storage
+  rules for a service other people use.
+
 - **Per-user LLM budget and rate limit** (plan 15, sub-stage 5.10) — the
   request rate limit counts per signed-in user instead of per address (sign-in
   itself stays limited per address), and each user may spend

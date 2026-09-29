@@ -251,6 +251,9 @@ each user gets their own watchlist, swipe file, drafts, transcript queue,
 alerts and a daily share of the YouTube quota; the extension and MCP over HTTP
 sign in with personal tokens, each user sets up their own Telegram or webhook
 alerts, and the LLM budget and rate limit count per user. Details: [backend/README.md](backend/README.md#multi-user-mode-plan-15-experimental-off-by-default).
+Before you give anyone an account, go through [SECURITY.md](SECURITY.md) —
+HTTPS, `NF_COOKIE_SECURE`, `OWN_TOKENS_KEY`, backups, and YouTube's 30-day data
+storage rule for services other people use.
 
 ## Privacy
 
@@ -275,6 +278,7 @@ See [CHANGELOG.md](CHANGELOG.md) for a history of notable changes, in
 
 ## Read next
 
+- [SECURITY.md](SECURITY.md) — reporting a problem, what protects each mode, the checklist before multi-user
 - [backend/README.md](backend/README.md) — YouTube API quotas, all 80 tools
   with descriptions, how to read `period_by`, running with and without
   Docker, the DDD layer structure.

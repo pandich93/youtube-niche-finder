@@ -1,0 +1,91 @@
+# Security
+
+niche-finder is built to run on your own machine for yourself. Everything
+listens on `127.0.0.1`, and nobody else can reach it. Multi-user mode
+(`NF_MULTI_USER=1`, plan 15) lets one server work for several people. This file
+covers what protects each mode and what you have to do yourself before you let
+anyone else in.
+
+## Reporting a problem
+
+Open a private security advisory on GitHub
+(Security → Advisories → Report a vulnerability). Do not open a public issue.
+Please include the steps to reproduce and what an attacker gains.
+
+## Single-user mode (default)
+
+- **No accounts.** The dashboard, API and MCP work for whoever can reach them,
+  so they are bound to `127.0.0.1`.
+- **Hostile web pages are blocked.** Every request must carry an allow-listed
+  `Host` header, which stops DNS rebinding. Every POST, PUT, PATCH or DELETE
+  must be JSON or carry `X-NF-Client`, so a cross-site form or a simple
+  cross-origin POST is refused. CORS answers only `chrome-extension://`.
+- **Secrets stay local.** Your YouTube key lives in `.env`. The OAuth refresh
+  tokens of your own channels are encrypted with `OWN_TOKENS_KEY` and never
+  returned or logged.
+
+## Multi-user mode (`NF_MULTI_USER=1`)
+
+What the server does for you:
+
+- **Accounts.**
+  - Accounts exist only by invitation: `cli.py create-user`.
+  - Passwords are scrypt hashes and must be at least 10 characters.
+  - A wrong password and an unknown email get the same answer.
+- **Sessions.**
+  - A session is a random token in an `HttpOnly`, `SameSite=Strict` cookie, and
+    the database keeps only its SHA-256.
+  - Changing a password ends every session of that user.
+  - Without a session, `/api` answers 401. Only sign-in, `/api/health` and the
+    Google OAuth return are open.
+- **Personal API tokens.** They are for the extension and for MCP over HTTP
+  (`Authorization: Bearer nf_...`).
+  - The token is shown once and stored as SHA-256.
+  - It can be revoked, and it cannot create or list other tokens.
+- **Separated data.** Each user sees and changes only their own:
+  - watchlist, swipe file, drafts and transcript queue;
+  - alert read marks, connected channels, notification settings and API tokens.
+
+  Public YouTube data (channels, videos, niches, transcripts, alert events) is
+  shared. A user sees only the alert events of their own watchlist.
+- **Limits.**
+  - YouTube quota: each user has a daily share of the installation's one key
+    (`NF_USER_DAILY_UNITS`, `NF_USER_DAILY_SEARCH_CALLS`). Running out stops
+    only that user.
+  - The LLM budget (`NF_USER_DAILY_LLM_USD`) and the request rate limit also
+    count per user.
+- **Notifications.**
+  - A user's webhook must be https to a public address. It is checked when
+    saved and again before every send, and redirects are off, so it cannot
+    reach into the server's own network.
+  - Bot tokens and webhook addresses are encrypted with `OWN_TOKENS_KEY`.
+- **Connecting your own channel.** It can be finished only in the browser that
+  started it, thanks to a short-lived state cookie. So nobody can attach your
+  channel to their account by sending you a link.
+
+What you have to do before you give anyone an account:
+
+1. **Put it behind HTTPS.** Use a reverse proxy (Caddy, nginx) with a real
+   certificate. Set `NF_COOKIE_SECURE=1` and add your domain to
+   `NF_ALLOWED_HOSTS`. Do not publish port 8080 or Postgres (5433) to the
+   internet.
+2. **Set `OWN_TOKENS_KEY`** (a Fernet key) and keep it only in `.env`. Losing
+   it makes stored tokens unreadable. Leaking it exposes them.
+3. **Back up Postgres.** It now holds accounts, sessions and encrypted
+   secrets. Protect the backups like the server itself.
+4. **Give each person their own account.** Admins are marked `--admin`, but
+   no route grants extra powers over HTTP. Accounts are managed only from the
+   command line on the server.
+5. **Read YouTube's API policies for a service others use.**
+   - III.D.1.c: one API project per application. That is why the installation
+     uses one key, and users do not bring their own.
+   - III.E.4.d: non-authorized YouTube data may be kept at most 30 days, then
+     refreshed or deleted. niche-finder keeps history without limit.
+   - For yourself this is your own risk. For a service other people use, you
+     must solve it before you open the service.
+6. **Keep MCP over HTTP behind the TLS front door (`mcp-https`)** and set
+   `MCP_PUBLIC_URL` to the address clients use. MCP over stdio is local only.
+
+Security reviews: the plan-14 OAuth flow and each plan-15 sub-stage were
+reviewed. The review of sign-in found a way to attach someone else's channel
+through the OAuth callback, and it was fixed (see CHANGELOG, "Fixed").

@@ -216,6 +216,8 @@ quota, an empty database, no history. One check costs 1 quota unit.
 
 ### Multi-user mode (plan 15, experimental, off by default)
 
+Checklist before you give anyone an account: [SECURITY.md](../SECURITY.md).
+
 `NF_MULTI_USER=1` turns on sign-in. Accounts are by invitation — there is no
 sign-up page:
 
