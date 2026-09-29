@@ -94,6 +94,10 @@ database.
   disappeared from YouTube), delivered to Telegram or a webhook one by one
   or as one morning digest; a swipe file for saved videos and channels
 - Export a niche's videos to TSV/CSV
+- YPP thresholds: which YouTube Partner Program bars a channel visibly meets
+  (subscribers, uploads and Shorts views in 90 days), on the channel screen and
+  in the extension — deliberately not a "monetized" badge, since YouTube does
+  not publish that and the page signals for it proved unreliable
 - Seven ready-made scenarios for Claude (MCP prompts, under "+" in Claude
   Desktop): find a niche, analyse a competitor, validate an idea, outlier to
   your own video, weekly review, content gaps, niche health — each names the

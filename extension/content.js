@@ -437,6 +437,20 @@
         Эвристика, не решение YouTube.</span></div>`;
   }
 
+  // Пороги YPP (план 12) -- что видно по открытым данным, не статус монетизации.
+  function yppRow(e) {
+    if (!e) return '';
+    const seen = compact(e.tiers?.full?.shortsViews90d?.seenAtLeast || 0);
+    const text = {
+      'below-threshold': 'не достигнут (меньше 500 подписчиков)',
+      'subscribers-met': 'по подписчикам достигнут, часы просмотра не узнать',
+      'shorts-path-met': `достигнут через Shorts (≥${seen} за 90 дней)`,
+      unknown: 'неизвестно (подписчики скрыты)',
+    }[e.status] || e.status;
+    return `<div class="nf-row"><span class="nf-muted">Порог YPP:</span> ${esc(text)}
+      <span class="nf-hint" title="${esc(e.note || '')}">Не статус монетизации: YouTube его не публикует.</span></div>`;
+  }
+
   function channelHtml(d, deep, risk) {
     const p = d.profile, m = d.metrics;
     const a = deep?.analytics?.found ? deep.analytics : null;
@@ -463,6 +477,7 @@
         <div class="nf-row"><span class="nf-muted">Динамика:</span> ${esc(growthLine)}
           <span class="nf-hint">${d.snapshots} ${plural(d.snapshots, 'снапшот', 'снапшота', 'снапшотов')}</span></div>
         ${riskRow(risk)}
+        ${yppRow(d.yppEligibility)}
 
         <div class="nf-row"><span class="nf-muted">Доход в месяц, оценка:</span>
           <b>$${decimal(m.revenue.low_usd, 0)}–$${decimal(m.revenue.high_usd, 0)}</b></div>

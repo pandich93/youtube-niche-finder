@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import infrastructure.postgres as db
 from application import collecting
 from application import maturity_curve as MC
+from application import monetization as MON
 from domain import keywords as K
 from domain import metrics as M
 from domain import periods as P
@@ -291,6 +292,8 @@ def channel_analytics(channel_id: str, period: str = "30d",
     return {
         "channelId": channel_id,
         "found": True,
+        # plan 12: YPP thresholds it visibly meets -- not a monetization status
+        "yppEligibility": MON.for_channel(channel_id),
         "profile": {
             "title": ch["title"], "handle": ch["custom_url"], "country": ch["country"],
             "subscribers": ch["subscriber_count"],

@@ -23,6 +23,7 @@ import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import collecting as collector
 from application import maturity_curve as MC
+from application import monetization as MON
 from domain import metrics as M
 from domain import periods as P
 
@@ -383,6 +384,7 @@ def inspect_channel(api_key: str, ref: str, refresh: bool = False, fetch: bool =
             "source": "youtube" if fetched else "db",
             "fetchedFromApi": fetched,
             "quotaUnits": quota,
+            "yppEligibility": MON.for_channel(channel_id),
             "profile": {
                 "title": ch.get("title"),
                 "handle": ch.get("custom_url"),

@@ -384,7 +384,7 @@ separately (or via cron), otherwise the velocity fields stay empty.
 | Tool | What it gives you |
 |---|---|
 | `track_channel` / `untrack_channel` / `list_tracked_channels` | a watchlist for history |
-| `channel_analytics` | profile, cadence, median vs. mean, viral skew, 24h/7d/30d/90d growth, momentum, grade, projections, two revenue models, top outliers |
+| `channel_analytics` | profile, cadence, median vs. mean, viral skew, 24h/7d/30d/90d growth, momentum, grade, projections, two revenue models, top outliers; `yppEligibility` -- which YouTube Partner Program thresholds it visibly meets (500/1,000 subscribers, uploads and Shorts views in 90 days as a lower bound from collected videos; watch hours are not in the API). Not a monetization status: YouTube does not publish one |
 | `compare_channels` | comparison, ranked by views per subscriber |
 | `template_risk` | how templated a channel's last N uploads look, 0-100: title similarity, shared openings/endings, uniform lengths, metronome rhythm; Shorts and long-form never mixed; needs 10+ videos; a heuristic, not YouTube's verdict |
 | `niche_template_risk` | the same for every channel in a niche: low/medium/high counts, share of high-risk channels, the most templated ones |

@@ -32,7 +32,8 @@ The extension never talks to the outside world — only to `127.0.0.1`.
 
 **Channel page** (under the header): subscribers, average views per video,
 growth estimate and momentum, revenue forecast, a template-risk line (how much the
-recent uploads look like one template; a heuristic, not YouTube's verdict), the channel's best
+recent uploads look like one template; a heuristic, not YouTube's verdict), a YPP-threshold
+line (which Partner Program thresholds it visibly meets — not a monetization status), the channel's best
 outliers, the best time to publish in your time zone, title phrases that
 produce outliers, and similar channels. When background enrichment has
 classified the channel, an AI-label chip shows faceless / on-camera and the

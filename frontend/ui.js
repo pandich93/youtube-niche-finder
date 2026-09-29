@@ -515,7 +515,29 @@ function saturationBlock(s) {
   </div>`;
 }
 
+/* Пороги YPP (план 12): что канал видимо проходит по открытым данным. Это не
+   статус монетизации -- YouTube его не публикует, и это сказано рядом. */
+function yppText(e) {
+  if (!e) return '';
+  const full = e.tiers?.full || {};
+  const exp = e.tiers?.expanded || {};
+  const shortsSeen = compact(full.shortsViews90d?.seenAtLeast || 0);
+  return {
+    'below-threshold': 'не достигнут: меньше 500 подписчиков, ни в одну программу YPP канал попасть не может',
+    'subscribers-met': `по подписчикам достигнут (${full.subscribers ? 'от 1000' : 'от 500'}); часы просмотра через API не узнать, `
+      + `загрузок за 90 дней видно ${exp.uploads90d?.seen ?? 0}, просмотров Shorts — не меньше ${shortsSeen}`,
+    'shorts-path-met': `достигнут через Shorts: не меньше ${shortsSeen} просмотров Shorts за 90 дней`,
+    unknown: 'неизвестно: число подписчиков скрыто',
+  }[e.status] || e.status;
+}
+
+function yppLine(e) {
+  if (!e) return '';
+  return `<div class="section-sub" style="margin-top:8px"><b>Порог YPP:</b> ${esc(yppText(e))}.
+    Это не статус монетизации — YouTube его не публикует; загрузки и Shorts считаются по собранным видео.</div>`;
+}
+
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
          lineChart, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
-         nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock };
+         nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock, yppLine };

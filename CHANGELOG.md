@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **YPP thresholds** (plan 12) — `yppEligibility` in `channel_analytics` (MCP,
+  channel screen) and `inspect_channel` (the extension's channel panel): which
+  YouTube Partner Program thresholds a channel visibly meets — 500 / 1,000
+  subscribers, 3 uploads and 3M / 10M Shorts views in 90 days, the last two as
+  a lower bound from the videos we collected; watch hours are not in the API
+  and always shown as unknown. Statuses below-threshold / subscribers-met /
+  shorts-path-met / unknown, each with a note that this is not a monetization
+  status. The plan's spike found no dependable page signal (ads also run on
+  non-partner channels; the "Join" button needs a signed-in viewer), so there
+  is no "monetized" badge and nothing reads YouTube pages. No schema change,
+  zero quota.
+
 - **Scenarios for Claude** (plan 11) — seven MCP prompts in
   `interfaces/mcp/prompts.py`, listed by the client (Claude Desktop: "+" →
   niche-finder): `find_niche`, `analyze_competitor`, `validate_idea`,
