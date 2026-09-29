@@ -78,7 +78,8 @@ def create_user(email: str, password: str, is_admin: bool = False) -> int:
 
 
 def set_password(email: str, password: str) -> int:
-    """Set or change a password; ends every session of that user."""
+    """Set or change a password; ends every session and revokes every API
+    token of that user."""
     _check_password(password)
     conn = db.get_conn()
     try:
@@ -87,6 +88,8 @@ def set_password(email: str, password: str) -> int:
         if not row:
             raise AuthError(f"no user {_norm(email)}")
         conn.execute("DELETE FROM sessions WHERE user_id = ?", (row["id"],))
+        # a password change is often a reaction to a leak: API tokens go too
+        conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (row["id"],))
         conn.commit()
         return row["id"]
     finally:

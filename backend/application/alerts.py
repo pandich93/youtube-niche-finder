@@ -161,6 +161,11 @@ def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
 # personal (event_reads), not events.seen_at.
 VISIBLE_TO_USER = ("EXISTS (SELECT 1 FROM tracked_channels t WHERE t.user_id = ? "
                    "AND t.channel_id = e.channel_id)")
+# What is SENT (Telegram/webhook, digest) needs the channel to still be on the
+# watchlist: untracking a channel stops its alerts, while the feed keeps its
+# history.
+DELIVERABLE_TO_USER = ("EXISTS (SELECT 1 FROM tracked_channels t WHERE t.user_id = ? "
+                       "AND t.channel_id = e.channel_id AND t.active = 1)")
 
 
 def _shape_event(r) -> dict:
@@ -290,7 +295,7 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, user_id: int = LOCAL_USER
         # this user's channels only, to this user's own Telegram/webhook (plan 15, 5.9)
         rows = conn.execute(
             "SELECT e.id, e.kind, e.ref_id, e.payload, e.created_at, NULL AS seen_at FROM events e "
-            "WHERE " + VISIBLE_TO_USER + " ORDER BY e.created_at ASC", (user_id,)
+            "WHERE " + DELIVERABLE_TO_USER + " ORDER BY e.created_at ASC", (user_id,)
         ).fetchall()
         events = [_shape_event(r) for r in rows]
         keys = [str(e["id"]) for e in events]

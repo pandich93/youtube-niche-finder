@@ -566,6 +566,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Plan 15 review notes** — untracking a channel now stops its Telegram/webhook
+  alerts and digest lines (the feed keeps its history); the worker syncs every
+  user's connected own channels, not only the local user's; the worker's LLM
+  spend is booked to a "system" user (0) instead of eating the local user's
+  personal budget; changing a password also revokes that user's API tokens.
+  `SECURITY.md` lists the known limits of multi-user mode.
+
 - **Own-channel connect could be finished by someone else's browser** (plan 14,
   found by the plan-15 security review) — the OAuth state was not bound to the
   browser that started it, so a consent link forwarded to another user would

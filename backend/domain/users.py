@@ -10,6 +10,9 @@ with no login, exactly as before.
 import os
 
 LOCAL_USER_ID = 1
+# Background work nobody asked for in a request (the worker): its LLM spend is
+# booked here, not to a person's personal budget. Never a row in users.
+SYSTEM_USER_ID = 0
 
 # Tables whose rows belong to one user (plan 15 "personal"). Rows written
 # before multi-user mode existed are moved to LOCAL_USER_ID by the migration.

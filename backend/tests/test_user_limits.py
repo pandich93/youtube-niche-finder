@@ -69,7 +69,8 @@ def test_the_worker_and_single_user_mode_have_no_personal_llm_limit():
     for i in range(5):
         assert ask(None, f"w{i}") is not None
     conn = db.get_conn()
-    assert gw.user_spent_today(conn, 1) == pytest.approx(0.5)          # booked to the local user
+    assert gw.user_spent_today(conn, 0) == pytest.approx(0.5)          # booked to "system"
+    assert gw.user_spent_today(conn, 1) == 0                           # not to a person
     conn.close()
 
 

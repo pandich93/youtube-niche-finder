@@ -248,8 +248,8 @@ def cycle():
 
     if DO_OWN_SYNC and _due("own_sync", OWN_SYNC_INTERVAL_MIN):
         st = _safe("own channels status", own_mod.status) or {}
-        if st.get("configured") and st.get("connectedChannels"):
-            _safe("own channels sync", own_mod.sync)
+        if st.get("configured"):
+            _safe("own channels sync", own_mod.sync_all)   # every user's channels
         _mark("own_sync")
 
 

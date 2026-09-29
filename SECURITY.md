@@ -86,6 +86,23 @@ What you have to do before you give anyone an account:
 6. **Keep MCP over HTTP behind the TLS front door (`mcp-https`)** and set
    `MCP_PUBLIC_URL` to the address clients use. MCP over stdio is local only.
 
+Known limits (by design, worth knowing before you invite anyone):
+
+- **Everyone who signs in can change shared public data.** That covers pasting
+  or re-pasting a video's transcript (one shared copy), curated tags,
+  recomputing the niche map and naming niches by collecting them. The `--admin`
+  flag is stored but not yet enforced anywhere. Invite only people you trust
+  with that.
+- **API tokens do not expire.** Revoke unused ones on the MCP screen. Changing a
+  password revokes all of that user's tokens and sessions.
+- **MCP over HTTP needs `NF_MULTI_USER=1` to ask for a token.** Without that
+  flag it is as open as before, so keep it on the compose network behind
+  `mcp-https`, which listens on 127.0.0.1 only.
+- **Some global feeds can hint at what others watch.** Thumbnail fingerprints
+  and swaps, and stats refreshes, run for every channel someone tracks, so the
+  repackaging feed and the tracked-channel total reflect other users'
+  watchlists.
+
 Security reviews: the plan-14 OAuth flow and each plan-15 sub-stage were
 reviewed. The review of sign-in found a way to attach someone else's channel
 through the OAuth callback, and it was fixed (see CHANGELOG, "Fixed").

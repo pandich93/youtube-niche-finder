@@ -13,7 +13,7 @@ import os
 from datetime import datetime, timezone
 
 import infrastructure.postgres as db
-from domain.users import LOCAL_USER_ID
+from domain.users import SYSTEM_USER_ID
 from infrastructure import quota_owner
 from infrastructure.llm import factory
 
@@ -97,7 +97,7 @@ def run(task: str, system: str, user: str, schema: dict, model: str = None) -> d
             "prompt_tokens=llm_usage.prompt_tokens+excluded.prompt_tokens, "
             "completion_tokens=llm_usage.completion_tokens+excluded.completion_tokens, "
             "cost_usd=llm_usage.cost_usd+excluded.cost_usd",
-            (owner if owner is not None else LOCAL_USER_ID, today_utc(), result.model, 1,
+            (owner if owner is not None else SYSTEM_USER_ID, today_utc(), result.model, 1,
              result.prompt_tokens, result.completion_tokens, result.cost_usd or 0))
         conn.commit()
         return result.data

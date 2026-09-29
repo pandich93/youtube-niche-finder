@@ -240,6 +240,18 @@ def sync(user_id: int = LOCAL_USER_ID, channel_id: str = None, today: date = Non
     return {"channels": results, "window": {"start": start28.isoformat(), "end": end.isoformat()}}
 
 
+def sync_all(today: date = None) -> dict:
+    """The worker's daily run: every user's connected channels, each with that
+    user's own token (plan 15)."""
+    conn = db.get_conn()
+    try:
+        users = [r["user_id"] for r in conn.execute(
+            "SELECT DISTINCT user_id FROM own_channels ORDER BY user_id").fetchall()]
+    finally:
+        conn.close()
+    return {str(uid): sync(user_id=uid, today=today) for uid in users}
+
+
 # ---------------------------------------------------------- reading
 
 def _owned(conn, user_id, channel_id):

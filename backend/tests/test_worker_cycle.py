@@ -95,7 +95,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(sponsors_mod, "scan_sponsors", rec("sponsors"))
     monkeypatch.setattr(thumbsearch_mod, "embed_thumbnails", rec("thumb_embed"))
     monkeypatch.setattr(own_mod, "status", lambda: {"configured": True, "connectedChannels": 1})
-    monkeypatch.setattr(own_mod, "sync", rec("own_sync"))
+    monkeypatch.setattr(own_mod, "sync_all", rec("own_sync"))
     return seen
 
 

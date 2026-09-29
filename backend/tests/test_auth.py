@@ -155,6 +155,13 @@ def test_forged_or_session_shaped_tokens_are_not_api_tokens():
     assert A.user_for_api_token("not-prefixed-at-all") is None
 
 
+def test_changing_the_password_revokes_api_tokens_too():
+    uid = A.create_user("ann@example.com", PW)
+    t = A.create_api_token(uid)
+    A.set_password("ann@example.com", "a brand new password")
+    assert A.user_for_api_token(t["token"]) is None
+
+
 # ------------------------------------------------------------ migration
 
 @pytest.mark.parametrize("table", U.PERSONAL_TABLES)

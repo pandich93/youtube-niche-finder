@@ -162,6 +162,34 @@ def test_each_user_is_alerted_about_their_own_channels_once(ab, monkeypatch):
     assert len(sent["chat-a"]) == 1 and len(sent["chat-b"]) == 2
 
 
+def test_untracking_a_channel_stops_its_alerts_but_keeps_the_feed(ab, monkeypatch):
+    a, _ = ab
+    sent = {}
+    _stub_telegram(monkeypatch, sent)
+    NS.save(a, telegram_bot_token=BOT, telegram_chat_id="chat-a")
+    T.track(CH_A, user_id=a)
+    T.untrack(CH_A, user_id=a)
+    _outlier(CH_A, "va")
+    AL.deliver_all()
+    assert sent == {}
+    assert [e["refId"] for e in AL.list_events(user_id=a)] == ["va"]    # history still there
+
+
+def test_the_worker_syncs_every_users_own_channels(ab, monkeypatch):
+    a, b = ab
+    from application import own_channels as OWN
+    conn = db.get_conn()
+    conn.execute("DELETE FROM own_channels")
+    for uid in (a, b):
+        conn.execute("INSERT INTO own_channels (user_id, channel_id) VALUES (?, ?)", (uid, f"UC{uid}"))
+    conn.commit()
+    conn.close()
+    seen = []
+    monkeypatch.setattr(OWN, "sync", lambda user_id=1, today=None, **kw: seen.append(user_id) or {})
+    OWN.sync_all()
+    assert sorted(seen) == sorted([a, b])
+
+
 def test_mode_off_and_digest_skip_instant_alerts(ab, monkeypatch):
     a, _ = ab
     sent = {}
