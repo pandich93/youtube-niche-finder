@@ -207,6 +207,32 @@ def comment_insights(video_id: str, max_comments: int = 200,
 
 @mcp.tool(annotations=ToolAnnotations(
     read_only_hint=False, destructive_hint=False,
+    idempotent_hint=False, open_world_hint=True))
+def content_gaps(niche: str, top_videos: int = 10, use_llm: bool = None,
+                 fetch: bool = False, limit: int = 20) -> dict:
+    """Demand without supply: questions and requests from the comments of a
+    niche's top videos (by views) that no collected video or pasted transcript
+    covers yet, ranked by demand (askers, likes, how many videos they asked
+    under) x (1 - coverage). Each gap has example comments, the source videos
+    and the nearest existing video/transcript; status free / partial, with the
+    covered ones counted apart. With an LLM configured (use_llm=None means "if
+    configured") questions come from comment_insights; without one, from rules
+    (question mark or explicit request, English and Russian) -- noisier, and
+    the answer says so. fetch=false (default) reads only cached comments, zero
+    quota; fetch=true spends 1 YouTube unit per uncached video (plus an LLM
+    call each in LLM mode); videos not read are listed in skippedVideos with
+    the reason. Coverage is checked against the local corpus only
+    (coverageBase says how big it is). Next step: build_brief(video_id of a
+    source video, gap_topic=the gap's topic)."""
+    if fetch:
+        _require_key()
+    from application import content_gaps as gaps_mod
+    return gaps_mod.content_gaps(API_KEY, niche, top_videos=top_videos, use_llm=use_llm,
+                                 fetch=fetch, limit=limit)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
     idempotent_hint=False, open_world_hint=False))
 def explain_outlier(video_id: str, force_refresh: bool = False) -> dict:
     """Why this video beat its channel's own baseline: up to 3 hooks, a
@@ -1075,7 +1101,7 @@ def scan_for_alerts() -> dict:
     read_only_hint=False, destructive_hint=False,
     idempotent_hint=False, open_world_hint=False))
 def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
-                save: bool = True) -> dict:
+                save: bool = True, gap_topic: str = None) -> dict:
     """Turn one outlier video into a working brief for YOUR OWN video: its
     numbers and hook (first ~75 words of a pasted transcript), why it worked
     (LLM), niche title patterns and best publish time, whether the topic is
@@ -1085,9 +1111,13 @@ def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
     no angle and no new titles, and no template pretends otherwise. save=true
     stores a draft (drafts.source_video_id = the outlier) and queues a missing
     transcript; save=false writes nothing. Research, not a script: choose your
-    own angle. Zero YouTube quota; use_llm=true may spend LLM budget."""
+    own angle. Zero YouTube quota; use_llm=true may spend LLM budget.
+    gap_topic: a viewer question from content_gaps -- the overlap check and
+    title candidates are then about that question, the video stays the
+    reference for hook and numbers."""
     from application import briefs as briefs_mod
-    return briefs_mod.build_brief(video_id, niche=niche, use_llm=use_llm, save=save)
+    return briefs_mod.build_brief(video_id, niche=niche, use_llm=use_llm, save=save,
+                                  gap_topic=gap_topic)
 
 
 @mcp.tool(annotations=ToolAnnotations(

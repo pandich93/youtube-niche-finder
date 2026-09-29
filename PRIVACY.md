@@ -39,7 +39,8 @@ but it is data about third parties, and how you use it is governed by the
 
 **Comments are not stored as themselves.** The `video_comments` tool reads
 comment threads live from the API and hands them straight back to the caller;
-nothing is written to the database. This is deliberate — comments are
+nothing is written to the database (the one narrow exception, questions without
+authors, is `content_gaps` below). This is deliberate — comments are
 user-generated content attached to identifiable authors, and keeping a local
 copy of them is a liability the tool does not need.
 
@@ -52,6 +53,16 @@ automatically. Like every other `llm_gateway` call, it is a no-op unless you
 have already set `LLM_PROVIDER=openrouter`, and it additionally requires an
 explicit click (dashboard) or tool call (MCP) naming a specific video —
 there is no bulk or background mode.
+
+**Second exception: `content_gaps` (plan 03), and only when you ask it to
+fetch.** With `fetch=true` (the "Прочитать комментарии" button on a niche
+screen) it reads the top comments of that niche's most-viewed videos, 1 quota
+unit per video. Without an LLM it keeps, per video, only the comments that ask
+a question or request a video -- their **text and like count, never the
+author** -- in `video_insights` (task `comment_questions`), for
+`LLM_INSIGHTS_TTL_DAYS`, so a repeat call does not spend quota again. With an
+LLM it goes through `comment_insights` above and stores only that output.
+The worker never calls it; without `fetch` it only reads that cache.
 
 **Transcripts (stage 19) are never fetched — you paste them, and they stay
 local.** There is no subtitle-download code anywhere in this project: you

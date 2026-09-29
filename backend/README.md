@@ -5,7 +5,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-71%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-72%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -404,7 +404,7 @@ Delivery to Telegram or a webhook is optional -- see [Configuration](#configurat
 | `suggest_titles` | generate up to n titles in the style of the best performers, then score them — requires an LLM |
 | `review_metadata` | check a draft title/description/tags against your corpus: signals with sample sizes, never one made-up score |
 | `save_draft` / `list_drafts` / `link_draft` | keep a draft, then link it to the real video_id after publishing |
-| `build_brief` | one outlier -> a brief for your own video: hook (first ~75 words of a pasted transcript), why it worked (LLM), niche title patterns and best time, whether the topic is already covered (source excluded), title candidates (LLM) and thumbnail references; unavailable parts are listed in `skipped`; `save=true` stores a draft (`drafts.source_video_id`) and queues a missing transcript, `save=false` writes nothing |
+| `build_brief` | `gap_topic` (from `content_gaps`) makes the overlap check and title candidates about that viewer question. One outlier -> a brief for your own video: hook (first ~75 words of a pasted transcript), why it worked (LLM), niche title patterns and best time, whether the topic is already covered (source excluded), title candidates (LLM) and thumbnail references; unavailable parts are listed in `skipped`; `save=true` stores a draft (`drafts.source_video_id`) and queues a missing transcript, `save=false` writes nothing |
 | `draft_outcomes` | the review snapshot next to the actual outcome, for linked drafts old enough to have views |
 
 ### Swipe file
@@ -431,6 +431,7 @@ Delivery to Telegram or a webhook is optional -- see [Configuration](#configurat
 |---|---|---|
 | `comment_insights` | pains / requests / video ideas mined from a video's comments; cached `LLM_INSIGHTS_TTL_DAYS` | 1 unit + LLM call on a cache miss |
 | `niche_comment_insights` | merges the cached `comment_insights` of a niche's top videos into one summary | free |
+| `content_gaps` | `niche, top_videos=10, use_llm=None, fetch=False, limit=20` -- viewer questions/requests from the comments of a niche's top videos that no collected video or pasted transcript covers: status free/partial, demand, example comments, source videos, nearest video/transcript, `skippedVideos` with reasons and `coverageBase`. Works without an LLM too (rules, cached as `comment_questions` in `video_insights`: question text and like count only, no authors) | `fetch=false`: free (cache only); `fetch=true`: 1 unit per uncached video (+ an LLM call each in LLM mode) |
 | `explain_outlier` | why a video beat its channel's baseline: hooks, title pattern, timing, formula, confidence; cached `LLM_WHY_VIRAL_TTL_DAYS` | LLM call, 0 quota |
 | `enrich_channels` | label channels: faceless, content format, topic, language, ... (the worker also does this) | LLM budget |
 | `tag_new_videos` | auto-tag videos in niches whose taxonomy has ≥ `LLM_MIN_MANUAL_TAGS` manual tags | LLM budget |
@@ -600,6 +601,7 @@ youtube-niche-finder/
     │   ├── sponsors.py         sponsor / promo-code / affiliate extraction from descriptions, brand normalisation
     │   ├── template_risk.py    title similarity / shared skeleton / length + cadence -> template score
     │   ├── hook_scoring.py     rule-based hook score, hook text extraction, niche aggregation
+    │   ├── content_gaps.py     question picking from comments, grouping, demand vs coverage
     │   ├── title_scoring.py    deterministic title scoring
     │   ├── idea_verdicts.py    free / recent / proven / flopped for check_ideas
     │   ├── niche_clusters.py   plain numpy k-means
@@ -635,11 +637,12 @@ youtube-niche-finder/
     │   ├── template_risk.py    per-channel and per-niche template risk
     │   ├── hook_score.py       hook_report, niche_hook_benchmark, score_hook_text (LLM review cached in video_insights)
     │   ├── briefs.py           outlier -> brief for your own video (+ draft)
+    │   ├── content_gaps.py     viewer questions from comments vs what the niche already covers
     │   ├── transcripts.py      manual transcript queue and hybrid search
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 71 tools
+    │   ├── mcp/server.py       MCP server, 72 tools
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
     │   └── worker/main.py      background collector's entry point

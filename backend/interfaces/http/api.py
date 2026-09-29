@@ -32,6 +32,7 @@ from application import alerts as AL
 from application import briefs as BR
 from application import channel_tracking as T
 from application import collecting as collector
+from application import content_gaps as CG
 from application import digest as DG
 from application import discovery as trends
 from application import enrichment as EN
@@ -671,7 +672,8 @@ def make_brief(payload: dict = Body(...)):
     brief = BR.build_brief(
         video_id, niche=payload.get("niche"),
         use_llm=payload.get("useLlm", payload.get("use_llm", True)),
-        save=payload.get("save", True))
+        save=payload.get("save", True),
+        gap_topic=payload.get("gapTopic", payload.get("gap_topic")))
     if not brief.get("found", True):
         raise HTTPException(status_code=404, detail=brief.get("hint") or "video not found")
     return brief
@@ -784,6 +786,30 @@ def comment_insights(video_id: str, payload: dict = Body(default={})):
 @app.get("/api/niches/{slug}/insights")
 def niche_comment_insights(slug: str, top_n: int = 5):
     return EN.niche_comment_insights(slug, top_n=top_n)
+
+
+@app.get("/api/niches/{slug}/content-gaps")
+def niche_content_gaps(slug: str, top_videos: int = 10, limit: int = 20, use_llm: bool = None):
+    """Content gaps (plan 03) from cached comments only -- zero quota. Videos
+    whose comments were never read are listed in skippedVideos."""
+    return CG.content_gaps(API_KEY, slug, top_videos=top_videos, use_llm=use_llm,
+                           fetch=False, limit=limit)
+
+
+@app.post("/api/niches/{slug}/content-gaps")
+def fetch_content_gaps(slug: str, payload: dict = Body(default={})):
+    """Content gaps, reading the comments of uncached videos first: 1 quota
+    unit per such video (plus an LLM call each in LLM mode). By click only."""
+    _need_key()
+    use_llm = payload.get("useLlm", payload.get("use_llm"))
+    try:
+        return CG.content_gaps(
+            API_KEY, slug,
+            top_videos=int(payload.get("topVideos", payload.get("top_videos", 10))),
+            use_llm=None if use_llm is None else bool(use_llm), fetch=True,
+            limit=int(payload.get("limit", 20)))
+    except (TypeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/transcripts/request")

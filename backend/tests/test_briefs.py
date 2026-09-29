@@ -193,6 +193,36 @@ def test_llm_that_returns_nothing_is_treated_as_skipped(monkeypatch):
     assert {"why_viral", "titles"} <= set(_parts(b))
 
 
+# ------------------------------------------------------------ gap topic (plan 03)
+
+def test_gap_topic_is_what_the_overlap_check_and_titles_are_about(monkeypatch):
+    seen = {}
+
+    def fake_check(ideas, niche=None, **kw):
+        seen["ideas"] = ideas
+        return {"ideas": [{"idea": ideas[0], "matches": []}]}
+    monkeypatch.setattr(Q, "check_ideas", fake_check)
+    monkeypatch.setattr(EN, "explain_outlier", lambda vid, **k: {"hooks": []})
+    monkeypatch.setattr(EN, "suggest_titles", lambda topic, **k: seen.setdefault(
+        "topic", topic) and {"titles": []})
+    b = BR.build_brief(SRC, use_llm=True, save=False, gap_topic="  how to fine-tune on a laptop? ")
+    assert seen["ideas"] == ["how to fine-tune on a laptop?"]
+    assert seen["topic"] == "how to fine-tune on a laptop?"
+    assert b["gapTopic"] == "how to fine-tune on a laptop?"
+
+
+def test_saved_gap_brief_uses_the_gap_as_working_title_without_an_llm():
+    b = BR.build_brief(SRC, use_llm=False, save=True, gap_topic="how to fine-tune on a laptop?")
+    d = MR.list_drafts()[0]
+    assert d["id"] == b["draftId"] and d["title"] == "how to fine-tune on a laptop?"
+    assert d["sourceVideoId"] == SRC and d["review"]["gapTopic"] == "how to fine-tune on a laptop?"
+
+
+def test_without_gap_topic_the_brief_is_unchanged():
+    b = BR.build_brief(SRC, use_llm=False, save=False)
+    assert b["gapTopic"] is None
+
+
 # ------------------------------------------------------------ saving
 
 def test_save_creates_a_draft_linked_to_the_source_video():

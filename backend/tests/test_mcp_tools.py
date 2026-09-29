@@ -423,8 +423,35 @@ def test_build_brief_delegates_with_its_options(monkeypatch):
                         lambda vid, **kw: calls.append((vid, kw)) or {"found": True})
     assert srv.build_brief("v1") == {"found": True}
     assert srv.build_brief("v2", niche="n1", use_llm=False, save=False) == {"found": True}
-    assert calls == [("v1", {"niche": None, "use_llm": True, "save": True}),
-                     ("v2", {"niche": "n1", "use_llm": False, "save": False})]
+    assert srv.build_brief("v3", gap_topic="how to X?") == {"found": True}
+    assert calls == [("v1", {"niche": None, "use_llm": True, "save": True, "gap_topic": None}),
+                     ("v2", {"niche": "n1", "use_llm": False, "save": False,
+                             "gap_topic": None}),
+                     ("v3", {"niche": None, "use_llm": True, "save": True,
+                             "gap_topic": "how to X?"})]
+
+
+# --------------------------------------------------- content_gaps
+
+def test_content_gaps_reads_the_cache_by_default_and_fetches_only_on_request(monkeypatch):
+    from application import content_gaps as cg
+    calls = []
+    monkeypatch.setattr(cg, "content_gaps",
+                        lambda key, niche, **kw: calls.append((key, niche, kw)) or {"gaps": []})
+    assert srv.content_gaps("n1") == {"gaps": []}
+    assert srv.content_gaps("n1", top_videos=5, use_llm=False, fetch=True, limit=7) == {"gaps": []}
+    assert calls == [
+        (srv.API_KEY, "n1", {"top_videos": 10, "use_llm": None, "fetch": False, "limit": 20}),
+        (srv.API_KEY, "n1", {"top_videos": 5, "use_llm": False, "fetch": True, "limit": 7})]
+
+
+def test_content_gaps_fetch_needs_a_key(monkeypatch):
+    monkeypatch.setattr(srv, "API_KEY", None)
+    try:
+        srv.content_gaps("n1", fetch=True)
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as e:
+        assert "YOUTUBE_API_KEY" in str(e)
 
 
 # --------------------------------------------------- template risk

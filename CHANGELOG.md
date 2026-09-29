@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Content gaps** (plan 03) — MCP `content_gaps`, `GET` / `POST
+  /api/niches/{slug}/content-gaps` and a "Пробелы в контенте" card on the niche
+  screen. Questions and requests from the comments of a niche's most-viewed
+  videos that no collected video or pasted transcript answers yet: similar
+  questions are grouped (embeddings, or normalised text without them), coverage
+  comes from `check_ideas` over titles plus cosine over transcript chunks, and
+  gaps are ranked by demand (askers, likes, how many videos they asked under)
+  x (1 - coverage), each with example comments and the nearest existing video.
+  With an LLM the questions come from `comment_insights`; without one, from
+  rules (question mark or explicit request, English and Russian) — noisier,
+  and the answer says so. `GET` and the MCP default read only the cache (zero
+  quota); `POST` / `fetch=true` reads uncached videos' comments, 1 unit each,
+  and stops at an exhausted quota, listing what it skipped. The no-LLM cache
+  (`video_insights`, task `comment_questions`) keeps question text and like
+  count only, never the author; `PRIVACY.md` updated. `build_brief` takes an
+  optional `gap_topic`, and the card's "В бриф" opens `#/brief/<video>?gap=…`.
+  No schema change.
+
 - **Hook score** (plan 10) — MCP `hook_report` / `niche_hook_benchmark` /
   `score_hook_text`, `/api/videos/{id}/hook`, `/api/niches/{slug}/hook-benchmark`,
   `/api/hooks/score`, a "Крючок" button on the Transcripts screen and an

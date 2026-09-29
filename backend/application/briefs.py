@@ -81,13 +81,19 @@ def _references(conn, video_id):
 
 
 def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
-                save: bool = True) -> dict:
+                save: bool = True, gap_topic: str = None) -> dict:
     """Brief for a video of your own, built from one outlier: its numbers and
     hook, why it worked and title patterns of the niche, whether the topic is
     already covered (source excluded), title candidates, and similar videos as
     thumbnail references. save=True also stores it as a draft
     (drafts.source_video_id points back at the outlier) and queues a missing
-    transcript; save=False writes nothing. Zero YouTube quota."""
+    transcript; save=False writes nothing. Zero YouTube quota.
+
+    gap_topic (plan 03): a viewer question found under this video's comments.
+    The overlap check and the title candidates are then about the gap, not
+    the source title, and without an LLM the gap is the draft's working
+    title -- the source stays as the reference for hook and numbers."""
+    gap_topic = (gap_topic or "").strip() or None
     conn = db.get_conn()
     try:
         src = _source(conn, video_id)
@@ -95,6 +101,7 @@ def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
             return {"videoId": video_id, "found": False,
                     "hint": "video not collected -- run collect_channel first"}
         niche = niche or _niche_of(conn, video_id)
+        topic = gap_topic or src["title"]
         skipped = []
         hook = _hook(conn, video_id, skipped)
 
@@ -121,7 +128,7 @@ def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
         angle["matchedInTitle"] = [p["keyword"] for p in angle["patterns"]
                                    if p.get("keyword") and p["keyword"].lower() in title_l]
         try:
-            overlap = _overlap(src["title"], niche, video_id)
+            overlap = _overlap(topic, niche, video_id)
         except Exception as e:
             _skip(skipped, "overlap", str(e))
         try:
@@ -145,7 +152,7 @@ def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
             except Exception as e:
                 _skip(skipped, "why_viral", str(e))
             try:
-                res = EN.suggest_titles(src["title"], niche_slug=niche,
+                res = EN.suggest_titles(topic, niche_slug=niche,
                                         channel_id=None if niche else src["channel_id"],
                                         n=TITLE_CANDIDATES)
                 suggestions = sorted(res.get("titles") or [],
@@ -160,6 +167,7 @@ def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
 
         brief = {
             "found": True, "videoId": video_id, "niche": niche, "kind": "brief",
+            "gapTopic": gap_topic,
             "source": source, "hook": hook, "why": why, "angle": angle,
             "titles": {"suggestions": suggestions,
                        "patternSkeletons": [p["keyword"] for p in angle["patterns"][:5]]},
@@ -173,7 +181,7 @@ def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
     if save:
         if not hook["available"]:
             TR.request_transcript(video_id, reason="brief")
-        working = suggestions[0]["title"] if suggestions else src["title"]
+        working = suggestions[0]["title"] if suggestions else topic
         brief["draftId"] = MR.save_draft(
             working, niche=niche, is_short=source["isShort"], review=brief,
             source_video_id=video_id)["id"]

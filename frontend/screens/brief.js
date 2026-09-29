@@ -28,7 +28,9 @@ function briefHtml(b, llm) {
   const v = ov && (VERDICT[ov.verdict] || [ov.verdict, '']);
   return `
     <div class="card">
-      ${sectionHead('Бриф из outlier', 'исследование, не сценарий: выберите СВОЙ угол, а не копию')}
+      ${sectionHead(b.gapTopic ? 'Бриф под пробел' : 'Бриф из outlier', 'исследование, не сценарий: выберите СВОЙ угол, а не копию')}
+      ${b.gapTopic ? `<div class="section-sub">Вопрос зрителей: <b>${esc(b.gapTopic)}</b>. Проверка темы и заголовки — про него,
+        видео ниже — источник, под которым спрашивали.</div>` : ''}
       <div class="tiles">
         ${tile('Множитель', mult(s.outlierScore), esc(s.outlierBand || ''))}
         ${tile('Просмотры', compact(s.views))}
@@ -64,7 +66,7 @@ function briefHtml(b, llm) {
         b.angle.bestTime.map((t) => `${esc(t.weekday)} ${String(t.hour).padStart(2, '0')}:00`).join(', ')} (UTC)</div>` : ''}
     </div>
 
-    ${ov && ov.matches.length ? `<div class="card">${sectionHead('Уже снято по этой теме', 'без самого исходного видео')}
+    ${ov && ov.matches.length ? `<div class="card">${sectionHead(b.gapTopic ? 'Уже снято по этому вопросу' : 'Уже снято по этой теме', 'без самого исходного видео')}
       <ul class="digest-list">${ov.matches.slice(0, 6).map((m) =>
         `<li style="white-space:normal"><a href="https://www.youtube.com/watch?v=${esc(m.videoId)}" target="_blank" rel="noopener">${esc(m.title)}</a>
           · ${esc(m.channelTitle || '')} · ×${esc(m.outlierScore ?? '—')}</li>`).join('')}</ul></div>` : ''}
@@ -89,9 +91,9 @@ function briefHtml(b, llm) {
     </div>`;
 }
 
-async function viewBrief(videoId) {
+async function viewBrief(videoId, gapTopic = null) {
   let useLlm = false;
-  const load = async (save) => api('/api/briefs', { method: 'POST', body: { videoId, save, useLlm } });
+  const load = async (save) => api('/api/briefs', { method: 'POST', body: { videoId, save, useLlm, gapTopic } });
   const draw = (b) => {
     view.innerHTML = briefHtml(b, useLlm);
     const saveBtn = $('#saveBrief');

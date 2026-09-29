@@ -154,6 +154,8 @@ DELEGATIONS = [
      {"timezone_offset_hours": 5, "period": "90d"}, None),
     ("get", "/api/title-patterns?niche=n1&top_n=4", "T", "title_patterns", (),
      {"niche": "n1", "top_n": 4}, None),
+    ("get", "/api/niches/abc/content-gaps?top_videos=5&limit=7", "CG", "content_gaps",
+     (None, "abc"), {"top_videos": 5, "limit": 7, "fetch": False, "use_llm": None}, None),
     ("get", "/api/niches/abc/insights?top_n=2", "EN", "niche_comment_insights",
      ("abc",), {"top_n": 2}, None),
     ("get", "/api/transcripts/queue?status=pending", "TR", "list_transcript_queue",
@@ -243,6 +245,7 @@ QUOTA_ROUTES = [
     ("/api/refresh", {}),
     ("/api/videos/v1/comments", {}),
     ("/api/videos/v1/insights", {}),
+    ("/api/niches/abc/content-gaps", {}),
 ]
 
 
@@ -371,10 +374,25 @@ def test_briefs_route_passes_the_options_and_accepts_both_key_styles(stub):
                                             "useLlm": False, "save": False})
     assert resp.status_code == 200 and resp.json() == {"stub": True}
     assert br.args == ("v1",)
-    assert br.kwargs == {"niche": "n1", "use_llm": False, "save": False}
+    assert br.kwargs == {"niche": "n1", "use_llm": False, "save": False, "gap_topic": None}
     client.post("/api/briefs", json={"video_id": "v2"})           # defaults: LLM on, saved
     assert br.args == ("v2",)
-    assert br.kwargs == {"niche": None, "use_llm": True, "save": True}
+    assert br.kwargs == {"niche": None, "use_llm": True, "save": True, "gap_topic": None}
+    client.post("/api/briefs", json={"videoId": "v3", "gapTopic": "how to X?"})
+    assert br.kwargs["gap_topic"] == "how to X?"
+    client.post("/api/briefs", json={"videoId": "v3", "gap_topic": "how to Y?"})
+    assert br.kwargs["gap_topic"] == "how to Y?"
+
+
+def test_content_gaps_post_fetches_with_the_key_and_maps_the_body(stub, with_key):
+    cg = stub("CG", "content_gaps")
+    resp = client.post("/api/niches/abc/content-gaps",
+                       json={"topVideos": 3, "useLlm": False, "limit": 5})
+    assert resp.status_code == 200 and resp.json() == {"stub": True}
+    assert cg.args == ("TESTKEY", "abc")
+    assert cg.kwargs == {"top_videos": 3, "use_llm": False, "fetch": True, "limit": 5}
+    client.post("/api/niches/abc/content-gaps", json={"top_videos": 4, "use_llm": True})
+    assert cg.kwargs == {"top_videos": 4, "use_llm": True, "fetch": True, "limit": 20}
 
 
 def test_briefs_route_unknown_video_is_404(stub):

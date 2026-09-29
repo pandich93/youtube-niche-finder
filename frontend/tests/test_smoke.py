@@ -36,6 +36,7 @@ ROUTES = [
     "tracker", "ideas", "transcripts", "clusters", "titles", "saved", "packaging", "metadata",
     "niches", "data", "help", "mcp",
     "niche/demo", "channel/UC0000000000000000000a", "brief/avid000",
+    "brief/avid000?gap=how%20to%20start%20a%20tiny%20AI%20lab%3F",
 ]
 
 READY_JS = """() => {
@@ -162,9 +163,31 @@ def test_screen_renders_without_errors(browser, base_url, route):
         page.wait_for_function(READY_JS, timeout=30000)
         page.wait_for_load_state("networkidle")
         SHOTS.mkdir(exist_ok=True)
-        page.screenshot(path=str(SHOTS / f"{route.replace('/', '_')}.png"), full_page=True)
+        shot = re.sub(r"[^\w.-]+", "_", route)
+        page.screenshot(path=str(SHOTS / f"{shot}.png"), full_page=True)
         text = page.inner_text("#view")
     finally:
         page.close()
     assert "Не удалось загрузить данные" not in text, text[:500]
     assert not problems, "\n".join(problems)
+
+
+@pytest.mark.parametrize("route,expected", [
+    # Карточка пробелов (план 03): без кэша комментариев -- кнопка «Прочитать
+    # комментарии», квота сама не тратится.
+    ("niche/demo", ["Пробелы в контенте", "Прочитать комментарии"]),
+    # Бриф под вопрос зрителей: тема из ?gap= доходит до экрана.
+    ("brief/avid000?gap=how%20to%20start%20a%20tiny%20AI%20lab%3F",
+     ["Бриф под пробел", "how to start a tiny AI lab?"]),
+])
+def test_content_gaps_parts_are_on_screen(browser, base_url, route, expected):
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    try:
+        page.goto(f"{base_url}/#/{route}")
+        page.wait_for_function(READY_JS, timeout=30000)
+        page.wait_for_load_state("networkidle")
+        text = page.inner_text("#view")
+    finally:
+        page.close()
+    for part in expected:
+        assert part in text, f"{part!r} not on #/{route}: {text[:400]}"

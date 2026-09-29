@@ -74,7 +74,10 @@ async function render() {
   }
   if (name === 'brief' && arg) {
     $('#crumbSection').textContent = 'Бриф'; setActive(null);
-    return guard(() => viewBrief(decodeURIComponent(arg)));
+    // #/brief/<videoId>?gap=<вопрос зрителей> -- бриф под пробел (план 03).
+    const [vid, query] = arg.split('?');
+    const gap = new URLSearchParams(query || '').get('gap');
+    return guard(() => viewBrief(decodeURIComponent(vid), gap));
   }
   if (name === 'niche' && arg) {
     $('#crumbSection').textContent = 'Ниша'; setActive('#/niches');

@@ -94,6 +94,78 @@ function wireCommentInsights() {
   });
 }
 
+/* Пробелы в контенте (план 03): вопросы зрителей из комментариев топовых видео
+   ниши, на которые в базе ещё нет видео. Экран читает только кэш (GET, 0 квоты);
+   комментарии непрочитанных видео -- строго по кнопке (POST, 1 unit на видео). */
+const GAP_STATUS = { free: ['свободно', 'chip-good'], partial: ['частично', 'chip-warn'] };
+const GAP_SKIP = {
+  'not-fetched': 'комментарии ещё не читали',
+  'quota-exhausted': 'квота YouTube кончилась',
+  'no-comments': 'комментариев нет',
+  'llm-unavailable': 'LLM недоступен',
+  error: 'ошибка',
+};
+
+function gapItemHtml(g) {
+  const st = GAP_STATUS[g.status] || [g.status, ''];
+  const src = g.sourceVideos[0];
+  const near = g.nearestVideo || g.nearestTranscript;
+  return `<li style="white-space:normal;margin-bottom:10px">
+    <div><span class="chip ${st[1]}">${esc(st[0])}</span> <b>${esc(g.topic)}</b></div>
+    <div class="row-sub">вопросов: ${g.askers} · лайков: ${compact(g.likes)} · видео-источников: ${g.sourceVideos.length}
+      · спрос ${esc(g.demand)}${g.coverage != null ? ` · покрытие ${Math.round(g.coverage * 100)}%` : ''}</div>
+    ${g.examples.filter((e) => e !== g.topic).map((e) => `<div class="row-sub">«${esc(e)}»</div>`).join('')}
+    ${near ? `<div class="row-sub">Ближе всего: ${g.nearestVideo
+      ? `<a href="https://www.youtube.com/watch?v=${esc(g.nearestVideo.videoId)}" target="_blank" rel="noopener">${esc(g.nearestVideo.title)}</a>`
+      : `транскрипт «${esc(g.nearestTranscript.title || g.nearestTranscript.videoId)}»`}
+      (${Math.round((near.similarity || 0) * 100)}%)</div>` : ''}
+    <a class="btn btn-ghost btn-sm" style="margin-top:4px"
+       href="#/brief/${encodeURIComponent(src)}?gap=${encodeURIComponent(g.topic)}">В бриф</a>
+  </li>`;
+}
+
+function gapsBlock(d, slug) {
+  if (!d) return '';
+  const notRead = (d.skippedVideos || []).filter((s) => s.reason === 'not-fetched').length;
+  const other = (d.skippedVideos || []).filter((s) => s.reason !== 'not-fetched');
+  const base = d.coverageBase || {};
+  const sub = `${d.mode === 'llm' ? 'вопросы выделил LLM' : 'вопросы отобраны правилами'}
+    · проверено по ${compact(base.videos)} видео и ${compact(base.transcripts)} транскриптам ниши`;
+  const btn = notRead ? `<button class="btn btn-ghost btn-sm" id="gapsFetch" data-slug="${esc(slug)}" type="button">
+    Прочитать комментарии: ${notRead} видео (квота ~${notRead}${d.mode === 'llm' ? ' + LLM' : ''})</button>` : '';
+  const gaps = d.gaps || [];
+  return `<div class="card" id="gapsCard">
+    ${sectionHead('Пробелы в контенте', sub, btn)}
+    ${d.modeNote ? `<div class="section-sub">Без LLM: больше шума и пропусков, особенно не на английском и русском.</div>` : ''}
+    ${gaps.length ? `<ul class="digest-list">${gaps.map(gapItemHtml).join('')}</ul>`
+      : empty(notRead ? 'комментарии топовых видео ещё не читали — нажмите кнопку выше'
+        : 'в комментариях не нашлось вопросов, на которые нет видео')}
+    ${d.coveredCount ? `<div class="section-sub">Уже закрыто видео из базы: ${d.coveredCount}.</div>` : ''}
+    ${other.length ? `<div class="section-sub">Пропущено видео: ${other.map((s) =>
+      `«${esc(s.title || s.videoId)}» — ${esc(GAP_SKIP[s.reason] || s.reason)}`).join('; ')}</div>` : ''}
+    <div class="section-sub">Пробел реален настолько, насколько полна база: покрытие проверяется только по собранному здесь.
+      ${d.quotaSpent ? ` Потрачено квоты: ${d.quotaSpent}.` : ''}</div>
+  </div>`;
+}
+
+function wireGaps() {
+  const btn = $('#gapsFetch');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true; btn.textContent = 'Читаю комментарии…';
+    try {
+      const d = await api(`/api/niches/${encodeURIComponent(btn.dataset.slug)}/content-gaps`,
+        { method: 'POST', body: {} });
+      $('#gapsCard').outerHTML = gapsBlock(d, btn.dataset.slug);
+      wireGaps();
+      toast(`Готово, квоты потрачено: ${d.quotaSpent || 0}`, 'ok');
+    } catch (e) {
+      btn.disabled = false; btn.textContent = 'Повторить';
+      toast(e.message, 'err');
+    }
+  });
+}
+
 function nicheVideoTagsSection(videos, tagsByVideo, tagGroup, nicheSlug) {
   if (!videos.length) return '';
   return `
@@ -233,7 +305,7 @@ function wireScatterFilters(rerender) {
 
 async function viewNiche(slug) {
   const tagGroup = localStorage.getItem('nf.tagGroup') || 'theme';
-  const [d, stats, videoTags, proposed, scatter, risk, sponsors] = await Promise.all([
+  const [d, stats, videoTags, proposed, scatter, risk, sponsors, gaps] = await Promise.all([
     api(`/api/niches/${encodeURIComponent(slug)}${q({ period: state.period, top_n: 30 })}`),
     api(`/api/tags/stats${q({ niche: slug, tag_group: tagGroup })}`),
     api(`/api/tags${q({ niche: slug })}`),
@@ -246,6 +318,7 @@ async function viewNiche(slug) {
     // Не критично для экрана: без спонсоров ниша всё равно открывается.
     api(`/api/niches/${encodeURIComponent(slug)}/sponsors${q({ period: state.period })}`)
       .catch(() => null),
+    api(`/api/niches/${encodeURIComponent(slug)}/content-gaps`).catch(() => null),
   ]);
   if (!d.found) { view.innerHTML = notice(esc(d.hint || 'ниша не найдена')); return; }
 
@@ -262,6 +335,7 @@ async function viewNiche(slug) {
     + nicheTemplateRiskBlock(risk)
     + scatterSection(scatter.videos || [], scatterFilters)
     + sponsorBlock(sponsors, 'Спонсоры ниши', plabel(state.period))
+    + gapsBlock(gaps, slug)
     + tagStatsSection(stats, tagGroup)
     + nicheVideoTagsSection(d.top_videos_by_outlier_score || [], tagsByVideo, tagGroup, slug)
     + proposedTagsSection(proposed.proposed || []);
@@ -270,6 +344,7 @@ async function viewNiche(slug) {
   wireProposedTags();
   wireScatterFilters(() => viewNiche(slug));
   wireCommentInsights();
+  wireGaps();
 }
 
 export { viewNiche };
