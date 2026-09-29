@@ -220,3 +220,20 @@ def test_sign_in_screen_when_multi_user_mode_has_no_session(browser, base_url):
     finally:
         page.close()
     assert "Вход в niche-finder" in text and not problems
+
+
+
+def test_token_section_shows_only_with_sign_in(browser, base_url):
+    # План 15 (5.7-5.8): без входа раздела токенов нет, с входом -- есть.
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    page.route("**/api/auth/me", lambda r: r.fulfill(status=200, content_type="application/json",
+        body='{"multiUser": true, "user": {"id": 2, "email": "a@x", "isAdmin": false}, "quota": null}'))
+    page.route("**/api/auth/tokens", lambda r: r.fulfill(status=200, content_type="application/json",
+        body='{"tokens": [{"id": 1, "name": "ext", "createdAt": "2026-09-29T00:00:00+00:00", "lastUsedAt": null}]}'))
+    try:
+        page.goto(f"{base_url}/#/mcp")
+        page.wait_for_selector("#apiTokens .card", timeout=30000)
+        text = page.inner_text("#apiTokens")
+    finally:
+        page.close()
+    assert "Личные токены" in text and "ext" in text

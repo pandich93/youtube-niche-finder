@@ -5,6 +5,7 @@ const compact = (n) => n == null ? '—' : new Intl.NumberFormat('ru-RU', { nota
 async function load() {
   const s = (await send({ type: 'settings:get' })).data;
   $('baseUrl').value = s.baseUrl;
+  $('apiToken').placeholder = s.apiToken ? 'токен сохранён — введите новый, чтобы заменить' : 'nf_…';
   $('autoFetch').checked = s.autoFetch;
   $('showBadges').checked = s.showBadges;
   $('onlyOutliers').checked = s.onlyOutliers;
@@ -20,7 +21,10 @@ async function save() {
     showBadges: $('showBadges').checked,
     onlyOutliers: $('onlyOutliers').checked,
     showVph: $('showVph').checked,
+    // пустое поле -- «не менять»; новый токен заменяет старый
+    ...($('apiToken').value.trim() ? { apiToken: $('apiToken').value.trim() } : {}),
   }});
+  $('apiToken').value = '';
   $('dash').href = $('baseUrl').value.trim();
   checkHealth();
 }
@@ -142,7 +146,7 @@ async function mdSaveDraft() {
 }
 
 document.addEventListener('DOMContentLoaded', load);
-['baseUrl', 'autoFetch', 'showBadges', 'onlyOutliers', 'showVph'].forEach((id) =>
+['baseUrl', 'autoFetch', 'showBadges', 'onlyOutliers', 'showVph', 'apiToken'].forEach((id) =>
   document.getElementById(id).addEventListener('change', save));
 document.getElementById('check').addEventListener('click', checkHealth);
 document.getElementById('mdReview').addEventListener('click', mdReview);

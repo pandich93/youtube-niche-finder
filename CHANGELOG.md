@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Personal API tokens for the extension and MCP over HTTP** (plan 15,
+  sub-stages 5.7–5.8) — with `NF_MULTI_USER=1`, `Authorization: Bearer nf_...`
+  signs in like the session cookie. Tokens are created on the dashboard's MCP
+  screen ("Личные токены") or with `cli.py create-token`, shown once, stored as
+  SHA-256, listed with last use, and revocable; a token cannot manage tokens.
+  The extension gets an "Токен доступа" setting (kept in
+  `chrome.storage.local`, masked in the popup). The HTTP MCP services require a
+  token (the SDK's `token_verifier`), tools act as the token's user and YouTube
+  calls count against that user's budget; stdio stays local as user 1.
+
 - **Per-user YouTube budgets** (plan 15, sub-stages 5.5–5.6) — in multi-user
   mode each signed-in user spends a daily share of the installation's one
   YouTube key (`NF_USER_DAILY_UNITS`, default 2000; `NF_USER_DAILY_SEARCH_CALLS`,

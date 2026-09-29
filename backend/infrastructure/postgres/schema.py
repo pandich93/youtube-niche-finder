@@ -420,6 +420,20 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
+-- plan 15 (5.7-5.8): personal API tokens for the browser extension and MCP
+-- over HTTP ("Authorization: Bearer nf_..."); only the SHA-256 is stored and
+-- the plaintext is shown once, when the token is created.
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL DEFAULT 1,
+    token_hash TEXT NOT NULL UNIQUE,
+    name TEXT,
+    created_at TEXT,
+    last_used_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
+
 -- plan 15 (5.4): "read" is personal even though the event is shared -- one row
 -- per user and event once that user has seen it (was events.seen_at).
 CREATE TABLE IF NOT EXISTS event_reads (

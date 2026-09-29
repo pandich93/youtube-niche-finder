@@ -165,3 +165,66 @@ def logout(token: str) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------- API tokens (5.7-5.8)
+# For clients that cannot hold the session cookie: the browser extension and
+# MCP over HTTP. "nf_" + 32 random bytes, shown once; only the SHA-256 is kept.
+
+TOKEN_PREFIX = "nf_"
+
+
+def create_api_token(user_id: int, name: str = None) -> dict:
+    token = TOKEN_PREFIX + secrets.token_urlsafe(32)
+    conn = db.get_conn()
+    try:
+        row = conn.execute("INSERT INTO api_tokens (user_id, token_hash, name, created_at) "
+                           "VALUES (?,?,?,?) RETURNING id",
+                           (user_id, _token_hash(token), (name or "").strip()[:80] or None,
+                            db.now_iso())).fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    return {"id": row["id"], "token": token, "name": name,
+            "note": "shown once -- copy it now; only its hash is stored"}
+
+
+def list_api_tokens(user_id: int) -> list:
+    conn = db.get_conn()
+    try:
+        return [{"id": r["id"], "name": r["name"], "createdAt": r["created_at"],
+                 "lastUsedAt": r["last_used_at"]}
+                for r in conn.execute("SELECT id, name, created_at, last_used_at FROM api_tokens "
+                                      "WHERE user_id = ? ORDER BY id", (user_id,)).fetchall()]
+    finally:
+        conn.close()
+
+
+def revoke_api_token(user_id: int, token_id: int) -> bool:
+    conn = db.get_conn()
+    try:
+        row = conn.execute("DELETE FROM api_tokens WHERE id = ? AND user_id = ? RETURNING id",
+                           (token_id, user_id)).fetchone()
+        conn.commit()
+        return bool(row)
+    finally:
+        conn.close()
+
+
+def user_for_api_token(token: str):
+    """{id, email, isAdmin} for a live API token, else None."""
+    if not token or not token.startswith(TOKEN_PREFIX):
+        return None
+    conn = db.get_conn()
+    try:
+        row = conn.execute(
+            "UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ? RETURNING user_id",
+            (db.now_iso(), _token_hash(token))).fetchone()
+        if not row:
+            return None
+        u = conn.execute("SELECT id, email, is_admin FROM users WHERE id = ?",
+                         (row["user_id"],)).fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    return {"id": u["id"], "email": u["email"], "isAdmin": bool(u["is_admin"])} if u else None

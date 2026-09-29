@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { sectionHead, notice } from '../ui.js';
+import { $, api, esc, ago, toast, sectionHead, notice, empty } from '../ui.js';
 import { view } from '../shared.js';
 
 /* ---------------------------------------------------------------- MCP */
@@ -227,7 +227,47 @@ cp .env.example .env   # впишите YOUTUBE_API_KEY</code></pre>
 
     <div class="card">
       ${notice('MCP-сервер — не то же самое, что веб-дашборд: Claude Desktop запускает свежий процесс на каждый диалог, поэтому правки в <code>backend/*.py</code> подхватываются в MCP сами собой при следующем запуске Claude Desktop. А вот у постоянно работающего дашборда (<code>docker compose up -d web</code>) после правок Python-файлов нужен <code>docker compose restart web</code> — подробнее в разделе «Справка и FAQ».')}
-    </div>`;
+    </div>
+    <div id="apiTokens"></div>`;
+  loadTokens();
+}
+
+/* План 15 (5.7-5.8): личные токены для расширения и MCP по HTTP -- только на
+   сервере с входом. Токен показывается один раз, в базе остаётся только хеш. */
+async function loadTokens() {
+  const box = $('#apiTokens');
+  if (!box) return;
+  let me;
+  try { me = await api('/api/auth/me'); } catch { return; }
+  if (!me.multiUser || !me.user) return;
+  let d = { tokens: [] };
+  try { d = await api('/api/auth/tokens'); } catch (e) { box.innerHTML = notice(esc(e.message), 'error'); return; }
+  box.innerHTML = `<div class="card">
+    ${sectionHead('Личные токены', 'для браузерного расширения и MCP по HTTP на сервере с входом',
+      `<input type="text" id="tokenName" placeholder="название: ноутбук, расширение…" style="width:220px">
+       <button class="btn btn-sm" id="tokenCreate" type="button">Создать токен</button>`)}
+    <div id="tokenFresh"></div>
+    ${d.tokens.length ? `<ul class="digest-list">${d.tokens.map((t) => `<li style="white-space:normal">
+        <b>${esc(t.name || 'без названия')}</b> · создан ${esc(ago(t.createdAt))}
+        · ${t.lastUsedAt ? `использован ${esc(ago(t.lastUsedAt))}` : 'ещё не использовался'}
+        <button class="btn btn-ghost btn-sm js-token-off" data-id="${t.id}" type="button">Отозвать</button></li>`).join('')}</ul>`
+      : empty('токенов пока нет')}
+    <div class="section-sub">Расширение: вставьте токен в его настройках (поле «Токен доступа»). MCP по HTTP:
+      заголовок <code>Authorization: Bearer &lt;токен&gt;</code>. Токен действует как вы — ваши каналы, черновики,
+      алерты и ваша квота. Утёк — отзовите его здесь.</div>
+  </div>`;
+  $('#tokenCreate').addEventListener('click', async () => {
+    try {
+      const t = await api('/api/auth/tokens', { method: 'POST', body: { name: $('#tokenName').value.trim() } });
+      await loadTokens();
+      $('#tokenFresh').innerHTML = notice(`Скопируйте сейчас — больше он не покажется: <code>${esc(t.token)}</code>`, 'ok');
+    } catch (e) { toast(e.message, 'err'); }
+  });
+  box.querySelectorAll('.js-token-off').forEach((btn) => btn.addEventListener('click', async () => {
+    if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; btn.textContent = 'Точно отозвать?'; return; }
+    try { await api(`/api/auth/tokens/${btn.dataset.id}`, { method: 'DELETE' }); loadTokens(); }
+    catch (e) { toast(e.message, 'err'); }
+  }));
 }
 
 export { viewMcp };

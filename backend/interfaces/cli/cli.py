@@ -304,6 +304,16 @@ def cmd_set_password(args):
     out({"updated": uid, "sessionsEnded": True})
 
 
+def cmd_create_token(args):
+    from application import auth
+    users = {u["email"]: u["id"] for u in auth.list_users()}
+    uid = users.get(args.email.strip().lower())
+    if uid is None:
+        print(f"error: no user {args.email}", file=sys.stderr)
+        sys.exit(1)
+    out(auth.create_api_token(uid, args.name))
+
+
 def cmd_users(args):
     from application import auth
     out(auth.list_users())
@@ -346,6 +356,10 @@ def main():
     p.add_argument("--password-stdin", action="store_true", help="читать пароль из stdin")
     p.set_defaults(fn=cmd_set_password)
     sub.add_parser("users", help="список пользователей").set_defaults(fn=cmd_users)
+    p = sub.add_parser("create-token", help="личный токен для расширения и MCP по HTTP")
+    p.add_argument("email")
+    p.add_argument("--name", default=None)
+    p.set_defaults(fn=cmd_create_token)
 
     p = sub.add_parser("embed-videos", help="досчитать эмбеддинги для уже собранных видео (0 quota)")
     p.add_argument("--limit", type=int, default=1000)

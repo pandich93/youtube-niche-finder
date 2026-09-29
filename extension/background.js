@@ -23,7 +23,10 @@ const TTL = { video: 120e3, channel: 300e3, deep: 300e3, batch: 600e3, health: 3
 
 async function getSettings() {
   const stored = await chrome.storage.sync.get(DEFAULTS);
-  return { ...DEFAULTS, ...stored };
+  // План 15 (5.7): личный API-токен для сервера с входом (NF_MULTI_USER=1).
+  // Секрет -- в storage.local: sync разнёс бы его по всем браузерам аккаунта.
+  const { apiToken = '' } = await chrome.storage.local.get({ apiToken: '' });
+  return { ...DEFAULTS, ...stored, apiToken };
 }
 
 // ------------------------------------------------------------------- кэш
@@ -58,9 +61,11 @@ async function api(path, { method = 'GET', body = null } = {}) {
       method,
       // X-NF-Client на каждом запросе: бэкенд принимает POST/DELETE только с ним
       // или с JSON-телом, иначе 403 (защита от чужих сайтов, api.py local_only_guard)
-      headers: body
-        ? { 'Content-Type': 'application/json', 'X-NF-Client': 'extension' }
-        : { 'X-NF-Client': 'extension' },
+      headers: {
+        'X-NF-Client': 'extension',
+        ...(body ? { 'Content-Type': 'application/json' } : {}),
+        ...(s.apiToken ? { Authorization: `Bearer ${s.apiToken}` } : {}),
+      },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(s.timeoutMs),
     });
@@ -282,8 +287,18 @@ chrome.alarms.onAlarm.addListener((a) => {
 // ------------------------------------------------------------- маршрутизация
 
 const HANDLERS = {
-  'settings:get': () => getSettings(),
-  'settings:set': async (m) => { await chrome.storage.sync.set(m.patch || {}); cache.clear(); return getSettings(); },
+  'settings:get': async () => {
+    const s = await getSettings();
+    return { ...s, apiToken: s.apiToken ? '••••' : '' };   // попапу хватает «есть / нет»
+  },
+  'settings:set': async (m) => {
+    const { apiToken, ...rest } = m.patch || {};
+    await chrome.storage.sync.set(rest);
+    if (apiToken !== undefined) await chrome.storage.local.set({ apiToken: String(apiToken).trim() });
+    cache.clear();
+    const s = await getSettings();
+    return { ...s, apiToken: s.apiToken ? '••••' : '' };   // сам токен в попап не возвращаем
+  },
   'health': () => health(),
   'stats': () => stats(),
   'why': (m) => explainOutlier(m.videoId, m.refresh),

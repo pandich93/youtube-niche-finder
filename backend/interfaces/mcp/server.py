@@ -38,7 +38,25 @@ API_KEY = os.environ.get("YOUTUBE_API_KEY")
 db.init_db()
 C.seed_fallback()
 
-mcp = MCPServer("niche-finder")
+def _build_server():
+    """stdio: local, user 1, no sign-in. HTTP with NF_MULTI_USER=1: bearer API
+    tokens required, tools act as the token's user (plan 15, 5.8)."""
+    from interfaces.mcp import auth as mcp_auth
+    if mcp_auth.http_auth_enabled():
+        return MCPServer("niche-finder", token_verifier=mcp_auth.ApiTokenVerifier(),
+                         auth=mcp_auth.auth_settings(),
+                         middleware=[mcp_auth.quota_owner_middleware])
+    return MCPServer("niche-finder")
+
+
+mcp = _build_server()
+
+
+def _uid() -> int:
+    """Whose personal data a tool works on: the API token's user over HTTP,
+    the local user over stdio."""
+    from interfaces.mcp import auth as mcp_auth
+    return mcp_auth.current_user_id()
 
 
 def _require_key():
@@ -252,7 +270,7 @@ def request_transcript(video_id: str, reason: str = None, compare_group: str = N
     YouTube's own transcript panel and paste it via the dashboard's
     Транскрипты screen. Shows up in list_transcript_queue(status='pending')
     until then."""
-    return transcripts_uc.request_transcript(video_id, reason=reason,
+    return transcripts_uc.request_transcript(video_id, reason=reason, user_id=_uid(),
                                              compare_group=compare_group,
                                              requested_by="claude-mcp")
 
@@ -262,7 +280,7 @@ def request_transcript(video_id: str, reason: str = None, compare_group: str = N
     idempotent_hint=True, open_world_hint=False))
 def list_transcript_queue(status: str = None) -> list:
     """status: 'pending' | 'ready' | 'error', or omit for everything."""
-    return transcripts_uc.list_transcript_queue(status=status)
+    return transcripts_uc.list_transcript_queue(status=status, user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -275,7 +293,7 @@ def search_transcripts(query: str, niche: str = None, compare_group: str = None,
     a youtu.be link with ?t=<seconds> when the chunk has a timestamp,
     views. FREE, no quota -- only searches what's already been pasted in."""
     try:
-        return transcripts_uc.search_transcripts(query, niche=niche,
+        return transcripts_uc.search_transcripts(query, niche=niche, user_id=_uid(),
                                                   compare_group=compare_group, k=k)
     except ValueError as e:
         return {"error": str(e)}
@@ -756,7 +774,7 @@ def track_channel(channel: str, note: str = None, collect: bool = True,
         finally:
             conn.close()
         res = {"channelId": cid}
-    T.track(cid, note)
+    T.track(cid, note, user_id=_uid())
     return {**res, "tracked": True, "note": note}
 
 
@@ -765,7 +783,7 @@ def track_channel(channel: str, note: str = None, collect: bool = True,
     idempotent_hint=True, open_world_hint=False))
 def untrack_channel(channel_id: str) -> dict:
     """Stop tracking a channel (history already collected is kept)."""
-    return T.untrack(channel_id)
+    return T.untrack(channel_id, user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -773,7 +791,7 @@ def untrack_channel(channel_id: str) -> dict:
     idempotent_hint=True, open_world_hint=False))
 def list_tracked_channels() -> list:
     """The watchlist, with how many snapshots exist per channel."""
-    return T.list_tracked()
+    return T.list_tracked(user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -999,7 +1017,7 @@ def save_item(kind: str, ref_id: str, payload: dict = None, note: str = None,
     snapshot of the metrics it had at the time (pass the dict another tool
     just returned, e.g. inspect_video's result). Zero quota, local only."""
     from application import library as lib
-    return lib.save_item(kind, ref_id, payload=payload, note=note, folder=folder)
+    return lib.save_item(kind, ref_id, payload=payload, note=note, folder=folder, user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1009,7 +1027,7 @@ def list_saved_items(kind: str = None, folder: str = None, limit: int = 200) -> 
     """List the swipe file, optionally filtered by kind ('video'/'channel')
     and/or folder."""
     from application import library as lib
-    return lib.list_items(kind=kind, folder=folder, limit=limit)
+    return lib.list_items(kind=kind, folder=folder, limit=limit, user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1018,7 +1036,7 @@ def list_saved_items(kind: str = None, folder: str = None, limit: int = 200) -> 
 def delete_saved_item(item_id: int) -> dict:
     """Remove one swipe-file entry by id."""
     from application import library as lib
-    return lib.delete_item(item_id)
+    return lib.delete_item(item_id, user_id=_uid())
 
 
 # ---------------------------------------------------- metadata review (8.8)
@@ -1053,7 +1071,8 @@ def save_draft(title: str, description: str = "", tags: list = None, niche: str 
     checked against actual outcomes later via draft_outcomes."""
     from application import metadata_review as mr
     return mr.save_draft(title, description=description, tags=tags or [], niche=niche,
-                         channel_id=channel_id, is_short=is_short, review=review)
+                         channel_id=channel_id, is_short=is_short, review=review,
+                         user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1065,7 +1084,7 @@ def list_drafts(channel_id: str = None, unpublished_only: bool = False,
     to a published video."""
     from application import metadata_review as mr
     return mr.list_drafts(channel_id=channel_id, unpublished_only=unpublished_only,
-                          limit=limit)
+                          limit=limit, user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1075,7 +1094,7 @@ def link_draft(draft_id: int, video_id: str) -> dict:
     """Call once a saved draft has actually been published, so draft_outcomes
     can later compare what the review predicted to what really happened."""
     from application import metadata_review as mr
-    return mr.link_draft(draft_id, video_id)
+    return mr.link_draft(draft_id, video_id, user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1087,7 +1106,7 @@ def draft_outcomes(min_age_days: float = 7.0) -> list:
     learn whether these signals predict anything for YOUR channel. Does not
     itself judge right/wrong; hands both numbers back."""
     from application import metadata_review as mr
-    return mr.draft_outcomes(min_age_days=min_age_days)
+    return mr.draft_outcomes(min_age_days=min_age_days, user_id=_uid())
 
 
 # ------------------------------------------------------------- alerts (8.9)
@@ -1127,7 +1146,7 @@ def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
     reference for hook and numbers."""
     from application import briefs as briefs_mod
     return briefs_mod.build_brief(video_id, niche=niche, use_llm=use_llm, save=save,
-                                  gap_topic=gap_topic)
+                                  gap_topic=gap_topic, user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1171,7 +1190,7 @@ def daily_digest(period: str = "24h", top_n: int = 5) -> dict:
     items. The worker sends the same summary to Telegram/webhook once a day
     when NOTIFY_MODE is digest or both. Zero quota."""
     from application import digest as digest_mod
-    return digest_mod.build_digest(period=period, top_n=top_n)
+    return digest_mod.build_digest(period=period, top_n=top_n, user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1182,7 +1201,7 @@ def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100) -
     ('outlier'/'acceleration'/'title_change'/'silence_break'/'channel_gone'/
     'video_gone')."""
     from application import alerts as alerts_mod
-    return alerts_mod.list_events(unseen_only=unseen_only, kind=kind, limit=limit)
+    return alerts_mod.list_events(unseen_only=unseen_only, kind=kind, limit=limit, user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1192,7 +1211,7 @@ def mark_events_seen(ids: list = None, all_unseen: bool = False) -> dict:
     """Mark specific event ids (or every unseen event, with all_unseen=True)
     as seen."""
     from application import alerts as alerts_mod
-    return alerts_mod.mark_seen(ids=ids, all_unseen=all_unseen)
+    return alerts_mod.mark_seen(ids=ids, all_unseen=all_unseen, user_id=_uid())
 
 
 # --------------------------------------------------------- thumbnails (plan 13)
@@ -1261,7 +1280,7 @@ def own_channels() -> dict:
     OAuth is configured and what is missing. Impressions and thumbnail CTR are
     not in the Analytics API. Zero Data API quota."""
     from application import own_channels as own
-    return {"status": own.status(), **own.list_channels()}
+    return {"status": own.status(user_id=_uid()), **own.list_channels(user_id=_uid())}
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1273,7 +1292,7 @@ def own_vs_niche(channel_id: str, niche: str) -> dict:
     ratio, the share of your videos above the niche median, your top videos
     with their RPM."""
     from application import own_channels as own
-    return own.own_vs_niche(channel_id, niche)
+    return own.own_vs_niche(channel_id, niche, user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1285,7 +1304,7 @@ def rpm_calibration() -> dict:
     channel from public data -- below, inside or above, and real/mid.
     Unknown without the monetary scope or on an unmonetized channel."""
     from application import own_channels as own
-    return own.rpm_calibration()
+    return own.rpm_calibration(user_id=_uid())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -1297,7 +1316,7 @@ def sync_own_channels(channel_id: str = None) -> dict:
     Analytics lag). Uses the Analytics API quota of your own OAuth client, not
     the Data API key's; the worker does this daily."""
     from application import own_channels as own
-    return own.sync(channel_id=channel_id)
+    return own.sync(user_id=_uid(), channel_id=channel_id)
 
 
 # Ready-made scenarios (plan 11) -- registered after every tool they name.

@@ -28,6 +28,7 @@ def setup_module(_=None):
 def _clean():
     conn = db.get_conn()
     conn.execute("DELETE FROM sessions")
+    conn.execute("DELETE FROM api_tokens")
     conn.execute("DELETE FROM users WHERE id != 1")
     conn.execute("UPDATE users SET password_hash = NULL WHERE id = 1")
     conn.commit()
@@ -120,6 +121,38 @@ def test_changing_the_password_ends_existing_sessions():
     token = A.login("ann@example.com", PW)["token"]
     A.set_password("ann@example.com", "another long password")
     assert A.user_for_token(token) is None
+
+
+# ------------------------------------------------------------ API tokens
+
+def test_an_api_token_is_shown_once_and_stored_only_as_a_hash():
+    uid = A.create_user("ann@example.com", PW)
+    t = A.create_api_token(uid, "extension")
+    assert t["token"].startswith("nf_") and len(t["token"]) > 40
+    conn = db.get_conn()
+    rows = [dict(r) for r in conn.execute("SELECT * FROM api_tokens").fetchall()]
+    conn.close()
+    assert t["token"] not in repr(rows)
+    assert A.list_api_tokens(uid) == [{"id": t["id"], "name": "extension",
+                                       "createdAt": rows[0]["created_at"], "lastUsedAt": None}]
+
+
+def test_an_api_token_resolves_to_its_user_until_revoked():
+    uid = A.create_user("ann@example.com", PW)
+    other = A.create_user("bob@example.com", PW)
+    t = A.create_api_token(uid)
+    assert A.user_for_api_token(t["token"])["id"] == uid
+    assert A.list_api_tokens(uid)[0]["lastUsedAt"] is not None
+    assert A.revoke_api_token(other, t["id"]) is False          # not Bob's token
+    assert A.user_for_api_token(t["token"])["id"] == uid
+    assert A.revoke_api_token(uid, t["id"]) is True
+    assert A.user_for_api_token(t["token"]) is None
+
+
+def test_forged_or_session_shaped_tokens_are_not_api_tokens():
+    assert A.user_for_api_token("") is None
+    assert A.user_for_api_token("nf_forged") is None
+    assert A.user_for_api_token("not-prefixed-at-all") is None
 
 
 # ------------------------------------------------------------ migration

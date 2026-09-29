@@ -424,11 +424,12 @@ def test_build_brief_delegates_with_its_options(monkeypatch):
     assert srv.build_brief("v1") == {"found": True}
     assert srv.build_brief("v2", niche="n1", use_llm=False, save=False) == {"found": True}
     assert srv.build_brief("v3", gap_topic="how to X?") == {"found": True}
-    assert calls == [("v1", {"niche": None, "use_llm": True, "save": True, "gap_topic": None}),
+    assert calls == [("v1", {"niche": None, "use_llm": True, "save": True, "gap_topic": None,
+                             "user_id": 1}),
                      ("v2", {"niche": "n1", "use_llm": False, "save": False,
-                             "gap_topic": None}),
+                             "gap_topic": None, "user_id": 1}),
                      ("v3", {"niche": None, "use_llm": True, "save": True,
-                             "gap_topic": "how to X?"})]
+                             "gap_topic": "how to X?", "user_id": 1})]
 
 
 # --------------------------------------------------- content_gaps
@@ -493,7 +494,7 @@ def test_daily_digest_reads_the_summary_without_sending(monkeypatch):
     monkeypatch.setattr(digest_mod, "send_digest",
                         lambda **kw: (_ for _ in ()).throw(AssertionError("must not send")))
     assert srv.daily_digest(period="48h") == {"empty": True}
-    assert calls == [{"period": "48h", "top_n": 5}]
+    assert calls == [{"period": "48h", "top_n": 5, "user_id": 1}]
 
 
 # --------------------------------------------------- refresh_channels
@@ -728,13 +729,62 @@ def test_thumbnail_tools_route_to_the_application_layer(monkeypatch):
 def test_own_channel_tools_route_to_the_application_layer(monkeypatch):
     from application import own_channels as own
     calls = []
-    monkeypatch.setattr(own, "status", lambda: {"configured": True})
-    monkeypatch.setattr(own, "list_channels", lambda: calls.append("list") or {"channels": []})
-    monkeypatch.setattr(own, "own_vs_niche", lambda cid, niche: calls.append(("vs", cid, niche)) or {"v": 1})
-    monkeypatch.setattr(own, "rpm_calibration", lambda: calls.append("rpm") or {"r": 1})
+    monkeypatch.setattr(own, "status", lambda user_id=1: {"configured": True})
+    monkeypatch.setattr(own, "list_channels", lambda user_id=1: calls.append(("list", user_id))
+                        or {"channels": []})
+    monkeypatch.setattr(own, "own_vs_niche", lambda cid, niche, user_id=1:
+                        calls.append(("vs", cid, niche, user_id)) or {"v": 1})
+    monkeypatch.setattr(own, "rpm_calibration", lambda user_id=1: calls.append(("rpm", user_id))
+                        or {"r": 1})
     monkeypatch.setattr(own, "sync", lambda **kw: calls.append(("sync", kw)) or {"s": 1})
     assert srv.own_channels() == {"status": {"configured": True}, "channels": []}
     assert srv.own_vs_niche("UC1", "n1") == {"v": 1}
     assert srv.rpm_calibration() == {"r": 1}
     assert srv.sync_own_channels(channel_id="UC1") == {"s": 1}
-    assert calls == ["list", ("vs", "UC1", "n1"), "rpm", ("sync", {"channel_id": "UC1"})]
+    assert calls == [("list", 1), ("vs", "UC1", "n1", 1), ("rpm", 1),
+                     ("sync", {"user_id": 1, "channel_id": "UC1"})]
+
+# --------------------------------------------------- MCP over HTTP sign-in (plan 15, 5.8)
+
+def test_stdio_needs_no_token_and_acts_as_the_local_user(monkeypatch):
+    from interfaces.mcp import auth as mcp_auth
+    monkeypatch.setenv("NF_MULTI_USER", "1")
+    monkeypatch.delenv("MCP_TRANSPORT", raising=False)
+    assert mcp_auth.http_auth_enabled() is False
+    assert srv._uid() == 1
+
+
+def test_http_with_multi_user_requires_tokens(monkeypatch):
+    from interfaces.mcp import auth as mcp_auth
+    monkeypatch.setenv("NF_MULTI_USER", "1")
+    monkeypatch.setenv("MCP_TRANSPORT", "streamable-http")
+    assert mcp_auth.http_auth_enabled() is True
+    server = srv._build_server()
+    assert server.settings.auth is not None
+    monkeypatch.setenv("NF_MULTI_USER", "0")
+    assert mcp_auth.http_auth_enabled() is False
+
+
+def test_the_token_verifier_maps_a_token_to_its_user(monkeypatch):
+    import anyio
+
+    from application import auth
+    from interfaces.mcp import auth as mcp_auth
+    monkeypatch.setattr(auth, "user_for_api_token",
+                        lambda t: {"id": 42, "email": "a@x", "isAdmin": False} if t == "nf_ok" else None)
+    v = mcp_auth.ApiTokenVerifier()
+    tok = anyio.run(v.verify_token, "nf_ok")
+    assert tok.client_id == "42" and mcp_auth.SCOPE in tok.scopes
+    assert anyio.run(v.verify_token, "nf_bad") is None
+
+
+def test_tools_act_as_the_tokens_user(monkeypatch):
+    from mcp.server.auth.provider import AccessToken
+
+    from interfaces.mcp import auth as mcp_auth
+    monkeypatch.setattr(mcp_auth, "get_access_token",
+                        lambda: AccessToken(token="nf_x", client_id="42", scopes=[mcp_auth.SCOPE]))
+    seen = {}
+    monkeypatch.setattr(srv.T, "list_tracked", lambda user_id=1: seen.setdefault("uid", user_id) and [])
+    srv.list_tracked_channels()
+    assert seen["uid"] == 42

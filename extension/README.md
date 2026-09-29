@@ -90,6 +90,7 @@ blue number is the count of unseen alerts. The badge is refreshed via
 | Badges on cards | multipliers on thumbnails in lists |
 | Outliers only | the badge appears from ×1.5 and up |
 | Views-per-hour badge | a second, blue badge under the thumbnail with views per hour |
+| Access token | only for a server with sign-in (`NF_MULTI_USER=1`): a personal token from the dashboard's MCP screen ("Личные токены"). Kept in `chrome.storage.local` (not synced to your other browsers), sent as `Authorization: Bearer` to the backend address only, never shown back in the popup |
 
 ## What it costs in quota
 

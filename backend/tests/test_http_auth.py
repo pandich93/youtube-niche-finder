@@ -30,6 +30,7 @@ def _clean(monkeypatch):
     monkeypatch.setattr(api, "RATE_LIMIT_PER_MINUTE", 0)
     conn = db.get_conn()
     conn.execute("DELETE FROM sessions")
+    conn.execute("DELETE FROM api_tokens")
     conn.execute("DELETE FROM users WHERE id != 1")
     conn.commit()
     conn.close()
@@ -119,6 +120,51 @@ def test_secure_cookie_can_be_forced_for_https(multi, monkeypatch):
     A.create_user("ann@example.com", PW)
     resp = client().post("/api/auth/login", json={"email": "ann@example.com", "password": PW})
     assert "secure" in resp.headers["set-cookie"].lower()
+
+
+# ------------------------------------------------------------ API tokens (5.7)
+
+def _signed_in(email="ann@example.com"):
+    uid = A.create_user(email, PW)
+    c = client()
+    c.post("/api/auth/login", json={"email": email, "password": PW})
+    return uid, c
+
+
+def test_a_bearer_token_works_like_a_sign_in(multi):
+    uid, c = _signed_in()
+    token = c.post("/api/auth/tokens", json={"name": "extension"}).json()["token"]
+    ext = TestClient(api.app, headers={"X-NF-Client": "extension", "Authorization": f"Bearer {token}"})
+    assert ext.get("/api/stats").status_code == 200
+    assert ext.get("/api/auth/me").json()["user"]["id"] == uid
+    bad = TestClient(api.app, headers={"X-NF-Client": "extension", "Authorization": "Bearer nf_forged"})
+    assert bad.get("/api/stats").status_code == 401
+
+
+def test_a_token_cannot_manage_tokens(multi):
+    _, c = _signed_in()
+    token = c.post("/api/auth/tokens", json={}).json()["token"]
+    ext = TestClient(api.app, headers={"X-NF-Client": "extension", "Authorization": f"Bearer {token}"})
+    assert ext.get("/api/auth/tokens").status_code == 403
+    assert ext.post("/api/auth/tokens", json={}).status_code == 403
+
+
+def test_tokens_are_listed_without_the_secret_and_can_be_revoked(multi):
+    _, c = _signed_in()
+    made = c.post("/api/auth/tokens", json={"name": "ext"}).json()
+    listed = c.get("/api/auth/tokens").json()["tokens"]
+    assert [t["id"] for t in listed] == [made["id"]] and "token" not in listed[0]
+    assert c.delete(f"/api/auth/tokens/{made['id']}").status_code == 200
+    ext = TestClient(api.app, headers={"X-NF-Client": "extension",
+                                       "Authorization": f"Bearer {made['token']}"})
+    assert ext.get("/api/stats").status_code == 401
+
+
+def test_you_cannot_revoke_someone_elses_token(multi):
+    _, a = _signed_in("a@example.com")
+    _, b = _signed_in("b@example.com")
+    tid = a.post("/api/auth/tokens", json={}).json()["id"]
+    assert b.delete(f"/api/auth/tokens/{tid}").status_code == 404
 
 
 if __name__ == "__main__":

@@ -248,10 +248,19 @@ daily share of it — `NF_USER_DAILY_UNITS` (2000) and
 YouTube client checks the share before every call and counts it after; running
 out answers 429 to that user only. The dashboard footer shows what is left.
 
-**Not ready for other people yet.** Still shared or missing: Telegram/webhook alerts and the
-digest (they follow the local user's watchlist; per-user settings in 5.9),
-the LLM budget and rate limit (5.10), and sign-in for the extension and MCP
-over HTTP (5.7, 5.8).
+Personal API tokens (sub-stages 5.7–5.8) sign in clients that cannot hold the
+cookie: the browser extension (its "Токен доступа" setting) and MCP over HTTP
+(`Authorization: Bearer nf_...`). Create one on the dashboard's MCP screen while
+signed in, or `make cli ARGS="create-token ann@example.com --name laptop"`. Only
+the SHA-256 is stored, the plaintext is shown once, a token cannot create or
+list tokens, and it acts as its user — their data and their YouTube budget.
+With `NF_MULTI_USER=1`, the HTTP MCP services (`mcp-http`/`mcp-https`) require
+such a token (401 without one; set `MCP_PUBLIC_URL` to the address clients use);
+MCP over stdio stays local and acts as user 1.
+
+**Not ready for other people yet.** Still shared: Telegram/webhook alerts and
+the digest (they follow the local user's watchlist; per-user settings in 5.9)
+and the LLM budget and rate limit (5.10).
 
 ### CLI: everything, without Claude Desktop
 

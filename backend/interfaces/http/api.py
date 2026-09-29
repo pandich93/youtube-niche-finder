@@ -144,6 +144,15 @@ async def session_guard(request, call_next):
         return await call_next(request)
     token = request.cookies.get(AUTH_COOKIE, "")
     user = await run_in_threadpool(AUTH.user_for_token, token) if token else None
+    request.state.via = "session" if user else None
+    if not user:
+        # plan 15 (5.7): the extension (and scripts) send a personal API token
+        # instead of the cookie; bearer auth is not sent by browsers on their
+        # own, so it carries no CSRF risk
+        auth = request.headers.get("authorization", "")
+        if auth[:7].lower() == "bearer ":
+            user = await run_in_threadpool(AUTH.user_for_api_token, auth[7:].strip())
+            request.state.via = "token" if user else None
     if user:
         request.state.user_id, request.state.user = user["id"], user
     path = request.url.path
@@ -804,6 +813,34 @@ def auth_logout(request: Request, response: Response):
 
 def _uid(request) -> int:
     return getattr(request.state, "user_id", LOCAL_USER_ID)
+
+
+def _session_user(request):
+    """Token management needs a real sign-in: a leaked API token must not be
+    able to mint more tokens or list them."""
+    if not multi_user_enabled():
+        raise HTTPException(status_code=409, detail="API tokens exist only with NF_MULTI_USER=1")
+    if getattr(request.state, "via", None) != "session":
+        raise HTTPException(status_code=403, detail="sign in to the dashboard to manage tokens")
+    return request.state.user_id
+
+
+@app.get("/api/auth/tokens")
+def api_tokens_list(request: Request):
+    return {"tokens": AUTH.list_api_tokens(_session_user(request))}
+
+
+@app.post("/api/auth/tokens")
+def api_tokens_create(request: Request, payload: dict = Body(default={})):
+    """A personal token for the extension or MCP over HTTP, shown ONCE."""
+    return AUTH.create_api_token(_session_user(request), payload.get("name"))
+
+
+@app.delete("/api/auth/tokens/{token_id}")
+def api_tokens_revoke(request: Request, token_id: int):
+    if not AUTH.revoke_api_token(_session_user(request), token_id):
+        raise HTTPException(status_code=404, detail="token not found")
+    return {"revoked": token_id}
 
 
 # ------------------------------------------------------ own channels (plan 14)
