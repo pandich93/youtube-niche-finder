@@ -41,6 +41,62 @@ SEARCH_DAILY_CALL_LIMIT = 100
 DAILY_UNIT_LIMIT = int(os.environ.get("YOUTUBE_DAILY_UNIT_LIMIT") or 10000)
 
 
+def user_units_key(user_id) -> str:
+    """plan 15 (5.5): a signed-in user's share of today's units."""
+    return f"yt_units_{P.pacific_date_key()}_u{user_id}"
+
+
+def user_search_key(user_id) -> str:
+    return f"search_calls_{P.pacific_date_key()}_u{user_id}"
+
+
+def user_limits() -> dict:
+    """Daily budget per signed-in user in multi-user mode; 0 = no limit.
+    Read on every call so a changed .env needs only a restart."""
+    def num(name, default):
+        try:
+            return max(0, int(os.environ.get(name) or default))
+        except ValueError:
+            return default
+    return {"units": num("NF_USER_DAILY_UNITS", 2000),
+            "searchCalls": num("NF_USER_DAILY_SEARCH_CALLS", 20)}
+
+
+def user_usage(user_id) -> dict:
+    import infrastructure.postgres as db
+    conn = db.get_conn()
+    try:
+        units = int(db.get_meta(conn, user_units_key(user_id)) or 0)
+        searches = int(db.get_meta(conn, user_search_key(user_id)) or 0)
+    finally:
+        conn.close()
+    limits = user_limits()
+    return {"units": units, "searchCalls": searches, "limits": limits,
+            "unitsLeft": None if not limits["units"] else max(0, limits["units"] - units),
+            "searchCallsLeft": (None if not limits["searchCalls"]
+                                else max(0, limits["searchCalls"] - searches)),
+            "resetsAt": "midnight Pacific Time"}
+
+
+def _check_user_budget(path: str):
+    """Refuse the call before it is sent when the signed-in user who asked for
+    it has spent their daily share. No owner (worker, single-user) -- no check."""
+    from infrastructure import quota_owner
+    uid = quota_owner.current()
+    if uid is None:
+        return
+    usage = user_usage(uid)
+    limits = usage["limits"]
+    if limits["units"] and usage["units"] + COST.get(path, 1) > limits["units"]:
+        raise UserQuotaExceeded(
+            f"your daily YouTube budget on this server is spent ({usage['units']} of "
+            f"{limits['units']} units); it resets at midnight Pacific Time")
+    if path == "search" and limits["searchCalls"] and usage["searchCalls"] >= limits["searchCalls"]:
+        raise UserQuotaExceeded(
+            f"your daily search budget on this server is spent ({usage['searchCalls']} of "
+            f"{limits['searchCalls']} searches); it resets at midnight Pacific Time")
+
+
 def units_meta_key() -> str:
     """meta key of today's shared-pool counter -- per Pacific-Time day, when
     Google resets the 10,000 units."""
@@ -55,9 +111,15 @@ def _record_units(path: str):
         # resolved at call time, so tests that swap infrastructure.postgres
         # for a double in sys.modules are honoured
         import infrastructure.postgres as db
+        from infrastructure import quota_owner
         conn = db.get_conn()
         try:
             db.incr_meta(conn, units_meta_key(), COST.get(path, 1))
+            uid = quota_owner.current()
+            if uid is not None:
+                db.incr_meta(conn, user_units_key(uid), COST.get(path, 1))
+                if path == "search":
+                    db.incr_meta(conn, user_search_key(uid), 1)
             conn.commit()
         finally:
             conn.close()
@@ -67,6 +129,10 @@ def _record_units(path: str):
 
 class QuotaExceeded(RuntimeError):
     pass
+
+
+class UserQuotaExceeded(QuotaExceeded):
+    """One signed-in user's daily share is spent; everyone else can go on."""
 
 
 def parse_duration(duration: str) -> int:
@@ -83,6 +149,7 @@ def parse_duration(duration: str) -> int:
 def _get(path: str, api_key: str, retries: int = 3, **params):
     params = {k: v for k, v in params.items() if v is not None}
     params["key"] = api_key
+    _check_user_budget(path)
     last = None
     for attempt in range(retries):
         resp = requests.get(f"{BASE}/{path}", params=params, timeout=30)

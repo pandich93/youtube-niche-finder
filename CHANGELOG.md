@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Per-user YouTube budgets** (plan 15, sub-stages 5.5–5.6) — in multi-user
+  mode each signed-in user spends a daily share of the installation's one
+  YouTube key (`NF_USER_DAILY_UNITS`, default 2000; `NF_USER_DAILY_SEARCH_CALLS`,
+  default 20; 0 = no limit). The YouTube client checks the share before every
+  call and counts it after, so every quota-spending route is covered; running
+  out answers 429 to that user only. The worker and single-user mode are not
+  limited. `/api/auth/me` and the dashboard footer show what is left.
+
 - **Per-user data** (plan 15, sub-stage 5.4) — with `NF_MULTI_USER=1` every
   signed-in user has their own watchlist, swipe file, drafts, transcript queue
   and alert read marks, through HTTP; someone else's saved item or draft id

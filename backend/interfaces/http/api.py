@@ -57,6 +57,7 @@ from application import template_risk as TRK
 from application import thumbnail_search as TS
 from application import transcripts as TR
 from domain.users import LOCAL_USER_ID, multi_user_enabled
+from infrastructure import quota_owner
 from infrastructure.categories import repository as C
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
@@ -151,7 +152,14 @@ async def session_guard(request, call_next):
         return JSONResponse(status_code=401,
                             content={"detail": "Sign in first: NF_MULTI_USER is on -- "
                                                "войдите в дашборде."})
-    return await call_next(request)
+    # plan 15 (5.5): YouTube calls made for this request count against the
+    # signed-in user's daily budget (infrastructure/quota_owner.py)
+    owner = quota_owner.set_owner(user["id"]) if user else None
+    try:
+        return await call_next(request)
+    finally:
+        if owner is not None:
+            quota_owner.reset(owner)
 
 
 # ------------------------------------------------ защита от чужих сайтов
@@ -769,7 +777,9 @@ def _cookie_secure(request) -> bool:
 def auth_me(request: Request):
     if not multi_user_enabled():
         return {"multiUser": False, "user": {"id": LOCAL_USER_ID, "email": "local", "isAdmin": True}}
-    return {"multiUser": True, "user": request.state.user}
+    user = request.state.user
+    return {"multiUser": True, "user": user,
+            "quota": yt.user_usage(user["id"]) if user else None}
 
 
 @app.post("/api/auth/login")

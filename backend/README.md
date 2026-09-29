@@ -240,10 +240,15 @@ events — a user sees the events of the channels on their own watchlist; the
 worker refreshes each tracked channel once, whoever tracks it. MCP over stdio
 acts as the local user.
 
-**Not ready for other people yet.** Still shared or missing: the YouTube
-quota (one key for the installation, as the YouTube API policies require one
-API project per application, III.D.1.c — per-user budgets come in 5.5, so one
-user could spend everyone's daily quota), Telegram/webhook alerts and the
+YouTube quota (sub-stages 5.5–5.6): one API key serves the installation, as
+the YouTube API policies require one API project per application (III.D.1.c),
+and the worker refreshes shared data with it. Each signed-in user spends a
+daily share of it — `NF_USER_DAILY_UNITS` (2000) and
+`NF_USER_DAILY_SEARCH_CALLS` (20 of the 100 daily searches), 0 = no limit. The
+YouTube client checks the share before every call and counts it after; running
+out answers 429 to that user only. The dashboard footer shows what is left.
+
+**Not ready for other people yet.** Still shared or missing: Telegram/webhook alerts and the
 digest (they follow the local user's watchlist; per-user settings in 5.9),
 the LLM budget and rate limit (5.10), and sign-in for the extension and MCP
 over HTTP (5.7, 5.8).

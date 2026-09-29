@@ -60,7 +60,7 @@ def test_multi_user_mode_answers_401_without_a_session(multi):
     c = client()
     resp = c.get("/api/stats")
     assert resp.status_code == 401 and "sign in" in resp.json()["detail"].lower()
-    assert c.get("/api/auth/me").json() == {"multiUser": True, "user": None}
+    assert c.get("/api/auth/me").json() == {"multiUser": True, "user": None, "quota": None}
 
 
 def test_public_routes_stay_open(multi):

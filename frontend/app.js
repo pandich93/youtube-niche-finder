@@ -79,6 +79,15 @@ async function start() {
       await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
       location.reload();
     });
+    // План 15 (5.5): личная доля общей квоты YouTube на сегодня.
+    const qd = me.quota;
+    if (qd) {
+      const part = (used, limit) => (limit ? `${used}/${limit}` : `${used}, без лимита`);
+      const box = $('#myQuota');
+      box.hidden = false;
+      box.textContent = `Ваша квота сегодня: ${part(qd.units, qd.limits.units)} units, `
+        + `поисков ${part(qd.searchCalls, qd.limits.searchCalls)}`;
+    }
   }
   addEventListener('nf:signin-required', () => showSignIn('Сессия закончилась — войдите снова.'));
   loadNiches();
