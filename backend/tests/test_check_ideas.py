@@ -59,6 +59,36 @@ def _seed(video_id, channel_id, title, days_ago, niche_slug, view_count=100):
     conn.close()
 
 
+def test_a_single_idea_works_with_real_embeddings(monkeypatch):
+    """Regression: embed(list) always returns a list, but check_ideas wrapped it
+    again for a single idea, so cosine() got a list of vectors and raised
+    "only 0-dimensional arrays can be converted to Python scalars" on any
+    corpus that actually has embeddings. Stubbed with the real contract."""
+    import numpy as np
+
+    import infrastructure.embeddings.fastembed_provider as emb
+
+    vec = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+
+    def fake_embed(texts):
+        return vec if isinstance(texts, str) else [vec for _ in texts]
+    monkeypatch.setattr(emb, "embed", fake_embed)
+
+    _seed("vidsingle1", "UCsingleidea000000000001", "unrelated words entirely", 200,
+          "single-idea-niche")
+    conn = db.get_conn()
+    conn.execute("UPDATE videos SET embedding = ? WHERE video_id = ?",
+                 (vec.tobytes(), "vidsingle1"))
+    conn.commit()
+    conn.close()
+
+    res = Q.check_ideas(["a brand new topic"], niche="single-idea-niche")
+    assert res["semanticSearchAvailable"] is True
+    idea = res["ideas"][0]
+    assert idea["matchCount"] == 1 and idea["matches"][0]["matchedBy"] == "semantic"
+    assert idea["matches"][0]["semanticScore"] == 1.0
+
+
 def test_rejects_empty_ideas():
     try:
         Q.check_ideas([])

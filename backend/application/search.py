@@ -244,9 +244,7 @@ def check_ideas(ideas: list, niche: str = None, min_similarity: float = 0.55,
                     video_vecs[rec["video_id"]] = emb.from_blob(rec["embedding"])
         conn.close()
         if video_vecs:
-            idea_vecs = emb.embed(ideas)
-            if len(ideas) == 1:
-                idea_vecs = [idea_vecs]
+            idea_vecs = emb.embed(ideas)   # a list in -> a list out, even for one idea
             semantic_available = True
     except Exception:
         semantic_available = False
