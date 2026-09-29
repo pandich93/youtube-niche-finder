@@ -267,8 +267,11 @@ back; a user's webhook must be https to a public address, checked when saved
 and again before every send (no requests into your own network). The local
 user without saved settings keeps `NOTIFY_*` from `.env`.
 
-**Not ready for other people yet.** Still shared: the LLM budget and the rate
-limit (5.10).
+Limits per user (sub-stage 5.10): the request rate limit
+(`RATE_LIMIT_PER_MINUTE`) counts per signed-in user instead of per address,
+and each user may spend `NF_USER_DAILY_LLM_USD` (0.25, 0 = no limit) of LLM
+money a day inside the installation-wide `LLM_DAILY_BUDGET_USD`; cached answers
+cost nothing. LLM usage is recorded per user (`llm_usage.user_id`).
 
 ### CLI: everything, without Claude Desktop
 

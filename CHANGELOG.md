@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Per-user LLM budget and rate limit** (plan 15, sub-stage 5.10) — the
+  request rate limit counts per signed-in user instead of per address (sign-in
+  itself stays limited per address), and each user may spend
+  `NF_USER_DAILY_LLM_USD` (default 0.25, 0 = no limit) a day inside the
+  installation-wide `LLM_DAILY_BUDGET_USD`. `llm_usage` is keyed by
+  `(user_id, day, model)`; the worker's LLM work is booked to the local user.
+
 - **Per-user notifications** (plan 15, sub-stage 5.9) — each user sets their
   own Telegram bot and chat or webhook and mode (instant / digest / both / off)
   on the "Данные" screen or `/api/settings/notifications`, with a test button.

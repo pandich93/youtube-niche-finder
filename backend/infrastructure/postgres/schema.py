@@ -655,7 +655,8 @@ def migrate(conn):
 # channel or ask for the same transcript. Swapped once, on the first start.
 _OWNER_KEYS = {"tracked_channels": ("user_id", "channel_id"),
                "transcript_requests": ("user_id", "video_id"),
-               "alert_deliveries": ("user_id", "alert_key")}   # plan 15 (5.9)
+               "alert_deliveries": ("user_id", "alert_key"),   # plan 15 (5.9)
+               "llm_usage": ("user_id", "day", "model")}        # plan 15 (5.10)
 
 
 def _primary_key(conn, table):

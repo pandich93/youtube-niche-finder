@@ -13,9 +13,21 @@ import os
 from datetime import datetime, timezone
 
 import infrastructure.postgres as db
+from domain.users import LOCAL_USER_ID
+from infrastructure import quota_owner
 from infrastructure.llm import factory
 
 DAILY_BUDGET_USD = float(os.environ.get("LLM_DAILY_BUDGET_USD", "1.0"))
+
+
+def user_daily_budget_usd() -> float:
+    """plan 15 (5.10): each signed-in user's share of the day's LLM spend in
+    multi-user mode; 0 = no personal limit. The installation-wide
+    LLM_DAILY_BUDGET_USD still caps everyone together."""
+    try:
+        return max(0.0, float(os.environ.get("NF_USER_DAILY_LLM_USD") or 0.25))
+    except ValueError:
+        return 0.25
 
 
 def today_utc() -> str:
@@ -32,6 +44,13 @@ def spent_today(conn) -> float:
     row = conn.execute(
         "SELECT COALESCE(SUM(cost_usd), 0) FROM llm_usage WHERE day=?",
         (today_utc(),)).fetchone()
+    return float(row[0] or 0)
+
+
+def user_spent_today(conn, user_id) -> float:
+    row = conn.execute(
+        "SELECT COALESCE(SUM(cost_usd), 0) FROM llm_usage WHERE day=? AND user_id=?",
+        (today_utc(), user_id)).fetchone()
     return float(row[0] or 0)
 
 
@@ -56,6 +75,11 @@ def run(task: str, system: str, user: str, schema: dict, model: str = None) -> d
             db.set_meta(conn, "llm_budget_blocked_until", today_utc())
             conn.commit()
             return None
+        # the signed-in user who asked (multi-user mode; the worker has none)
+        owner = quota_owner.current()
+        limit = user_daily_budget_usd()
+        if owner is not None and limit and user_spent_today(conn, owner) >= limit:
+            return None
 
         result = provider.complete_json(system, user, schema, model=model)
         if result is None:
@@ -67,14 +91,14 @@ def run(task: str, system: str, user: str, schema: dict, model: str = None) -> d
             (key, task, result.model, json.dumps(result.data),
              datetime.now(timezone.utc).isoformat()))
         conn.execute(
-            "INSERT INTO llm_usage (day, model, calls, prompt_tokens, completion_tokens, cost_usd) "
-            "VALUES (?,?,?,?,?,?) ON CONFLICT(day, model) DO UPDATE SET "
+            "INSERT INTO llm_usage (user_id, day, model, calls, prompt_tokens, completion_tokens, "
+            "cost_usd) VALUES (?,?,?,?,?,?,?) ON CONFLICT(user_id, day, model) DO UPDATE SET "
             "calls=llm_usage.calls+excluded.calls, "
             "prompt_tokens=llm_usage.prompt_tokens+excluded.prompt_tokens, "
             "completion_tokens=llm_usage.completion_tokens+excluded.completion_tokens, "
             "cost_usd=llm_usage.cost_usd+excluded.cost_usd",
-            (today_utc(), result.model, 1, result.prompt_tokens, result.completion_tokens,
-             result.cost_usd or 0))
+            (owner if owner is not None else LOCAL_USER_ID, today_utc(), result.model, 1,
+             result.prompt_tokens, result.completion_tokens, result.cost_usd or 0))
         conn.commit()
         return result.data
     finally:

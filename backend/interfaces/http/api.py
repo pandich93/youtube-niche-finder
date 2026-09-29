@@ -102,6 +102,12 @@ async def rate_limit(request, call_next):
         return await call_next(request)
 
     client = request.client.host if request.client else "unknown"
+    # plan 15 (5.10): a signed-in user has their own window, so several people
+    # behind one address do not throttle each other (sign-in itself stays
+    # limited per address, which also slows password guessing)
+    user = getattr(request.state, "user", None)
+    if user:
+        client = f"user:{user['id']}"
     now = time.monotonic()
     hits = _rate_hits[client]
     while hits and hits[0] <= now - 60.0:
