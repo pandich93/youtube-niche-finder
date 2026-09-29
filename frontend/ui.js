@@ -19,6 +19,10 @@ async function api(path, opts = {}) {
   });
   let data = null;
   try { data = await res.json(); } catch { /* пустой ответ */ }
+  if (res.status === 401 && path !== '/api/auth/login') {
+    // План 15: сессия кончилась или её нет -- app.js покажет экран входа.
+    dispatchEvent(new CustomEvent('nf:signin-required'));
+  }
   if (!res.ok) {
     const msg = data?.detail || data?.error || `HTTP ${res.status}`;
     throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));

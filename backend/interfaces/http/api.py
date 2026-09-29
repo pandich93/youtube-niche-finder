@@ -10,16 +10,18 @@
 От чужих сайтов в браузере прикрывает local_only_guard: проверка Host и
 обязательный JSON или X-NF-Client у POST/PUT/PATCH/DELETE.
 """
+import hmac
 import os
 import time
 from collections import defaultdict, deque
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import Body, FastAPI, HTTPException, Response
+from fastapi import Body, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 try:
     from dotenv import load_dotenv
@@ -30,6 +32,7 @@ except Exception:  # pragma: no cover
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import alerts as AL
+from application import auth as AUTH
 from application import briefs as BR
 from application import channel_tracking as T
 from application import collecting as collector
@@ -53,6 +56,7 @@ from application import tags as TG
 from application import template_risk as TRK
 from application import thumbnail_search as TS
 from application import transcripts as TR
+from domain.users import LOCAL_USER_ID, multi_user_enabled
 from infrastructure.categories import repository as C
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
@@ -112,6 +116,41 @@ async def rate_limit(request, call_next):
         )
 
     hits.append(now)
+    return await call_next(request)
+
+
+# ------------------------------------------------ вход (план 15)
+#
+# NF_MULTI_USER=1: без живой сессии /api отвечает 401. Сессия -- случайный
+# токен в cookie nf_session (HttpOnly, SameSite=Strict); в базе только его
+# SHA-256. Открыты без входа: сам вход и «кто я», /api/health (healthcheck
+# контейнера) и возврат из Google OAuth (пользователя там называет одноразовый
+# state, а Strict-cookie при переходе с чужого сайта не приходит). Middleware
+# стоит внутри защиты Host: чужое имя получает 400 раньше, чем 401, и ответы
+# 401 тоже уезжают с заголовками CORS. Без NF_MULTI_USER всё как раньше:
+# пользователь 1, без входа.
+
+AUTH_COOKIE = "nf_session"
+_PUBLIC_API = frozenset({"/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/health",
+                         "/api/own/oauth/callback"})
+
+
+@app.middleware("http")
+async def session_guard(request, call_next):
+    request.state.user_id = LOCAL_USER_ID
+    request.state.user = None
+    if not multi_user_enabled():
+        return await call_next(request)
+    token = request.cookies.get(AUTH_COOKIE, "")
+    user = await run_in_threadpool(AUTH.user_for_token, token) if token else None
+    if user:
+        request.state.user_id, request.state.user = user["id"], user
+    path = request.url.path
+    if (path.startswith("/api/") and path not in _PUBLIC_API and not user
+            and request.method != "OPTIONS"):
+        return JSONResponse(status_code=401,
+                            content={"detail": "Sign in first: NF_MULTI_USER is on -- "
+                                               "войдите в дашборде."})
     return await call_next(request)
 
 
@@ -708,6 +747,44 @@ def packaging_history(video_id: str):
     return PKG.packaging_history(video_id)
 
 
+# ------------------------------------------------------ sign-in (plan 15)
+
+def _cookie_secure(request) -> bool:
+    forced = os.environ.get("NF_COOKIE_SECURE", "").strip().lower() in ("1", "true", "yes")
+    return forced or request.url.scheme == "https"
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request):
+    if not multi_user_enabled():
+        return {"multiUser": False, "user": {"id": LOCAL_USER_ID, "email": "local", "isAdmin": True}}
+    return {"multiUser": True, "user": request.state.user}
+
+
+@app.post("/api/auth/login")
+def auth_login(request: Request, response: Response, payload: dict = Body(...)):
+    """Accounts are created by an admin (`cli.py create-user`). The session
+    token goes only into the HttpOnly cookie, never into the JSON body."""
+    try:
+        s = AUTH.login(str(payload.get("email") or ""), str(payload.get("password") or ""))
+    except AUTH.AuthError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    response.set_cookie(AUTH_COOKIE, s["token"], max_age=AUTH.SESSION_DAYS * 86400, path="/",
+                        httponly=True, samesite="strict", secure=_cookie_secure(request))
+    return {"user": AUTH.user_for_token(s["token"]), "expiresAt": s["expiresAt"]}
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request, response: Response):
+    AUTH.logout(request.cookies.get(AUTH_COOKIE, ""))
+    response.delete_cookie(AUTH_COOKIE, path="/")
+    return {"signedOut": True}
+
+
+def _uid(request) -> int:
+    return getattr(request.state, "user_id", LOCAL_USER_ID)
+
+
 # ------------------------------------------------------ own channels (plan 14)
 # Personal data of the local user. The refresh token never leaves
 # application/own_channels.py; nothing below returns or logs it.
@@ -722,55 +799,80 @@ def _own_call(fn, *args, **kwargs):
 
 
 @app.get("/api/own/status")
-def own_status():
-    return OWN.status()
+def own_status(request: Request):
+    return OWN.status(user_id=_uid(request))
+
+
+OAUTH_STATE_COOKIE = "nf_oauth_state"
+_OAUTH_CALLBACK_PATH = "/api/own/oauth/callback"
 
 
 @app.post("/api/own/connect")
-def own_connect():
+def own_connect(request: Request, response: Response):
     """A Google consent URL; the browser opens it and Google sends the user
-    back to /api/own/oauth/callback."""
-    return _own_call(OWN.start_connect)
+    back to /api/own/oauth/callback. The state also goes into a short-lived
+    cookie of THIS browser: a consent link opened anywhere else (someone else's
+    link, forwarded to a victim) cannot attach a channel to the account that
+    started it. Lax, so it rides along on Google's top-level redirect back."""
+    # Come back to the loopback name the dashboard is open on (localhost vs
+    # 127.0.0.1 are different cookie hosts); the Host is already allow-listed.
+    host = request.headers.get("host", "")
+    redirect = (f"{request.url.scheme}://{host}{_OAUTH_CALLBACK_PATH}"
+                if _host_name(host) in ("127.0.0.1", "localhost", "[::1]") else None)
+    out = dict(_own_call(OWN.start_connect, user_id=_uid(request), redirect_uri=redirect))
+    state = out.pop("state", None)
+    if state:
+        response.set_cookie(OAUTH_STATE_COOKIE, state, max_age=OWN.STATE_TTL_MINUTES * 60,
+                            path=_OAUTH_CALLBACK_PATH, httponly=True, samesite="lax",
+                            secure=_cookie_secure(request))
+    return out
 
 
 @app.get("/api/own/oauth/callback")
-def own_oauth_callback(state: str = "", code: str = "", error: str = ""):
+def own_oauth_callback(request: Request, state: str = "", code: str = "", error: str = ""):
     """Google's redirect after consent. Always lands on the dashboard's "Мои
     каналы" screen with a short result -- never a stack trace or a token."""
+    def done(fragment):
+        resp = RedirectResponse(f"/#/own?{fragment}", status_code=303)
+        resp.delete_cookie(OAUTH_STATE_COOKIE, path=_OAUTH_CALLBACK_PATH)
+        return resp
+
     if error or not code:
-        return RedirectResponse(f"/#/own?error={quote(error or 'no code from Google', safe='')}",
-                                status_code=303)
+        return done(f"error={quote(error or 'no code from Google', safe='')}")
+    started_here = request.cookies.get(OAUTH_STATE_COOKIE, "")
+    if not state or not started_here or not hmac.compare_digest(started_here, state):
+        return done("error=" + quote("this sign-in link was started in another browser or has "
+                                     "expired -- start the connection again from this browser", safe=""))
     try:
         out = OWN.finish_connect(state, code)
     except (OWN.ConnectError, OWN.NotConfigured) as e:
-        return RedirectResponse(f"/#/own?error={quote(str(e)[:200], safe='')}", status_code=303)
-    return RedirectResponse(f"/#/own?connected={quote(out.get('title') or out['channelId'], safe='')}",
-                            status_code=303)
+        return done(f"error={quote(str(e)[:200], safe='')}")
+    return done(f"connected={quote(out.get('title') or out['channelId'], safe='')}")
 
 
 @app.get("/api/own/channels")
-def own_channels_list():
-    return OWN.list_channels()
+def own_channels_list(request: Request):
+    return OWN.list_channels(user_id=_uid(request))
 
 
 @app.post("/api/own/sync")
-def own_sync(channel_id: str = None):
-    return _own_call(OWN.sync, channel_id=channel_id)
+def own_sync(request: Request, channel_id: str = None):
+    return _own_call(OWN.sync, user_id=_uid(request), channel_id=channel_id)
 
 
 @app.get("/api/own/rpm-calibration")
-def own_rpm_calibration():
-    return OWN.rpm_calibration()
+def own_rpm_calibration(request: Request):
+    return OWN.rpm_calibration(user_id=_uid(request))
 
 
 @app.get("/api/own/channels/{channel_id}/vs-niche")
-def own_vs_niche(channel_id: str, niche: str):
-    return _own_call(OWN.own_vs_niche, channel_id, niche)
+def own_vs_niche(request: Request, channel_id: str, niche: str):
+    return _own_call(OWN.own_vs_niche, channel_id, niche, user_id=_uid(request))
 
 
 @app.delete("/api/own/channels/{channel_id}")
-def own_disconnect(channel_id: str):
-    return _own_call(OWN.disconnect, channel_id)
+def own_disconnect(request: Request, channel_id: str):
+    return _own_call(OWN.disconnect, channel_id, user_id=_uid(request))
 
 
 @app.get("/api/thumbnails/search")

@@ -271,6 +271,44 @@ def cmd_export_niche(args):
     out({"written": path, "rows": result["rowCount"]})
 
 
+def _read_password(args):
+    """From stdin with --password-stdin (scripts), else asked twice without
+    echo. Never taken from argv, where it would land in shell history."""
+    if args.password_stdin:
+        return sys.stdin.readline().rstrip("\n")
+    import getpass
+    first = getpass.getpass("password: ")
+    if getpass.getpass("again: ") != first:
+        print("error: the passwords differ", file=sys.stderr)
+        sys.exit(1)
+    return first
+
+
+def cmd_create_user(args):
+    from application import auth
+    try:
+        uid = auth.create_user(args.email, _read_password(args), is_admin=args.admin)
+    except auth.AuthError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    out({"created": uid, "email": args.email.strip().lower(), "admin": args.admin})
+
+
+def cmd_set_password(args):
+    from application import auth
+    try:
+        uid = auth.set_password(args.email, _read_password(args))
+    except auth.AuthError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+    out({"updated": uid, "sessionsEnded": True})
+
+
+def cmd_users(args):
+    from application import auth
+    out(auth.list_users())
+
+
 def cmd_seed(args):
     # cli.py now lives at backend/interfaces/cli/ (two levels deeper than the
     # old flat backend/cli.py), so climb back up to backend/ before reaching
@@ -296,6 +334,18 @@ def main():
     sub.add_parser("digest-send", help="отправить дайджест за сутки прямо сейчас").set_defaults(
         fn=cmd_digest_send)
     sub.add_parser("seed", help="залить синтетические данные").set_defaults(fn=cmd_seed)
+
+    # plan 15: accounts for NF_MULTI_USER=1 -- by invitation, no sign-up page
+    p = sub.add_parser("create-user", help="создать пользователя (вход при NF_MULTI_USER=1)")
+    p.add_argument("email")
+    p.add_argument("--admin", action="store_true")
+    p.add_argument("--password-stdin", action="store_true", help="читать пароль из stdin")
+    p.set_defaults(fn=cmd_create_user)
+    p = sub.add_parser("set-password", help="задать или сменить пароль (local -- ваши данные)")
+    p.add_argument("email")
+    p.add_argument("--password-stdin", action="store_true", help="читать пароль из stdin")
+    p.set_defaults(fn=cmd_set_password)
+    sub.add_parser("users", help="список пользователей").set_defaults(fn=cmd_users)
 
     p = sub.add_parser("embed-videos", help="досчитать эмбеддинги для уже собранных видео (0 quota)")
     p.add_argument("--limit", type=int, default=1000)

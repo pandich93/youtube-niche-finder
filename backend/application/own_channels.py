@@ -78,23 +78,30 @@ def _require_configured():
 
 # ---------------------------------------------------------- connect
 
-def start_connect(user_id: int = LOCAL_USER_ID) -> dict:
+def start_connect(user_id: int = LOCAL_USER_ID, redirect_uri: str = None) -> dict:
     """A Google consent URL for this user. The state is single-use and
-    expires in STATE_TTL_MINUTES; the PKCE verifier stays on the server."""
+    expires in STATE_TTL_MINUTES; the PKCE verifier stays on the server.
+    redirect_uri: the loopback address the dashboard is open on (the HTTP
+    layer passes it), so the browser comes back to the same host name its
+    state cookie belongs to; OWN_OAUTH_REDIRECT_URI, when set, wins."""
     _require_configured()
+    redirect = os.environ.get(REDIRECT_ENV, "").strip() or redirect_uri or DEFAULT_REDIRECT
     verifier, challenge = OA.pkce_pair()
     state = OA.new_state()
     conn = db.get_conn()
     try:
         conn.execute("DELETE FROM own_oauth_pending WHERE created_at::timestamptz < now() - "
                      "(? || ' minutes')::interval", (str(STATE_TTL_MINUTES),))
-        conn.execute("INSERT INTO own_oauth_pending (state, user_id, code_verifier, created_at) "
-                     "VALUES (?,?,?,?)", (state, user_id, verifier, db.now_iso()))
+        conn.execute("INSERT INTO own_oauth_pending (state, user_id, code_verifier, created_at, "
+                     "redirect_uri) VALUES (?,?,?,?,?)",
+                     (state, user_id, verifier, db.now_iso(), redirect))
         conn.commit()
     finally:
         conn.close()
-    return {"authUrl": OA.auth_url(_client()[0], _redirect_uri(), state, challenge),
-            "expiresInMinutes": STATE_TTL_MINUTES, "redirectUri": _redirect_uri()}
+    # `state` is for the HTTP layer to bind to the browser that started this
+    # (a short-lived cookie checked at the callback); it never reaches the page.
+    return {"authUrl": OA.auth_url(_client()[0], redirect, state, challenge),
+            "state": state, "expiresInMinutes": STATE_TTL_MINUTES, "redirectUri": redirect}
 
 
 def finish_connect(state: str, code: str, today: date = None) -> dict:
@@ -104,7 +111,7 @@ def finish_connect(state: str, code: str, today: date = None) -> dict:
     conn = db.get_conn()
     try:
         row = conn.execute("DELETE FROM own_oauth_pending WHERE state = ? RETURNING user_id, "
-                           "code_verifier, created_at", (state or "",)).fetchone()
+                           "code_verifier, created_at, redirect_uri", (state or "",)).fetchone()
         conn.commit()
     finally:
         conn.close()
@@ -115,7 +122,8 @@ def finish_connect(state: str, code: str, today: date = None) -> dict:
     user_id = row["user_id"]
     cid, secret = _client()
     try:
-        tokens = OA.exchange_code(cid, secret, code, row["code_verifier"], _redirect_uri())
+        tokens = OA.exchange_code(cid, secret, code, row["code_verifier"],
+                                  row["redirect_uri"] or _redirect_uri())
     except OA.OAuthError as e:
         raise ConnectError(str(e)) from None
     refresh = tokens.get("refresh_token")

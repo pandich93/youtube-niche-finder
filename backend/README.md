@@ -214,6 +214,33 @@ window coverage — then prints, in plain words, exactly what to fix: YouTube
 Data API v3 not enabled, an IP/referrer restriction on the key, exhausted
 quota, an empty database, no history. One check costs 1 quota unit.
 
+### Multi-user mode (plan 15, experimental, off by default)
+
+`NF_MULTI_USER=1` turns on sign-in. Accounts are by invitation — there is no
+sign-up page:
+
+```bash
+make cli ARGS="create-user ann@example.com --admin"   # asks for the password twice
+make cli ARGS="set-password local"                    # your existing data belongs to "local"
+make cli ARGS="users"
+```
+
+Passwords are scrypt hashes (standard library), at least 10 characters. A
+session is a random token in the `nf_session` cookie (HttpOnly,
+SameSite=Strict, `Secure` with `NF_COOKIE_SECURE=1` or over HTTPS, 30 days);
+the database keeps only its SHA-256, and changing a password ends every
+session. Without a session `/api` answers 401 except sign-in, `/api/health` and
+the Google OAuth return. Every personal table has a `user_id` (existing rows
+moved to user 1, "local").
+
+**Not ready for other people yet.** Sub-stages 5.1–5.3 add the switch,
+accounts and data ownership; separating tracked channels, drafts, the swipe
+file and alerts per user is sub-stage 5.4. Until then everyone who signs in
+sees the same data (only "Мои каналы" is already per user). The extension and
+MCP over HTTP do not sign in yet (5.7, 5.8). One YouTube API key serves the
+whole installation, as the YouTube API policies require one API project per
+application (III.D.1.c); per-user quota budgets come in 5.5.
+
 ### CLI: everything, without Claude Desktop
 
 ```bash
@@ -518,9 +545,13 @@ One-time setup (each user brings their own OAuth client; nothing is shared):
 5. `docker compose up -d web worker`, open the dashboard → **Мои каналы** →
    **Подключить канал**, sign in and allow read-only access.
 
-Google sends you back to `http://127.0.0.1:8080/api/own/oauth/callback`
-(`OWN_OAUTH_REDIRECT_URI` if the dashboard runs on another port); a Desktop app
-client accepts any loopback address, so there is nothing to register. The
+Google sends you back to `/api/own/oauth/callback` on the loopback address the
+dashboard is open on (`localhost:8080` or `127.0.0.1:8080`; set
+`OWN_OAUTH_REDIRECT_URI` to pin one); a Desktop app client accepts loopback
+addresses, so there is nothing to register. Finish the sign-in in the same
+browser you started it in: the start sets a short-lived cookie that the return
+must match, so a consent link opened anywhere else is refused and cannot attach
+someone else's channel to your account. The
 consent asks only for read-only scopes (`youtube.readonly`,
 `yt-analytics.readonly`, `yt-analytics-monetary.readonly`); the flow uses PKCE
 and a single-use state that expires in 10 minutes.

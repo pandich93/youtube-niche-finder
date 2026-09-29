@@ -203,3 +203,20 @@ def test_content_gaps_parts_are_on_screen(browser, base_url, route, expected):
     # отдаёт уже преобразованный текст -- сравниваем без регистра.
     for part in expected:
         assert part.lower() in text.lower(), f"{part!r} not on #/{route}: {text[:400]}"
+
+
+def test_sign_in_screen_when_multi_user_mode_has_no_session(browser, base_url):
+    # План 15: сервер с NF_MULTI_USER=1 без сессии -- дашборд показывает вход, а не
+    # сыплет ошибками 401 по экранам. Ответ /api/auth/me подменяем.
+    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    problems = []
+    page.on("pageerror", lambda e: problems.append(str(e)))
+    page.route("**/api/auth/me", lambda r: r.fulfill(
+        status=200, content_type="application/json", body='{"multiUser": true, "user": null}'))
+    try:
+        page.goto(f"{base_url}/#/overview")
+        page.wait_for_selector("#signInForm", timeout=30000)
+        text = page.inner_text("#view")
+    finally:
+        page.close()
+    assert "Вход в niche-finder" in text and not problems

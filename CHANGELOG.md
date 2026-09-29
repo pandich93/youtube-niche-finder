@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Multi-user groundwork** (plan 15, sub-stages 5.1–5.3, experimental) —
+  `NF_MULTI_USER` (off by default: nothing changes). When on, `/api` needs a
+  sign-in: invited accounts (`cli.py create-user` / `set-password` / `users`,
+  no sign-up page), scrypt password hashes, a session token in an HttpOnly
+  SameSite=Strict cookie (`nf_session`, `Secure` with `NF_COOKIE_SECURE` or
+  HTTPS) stored only as SHA-256, a sign-in screen and a sign-out button in the
+  dashboard. New tables `users` (user 1 = "local") and `sessions`; every
+  personal table (`tracked_channels`, `saved_items`, `drafts`,
+  `alert_deliveries`, `transcript_requests`, `llm_usage`) gets `user_id`, with
+  existing rows moved to user 1; `SCHEMA_VERSION` 4. "Мои каналы" already reads
+  as the signed-in user. Separating the rest per user is sub-stage 5.4 — until
+  then do not give accounts to other people. One YouTube API key per
+  installation (YouTube API policies III.D.1.c), per-user quota budgets later.
+
 - **Your own channels** (plan 14) — connect your channels through Google OAuth
   (your own "Desktop app" client, read-only scopes, loopback redirect with PKCE
   and a single-use 10-minute state) and get their real YouTube Analytics
@@ -495,6 +509,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   `embed=True`.
 
 ### Fixed
+
+- **Own-channel connect could be finished by someone else's browser** (plan 14,
+  found by the plan-15 security review) — the OAuth state was not bound to the
+  browser that started it, so a consent link forwarded to another user would
+  attach their channel to the sender's account. The start now sets a
+  short-lived HttpOnly `nf_oauth_state` cookie (SameSite=Lax, callback path
+  only) that the callback must match; the return address follows the loopback
+  host the dashboard is open on (`localhost` vs `127.0.0.1`) and is stored
+  with the state so the token exchange repeats it.
 
 - **Slow loads on large windows** — `load_window` looked up the category title
   with one database query per video (3573 on a 120-day window, about 90% of its

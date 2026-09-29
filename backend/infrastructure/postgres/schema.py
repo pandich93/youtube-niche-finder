@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 
 from infrastructure.postgres.connection import get_conn  # noqa: F401  (re-export for callers)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS channels (
@@ -392,14 +392,48 @@ CREATE TABLE IF NOT EXISTS own_oauth_pending (
     state TEXT PRIMARY KEY,
     user_id BIGINT NOT NULL DEFAULT 1,
     code_verifier TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    redirect_uri TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_own_oauth_pending_user ON own_oauth_pending(user_id);
+
+-- ---------- plan 15: users and sign-in (used when NF_MULTI_USER=1) ----------
+-- id 1 is the local user every personal row belonged to before; it has no
+-- password until `cli.py set-password local`. Passwords are scrypt hashes;
+-- sessions keep only the SHA-256 of the cookie token.
+
+CREATE TABLE IF NOT EXISTS users (
+    id BIGSERIAL PRIMARY KEY,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT,
+    is_admin INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    created_at TEXT,
+    expires_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 """
 
 # columns added to pre-existing tables (name -> DDL type)
+# plan 15: every personal table gets its owner; ADD COLUMN with DEFAULT 1
+# moves the rows that already exist to the local user.
+_USER_ID = "BIGINT NOT NULL DEFAULT 1"
+
 MIGRATIONS = {
+    "tracked_channels": {"user_id": _USER_ID},
+    "saved_items": {"user_id": _USER_ID},
+    "alert_deliveries": {"user_id": _USER_ID},
+    "transcript_requests": {"user_id": _USER_ID},
+    "llm_usage": {"user_id": _USER_ID},
+    # plan 14 fix: the exact redirect the consent used (the token exchange must repeat it)
+    "own_oauth_pending": {"redirect_uri": "TEXT"},
     "videos": {
         "category_id": "TEXT",
         "region": "TEXT",
@@ -435,6 +469,7 @@ MIGRATIONS = {
     # plan 02: a draft born from an outlier brief points back at that outlier.
     "drafts": {
         "source_video_id": "TEXT",
+        "user_id": _USER_ID,          # plan 15 (drafts is keyed once: a second key would win)
     },
 }
 
@@ -539,6 +574,18 @@ def migrate(conn):
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_channels_llm_faceless "
             "ON channels ((llm_labels->>'is_faceless'))")
+    # plan 15: an index per owner column, and the local user every
+    # pre-multi-user row belongs to (no password: it cannot sign in until one
+    # is set with `cli.py set-password local`)
+    from domain.users import LOCAL_USER_ID, PERSONAL_TABLES
+    for table in PERSONAL_TABLES:
+        if "user_id" in _existing_columns(conn, table):
+            conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_user ON {table}(user_id)")
+    if _existing_columns(conn, "users"):
+        conn.execute("INSERT INTO users (id, email, is_admin, created_at) VALUES (?, 'local', 1, ?) "
+                     "ON CONFLICT (id) DO NOTHING", (LOCAL_USER_ID, now_iso()))
+        conn.execute("SELECT setval(pg_get_serial_sequence('users', 'id'), "
+                     "GREATEST((SELECT MAX(id) FROM users), 1))")
     conn.execute(
         "INSERT INTO meta (key, value) VALUES ('schema_version', ?) "
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",

@@ -364,3 +364,31 @@ def test_key_reads_dotenv_and_strips(monkeypatch):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q", "-p", "no:cacheprovider"]))
+
+
+# ------------------------------------------------------- accounts (plan 15)
+
+def test_create_user_reads_the_password_from_stdin(run, stub, monkeypatch):
+    import io
+
+    from application import auth
+    s = stub(auth, "create_user", result=7)
+    monkeypatch.setattr(sys, "stdin", io.StringIO("correct horse battery\n"))
+    code, out, _ = run("create-user", "Ann@Example.com", "--admin", "--password-stdin")
+    assert code in (0, None) and json.loads(out)["created"] == 7
+    assert s.calls == [(("Ann@Example.com", "correct horse battery"), {"is_admin": True})]
+
+
+def test_set_password_error_goes_to_stderr_with_exit_1(run, stub, monkeypatch):
+    import io
+
+    from application import auth
+    stub(auth, "set_password", raises=auth.AuthError("no user x@example.com"))
+    monkeypatch.setattr(sys, "stdin", io.StringIO("correct horse battery\n"))
+    code, _, err = run("set-password", "x@example.com", "--password-stdin")
+    assert code == 1 and "no user" in err
+
+
+def test_the_password_is_never_an_argument(run):
+    code, _, err = run("create-user", "a@example.com", "--password", "x")
+    assert code == 2 and "unrecognized arguments" in err

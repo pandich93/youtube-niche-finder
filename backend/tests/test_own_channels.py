@@ -229,3 +229,23 @@ def test_disconnect_revokes_and_forgets_everything(monkeypatch):
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_the_consent_and_the_token_exchange_use_the_same_redirect(monkeypatch):
+    seen = {}
+
+    def exchange(cid, secret, code, verifier, redirect_uri):
+        seen["redirect"] = redirect_uri
+        return {"access_token": "at", "refresh_token": REFRESH, "scope": " ".join(OA.SCOPES)}
+    monkeypatch.setattr(OA, "exchange_code", exchange)
+    out = OWN.start_connect(redirect_uri="http://localhost:8080/api/own/oauth/callback")
+    q = parse_qs(urlsplit(out["authUrl"]).query)
+    assert q["redirect_uri"] == ["http://localhost:8080/api/own/oauth/callback"]
+    OWN.finish_connect(q["state"][0], "c0de", today=TODAY)
+    assert seen["redirect"] == "http://localhost:8080/api/own/oauth/callback"
+
+
+def test_the_configured_redirect_wins(monkeypatch):
+    monkeypatch.setenv("OWN_OAUTH_REDIRECT_URI", "http://127.0.0.1:9000/api/own/oauth/callback")
+    out = OWN.start_connect(redirect_uri="http://localhost:8080/api/own/oauth/callback")
+    assert out["redirectUri"] == "http://127.0.0.1:9000/api/own/oauth/callback"

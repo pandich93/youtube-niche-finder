@@ -493,10 +493,14 @@ def test_thumbnail_search_without_query_is_400(stub):
 
 # --------------------------------------------------- own channels (plan 14)
 
-def test_own_connect_returns_the_consent_url(stub):
-    stub("OWN", "start_connect", result={"authUrl": "https://accounts.google.com/x"})
+def test_own_connect_returns_the_consent_url_and_binds_the_state_to_this_browser(stub):
+    stub("OWN", "start_connect", result={"authUrl": "https://accounts.google.com/x", "state": "st4te"})
     resp = client.post("/api/own/connect")
     assert resp.status_code == 200 and resp.json()["authUrl"].startswith("https://accounts.google.com")
+    assert "state" not in resp.json()
+    cookie = resp.headers["set-cookie"].lower()
+    assert "nf_oauth_state=st4te" in cookie and "httponly" in cookie and "samesite=lax" in cookie
+    assert "path=/api/own/oauth/callback" in cookie
 
 
 def test_own_connect_without_setup_is_428(stub):
@@ -508,15 +512,32 @@ def test_own_connect_without_setup_is_428(stub):
 
 def test_oauth_callback_redirects_to_the_screen(stub):
     fin = stub("OWN", "finish_connect", result={"channelId": "UC1", "title": "My Channel"})
-    resp = client.get("/api/own/oauth/callback?state=s&code=c", follow_redirects=False)
+    c = TestClient(api.app, headers={"X-NF-Client": "tests"})
+    c.cookies.set("nf_oauth_state", "s", path="/api/own/oauth/callback")
+    resp = c.get("/api/own/oauth/callback?state=s&code=c", follow_redirects=False)
     assert resp.status_code == 303 and resp.headers["location"] == "/#/own?connected=My%20Channel"
     assert fin.args == ("s", "c")
+
+
+def test_oauth_callback_from_another_browser_is_refused(stub):
+    # Someone else's consent link: the state is valid on the server, but this
+    # browser never started it, so it must not attach a channel to that account.
+    fin = stub("OWN", "finish_connect", result={"channelId": "UC1", "title": "Victim"})
+    for cookie in (None, "other-state"):
+        c = TestClient(api.app, headers={"X-NF-Client": "tests"})
+        if cookie:
+            c.cookies.set("nf_oauth_state", cookie, path="/api/own/oauth/callback")
+        resp = c.get("/api/own/oauth/callback?state=s&code=c", follow_redirects=False)
+        assert resp.status_code == 303 and "error=" in resp.headers["location"]
+    assert fin.calls == []
 
 
 def test_oauth_callback_errors_become_a_message_not_a_trace(stub):
     from application import own_channels as own
     stub("OWN", "finish_connect", raises=own.ConnectError("the sign-in link expired"))
-    resp = client.get("/api/own/oauth/callback?state=s&code=c", follow_redirects=False)
+    c = TestClient(api.app, headers={"X-NF-Client": "tests"})
+    c.cookies.set("nf_oauth_state", "s", path="/api/own/oauth/callback")
+    resp = c.get("/api/own/oauth/callback?state=s&code=c", follow_redirects=False)
     assert resp.status_code == 303 and "error=the%20sign-in%20link%20expired" in resp.headers["location"]
     resp = client.get("/api/own/oauth/callback?error=access_denied", follow_redirects=False)
     assert "error=access_denied" in resp.headers["location"]
@@ -526,3 +547,9 @@ def test_own_channel_you_did_not_connect_is_404(stub):
     from application import own_channels as own
     stub("OWN", "own_vs_niche", raises=own.NotConnected("UC9"))
     assert client.get("/api/own/channels/UC9/vs-niche?niche=n1").status_code == 404
+
+
+def test_own_connect_returns_to_the_host_the_dashboard_is_open_on(stub):
+    s = stub("OWN", "start_connect", result={"authUrl": "https://accounts.google.com/x", "state": "st"})
+    TestClient(api.app, headers={"X-NF-Client": "tests", "Host": "localhost:8080"}).post("/api/own/connect")
+    assert s.kwargs["redirect_uri"] == "http://localhost:8080/api/own/oauth/callback"

@@ -1,6 +1,6 @@
 /* Точка входа дашборда: тема, глобальные фильтры, подвал, первый render().
    Экраны -- screens/*.js, роутинг -- router.js, общее -- shared.js. */
-import { $, api, esc, state } from './ui.js';
+import { $, api, esc, notice, state } from './ui.js';
 import { loadFootStat } from './shared.js';
 import { render } from './router.js';
 
@@ -40,7 +40,50 @@ function initChrome() {
   addEventListener('hashchange', render);
 }
 
-initChrome();
-loadNiches();
-loadFootStat();
-render();
+/* ------------------------------------------------ вход (план 15)
+   Только при NF_MULTI_USER=1 на сервере. Аккаунты создаёт администратор
+   (cli.py create-user), регистрации нет. Сессия -- HttpOnly cookie, скрипт её
+   не видит и не хранит. */
+function showSignIn(message = '') {
+  $('#crumbSection').textContent = 'Вход';
+  $('#view').innerHTML = `${message ? notice(esc(message), 'error') : ''}
+    <div class="card" style="max-width:420px">
+      <div class="section-head"><div><div class="section-title">Вход в niche-finder</div>
+        <div class="section-sub">аккаунт выдаёт администратор этого сервера</div></div></div>
+      <form id="signInForm" style="display:grid;gap:10px">
+        <input type="email" id="signInEmail" placeholder="email" autocomplete="username" required>
+        <input type="password" id="signInPassword" placeholder="пароль" autocomplete="current-password" required>
+        <button class="btn" type="submit">Войти</button>
+      </form>
+    </div>`;
+  $('#signInForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/api/auth/login', { method: 'POST',
+        body: { email: $('#signInEmail').value, password: $('#signInPassword').value } });
+      location.reload();
+    } catch (err) { showSignIn(err.message); }
+  });
+}
+
+async function start() {
+  initChrome();
+  let me = { multiUser: false, user: null };
+  try { me = await api('/api/auth/me'); } catch { /* старый сервер без входа */ }
+  if (me.multiUser && !me.user) { showSignIn(); return; }
+  if (me.multiUser) {
+    const out = $('#signOut');
+    out.hidden = false;
+    out.textContent = `Выйти (${me.user.email})`;
+    out.addEventListener('click', async () => {
+      await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
+      location.reload();
+    });
+  }
+  addEventListener('nf:signin-required', () => showSignIn('Сессия закончилась — войдите снова.'));
+  loadNiches();
+  loadFootStat();
+  render();
+}
+
+start();

@@ -32,8 +32,8 @@ function setupHtml(st) {
           Храните ключ только в <code>.env</code>: без него сохранённые токены не прочитать, придётся подключить канал заново.</li>
         <li>Перезапустите: <code>docker compose up -d web worker</code>.</li>
       </ol>
-      <p>Адрес возврата после входа: <code>${esc(st.redirectUri)}</code> — для клиента типа Desktop app его отдельно
-        прописывать не нужно. Подробно — в <code>backend/README.md</code>, раздел «Your own channels».</p>
+      <p>После входа Google вернёт вас на этот же адрес дашборда (<code>/api/own/oauth/callback</code>) — для клиента
+        типа Desktop app его отдельно прописывать не нужно. Завершайте вход в том же браузере, где начали. Подробно — в <code>backend/README.md</code>, раздел «Your own channels».</p>
     </div></div>`;
 }
 
