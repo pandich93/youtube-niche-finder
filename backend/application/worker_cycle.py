@@ -12,6 +12,7 @@ Default daily budget (well inside the free tier):
   trending     once a day mostPopular per region            ~3 units / region
   queries      once a day WORKER_QUERIES, if set            1 search call each
   thumbnails   every 6h   tracked channels' last 30d        0 units (i.ytimg.com)
+  sponsors     every 1h   new/changed video descriptions    0 units (local DB only)
 
 Configure with env vars (see .env.example). Set WORKER_QUERIES to keep a set of
 topics continuously fresh, e.g. "ai automation,faceless history,нейросети".
@@ -32,6 +33,7 @@ from application import enrichment as enrich_mod
 from application import maturity_curve as curve_mod
 from application import niche_clusters as clusters_mod
 from application import packaging as packaging_mod
+from application import sponsors as sponsors_mod
 from domain import periods as P
 from infrastructure.llm import factory as llm_factory
 from infrastructure.llm.null import NullProvider
@@ -72,6 +74,12 @@ CALIBRATE_INTERVAL_MIN = int(os.environ.get("WORKER_CALIBRATE_INTERVAL_MIN", "14
 DO_THUMBS = os.environ.get("WORKER_THUMBS", "1") not in ("0", "false", "no")
 THUMBS_INTERVAL_MIN = int(os.environ.get("WORKER_THUMBS_INTERVAL_MIN", "360"))
 THUMBS_LIMIT = int(os.environ.get("WORKER_THUMBS_LIMIT", "500"))
+# Sponsor scan (plan 09): reads video descriptions already in the database for
+# "sponsored by / promo code / affiliate" signals. No network, no quota; only
+# videos that are new, changed or covered by older rules are read.
+DO_SPONSORS = os.environ.get("WORKER_SPONSORS", "1") not in ("0", "false", "no")
+SPONSORS_INTERVAL_MIN = int(os.environ.get("WORKER_SPONSORS_INTERVAL_MIN", "60"))
+SPONSORS_LIMIT = int(os.environ.get("WORKER_SPONSORS_LIMIT", "5000"))
 # Daily digest (plan 07): only when NOTIFY_MODE is digest/both. Checked this
 # often; application/digest.py itself decides whether today's is due.
 DIGEST_CHECK_INTERVAL_MIN = int(os.environ.get("WORKER_DIGEST_CHECK_INTERVAL_MIN", "10"))
@@ -214,6 +222,10 @@ def cycle():
         _safe("thumbnail fingerprints", lambda: packaging_mod.fingerprint_thumbnails(
             period=FULL_PERIOD, limit=THUMBS_LIMIT))
         _mark("thumbs")
+
+    if DO_SPONSORS and _due("sponsors", SPONSORS_INTERVAL_MIN):
+        _safe("sponsor scan", lambda: sponsors_mod.scan_sponsors(limit=SPONSORS_LIMIT))
+        _mark("sponsors")
 
 
 def main():

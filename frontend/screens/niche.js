@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, state, nicheTemplateRiskBlock } from '../ui.js';
+import { $, api, q, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, sponsorBlock, state, nicheTemplateRiskBlock } from '../ui.js';
 import { view, plabel, nicheOverviewBlock, render } from '../shared.js';
 
 /* Доля хитов по тегам одной группы -- barList из tag_stats. Группа вводится
@@ -233,7 +233,7 @@ function wireScatterFilters(rerender) {
 
 async function viewNiche(slug) {
   const tagGroup = localStorage.getItem('nf.tagGroup') || 'theme';
-  const [d, stats, videoTags, proposed, scatter, risk] = await Promise.all([
+  const [d, stats, videoTags, proposed, scatter, risk, sponsors] = await Promise.all([
     api(`/api/niches/${encodeURIComponent(slug)}${q({ period: state.period, top_n: 30 })}`),
     api(`/api/tags/stats${q({ niche: slug, tag_group: tagGroup })}`),
     api(`/api/tags${q({ niche: slug })}`),
@@ -243,6 +243,9 @@ async function viewNiche(slug) {
       include_shorts: scatterFilters.includeShorts,
     })}`),
     api(`/api/niches/${encodeURIComponent(slug)}/template-risk`).catch(() => null),
+    // Не критично для экрана: без спонсоров ниша всё равно открывается.
+    api(`/api/niches/${encodeURIComponent(slug)}/sponsors${q({ period: state.period })}`)
+      .catch(() => null),
   ]);
   if (!d.found) { view.innerHTML = notice(esc(d.hint || 'ниша не найдена')); return; }
 
@@ -258,6 +261,7 @@ async function viewNiche(slug) {
       <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.csv">Экспорт CSV</a>`))
     + nicheTemplateRiskBlock(risk)
     + scatterSection(scatter.videos || [], scatterFilters)
+    + sponsorBlock(sponsors, 'Спонсоры ниши', plabel(state.period))
     + tagStatsSection(stats, tagGroup)
     + nicheVideoTagsSection(d.top_videos_by_outlier_score || [], tagsByVideo, tagGroup, slug)
     + proposedTagsSection(proposed.proposed || []);

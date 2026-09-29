@@ -173,6 +173,15 @@ hours before vs after the swap. Filters: what changed, tracked channel; the
 period comes from the top bar. Thumbnails are fingerprinted by the worker for
 tracked channels only, so their history starts when a channel is tracked.
 
+### Sponsors (cards on `#/niche/<slug>` and `#/channel/<id>`)
+
+"Спонсоры ниши" (`/api/niches/{slug}/sponsors`) and "Спонсоры канала"
+(`/api/channels/{id}/sponsors`): the share of videos with a named sponsor or
+promo code, top brands, affiliate links listed apart, and average views with
+and without a sponsor. Always labelled a lower bound: only what is written in
+video descriptions. Shares are computed over the videos the worker has already
+scanned, and the card says how many that is.
+
 ### Brief (`#/brief/<videoId>`)
 
 Opened from the "бриф" link on any video card (or the extension's "Бриф"

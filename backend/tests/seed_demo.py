@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import infrastructure.postgres as db  # noqa: E402
+from application import sponsors as SPN  # noqa: E402
 from domain import metrics as M  # noqa: E402
 
 random.seed(7)
@@ -90,6 +91,18 @@ def seed_packaging(conn):
                  ("avid001", after, "title", "My first AI agent", "AI agents just changed everything"))
 
 
+def description_for(t, i):
+    """Plan 09 demo: every 7th video names a sponsor with a promo code, every
+    11th carries an Amazon affiliate link. Deterministic -- no random calls, so
+    the rest of the seeded data stays as it was."""
+    desc = t + " — full breakdown."
+    if i % 7 == 0:
+        desc += "\n\nThis video is sponsored by NordVPN. Use code DEMO at https://nordvpn.com/demo"
+    if i % 11 == 0:
+        desc += "\n\nGear I use: https://amzn.to/demo" + str(i)
+    return desc
+
+
 def seed(days_back=75, per_channel=34):
     db.init_db()
     conn = db.get_conn()
@@ -133,7 +146,7 @@ def seed(days_back=75, per_channel=34):
             t = title_for(cat, i)
             db.upsert_video(conn, {
                 "video_id": vid, "channel_id": cid, "title": t,
-                "description": t + " — full breakdown.",
+                "description": description_for(t, i),
                 "published_at": published.isoformat(),
                 "duration_seconds": duration, "view_count": views,
                 "like_count": int(views * random.uniform(0.02, 0.06)),
@@ -157,6 +170,7 @@ def seed(days_back=75, per_channel=34):
     db.upsert_niche(conn, "demo", "synthetic demo corpus", "Demo")
     conn.commit()
     conn.close()
+    SPN.scan_sponsors()
     return {"channels": len(CHANNELS), "videos": len(CHANNELS) * per_channel}
 
 

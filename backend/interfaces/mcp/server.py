@@ -760,6 +760,33 @@ def packaging_changes(period: str = "30d", channel_id: str = None, field: str = 
 @mcp.tool(annotations=ToolAnnotations(
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
+def sponsor_map(niche: str, period: str = "all", top_n: int = 10) -> dict:
+    """Who pays creators in a niche: the share of its videos with a named
+    sponsor or promo code, the top brands (videos, channels, last seen, example
+    videos with the description line as evidence), affiliate brands listed
+    apart (a commission link is not a paid integration), and average/median
+    views with vs without a sponsor. A lower bound: only what is written in
+    descriptions -- a sponsor spoken only in the video is invisible. Read from
+    what the worker already scanned (scanCoverage says how much). Zero quota."""
+    from application import sponsors as sponsors_mod
+    return sponsors_mod.sponsor_map(niche, period=period, top_n=top_n)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def channel_sponsors(channel_id: str, period: str = "all", top_n: int = 10) -> dict:
+    """The sponsor picture of one channel: which brands it names in
+    descriptions (sponsor / promo code), its affiliate links apart, and how many
+    of its videos carry them. A lower bound: only what is written in
+    descriptions. Zero quota."""
+    from application import sponsors as sponsors_mod
+    return sponsors_mod.channel_sponsors(channel_id, period=period, top_n=top_n)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
 def best_time_to_publish(niche: str = None, channel_id: str = None,
                          period: str = "90d", min_samples: int = 3,
                          timezone_offset_hours: int = 0) -> dict:

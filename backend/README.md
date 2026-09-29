@@ -5,7 +5,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-66%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-68%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -379,6 +379,8 @@ separately (or via cron), otherwise the velocity fields stay empty.
 | `niche_template_risk` | the same for every channel in a niche: low/medium/high counts, share of high-risk channels, the most templated ones |
 | `channel_velocity` | lifetime VPH, 24h VPH, daily gain, "accelerating / decelerating" |
 | `title_changes` | who renamed a video (thumbnail swaps are invisible to the API -- see `packaging_changes`) |
+| `sponsor_map` | `niche, period="all", top_n=10` -- share of a niche's videos with a named sponsor or promo code, top brands (videos, channels, last seen, examples), affiliate brands apart, views with vs without a sponsor; a lower bound (only what is written in descriptions); zero quota |
+| `channel_sponsors` | `channel_id, period="all", top_n=10` -- the same for one channel |
 | `packaging_changes` | title and thumbnail swaps with before/after and views per hour 48h before vs after; thumbnails come from the worker's image fingerprints of tracked channels; `video_id` for one video's full history |
 | `best_time_to_publish` | 168 weekly slots by median age-adjusted outlier |
 | `title_patterns` | which title phrases correlate with breakouts |
@@ -441,7 +443,7 @@ required. The optional groups:
 | Group | Variables |
 |---|---|
 | Database | `POSTGRES_*`, `NICHE_DATABASE_URL` (host-only DSN, see above), `NICHE_DB_SCHEMA` (default `public`) |
-| Worker schedule | `WORKER_RSS_INTERVAL_MIN`, `WORKER_ALERTS_INTERVAL_MIN`, `WORKER_HOT_*`, `WORKER_EMBED*`, `WORKER_DAILY_INTERVAL_MIN`, `WORKER_FULL_*`, `WORKER_REGIONS`, `WORKER_TRENDING`, `WORKER_QUERIES`, `WORKER_QUERY_*`, `WORKER_ENRICH_*`, `WORKER_CLUSTER_INTERVAL_MIN`, `WORKER_THUMBS` (1), `WORKER_THUMBS_INTERVAL_MIN` (360), `WORKER_THUMBS_LIMIT` (500) |
+| Worker schedule | `WORKER_RSS_INTERVAL_MIN`, `WORKER_ALERTS_INTERVAL_MIN`, `WORKER_HOT_*`, `WORKER_EMBED*`, `WORKER_DAILY_INTERVAL_MIN`, `WORKER_FULL_*`, `WORKER_REGIONS`, `WORKER_TRENDING`, `WORKER_QUERIES`, `WORKER_QUERY_*`, `WORKER_ENRICH_*`, `WORKER_CLUSTER_INTERVAL_MIN`, `WORKER_THUMBS` (1), `WORKER_THUMBS_INTERVAL_MIN` (360), `WORKER_THUMBS_LIMIT` (500), `WORKER_SPONSORS` (1), `WORKER_SPONSORS_INTERVAL_MIN` (60), `WORKER_SPONSORS_LIMIT` (5000) |
 | LLM (off by default) | `LLM_PROVIDER` (`none` / `openrouter` / `ollama`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_MODEL_LONG` (long-context model for comment insights), `OPENROUTER_REFERER`, `OPENROUTER_TITLE`, `OLLAMA_URL`, `OLLAMA_MODEL`, `LLM_DAILY_BUDGET_USD`, `LLM_RELABEL_DAYS`, `LLM_MIN_MANUAL_TAGS`, `LLM_INSIGHTS_TTL_DAYS` (7), `LLM_WHY_VIRAL_TTL_DAYS` (14) |
 | Niche clusters | `NICHE_CLUSTERS_MIN_CHANNELS` (10), `NICHE_CLUSTERS_COMPETITION_SUBS` (100000) |
 | Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_DASHBOARD_URL`, `NOTIFY_MODE` (`instant` / `digest` / `both`), `DIGEST_HOUR` (8, container time zone), `DIGEST_SKIP_EMPTY` (1), `WORKER_DIGEST_CHECK_INTERVAL_MIN` (10) |
@@ -592,6 +594,7 @@ youtube-niche-finder/
     │   ├── alerts.py           event detection (outlier, acceleration, ...)
     │   ├── metadata.py         metadata-review signals
     │   ├── packaging.py        thumbnail fingerprint distance, before/after views effect
+    │   ├── sponsors.py         sponsor / promo-code / affiliate extraction from descriptions, brand normalisation
     │   ├── template_risk.py    title similarity / shared skeleton / length + cadence -> template score
     │   ├── title_scoring.py    deterministic title scoring
     │   ├── idea_verdicts.py    free / recent / proven / flopped for check_ideas
@@ -624,13 +627,14 @@ youtube-niche-finder/
     │   ├── niche_clusters.py   niche map: clustering + LLM naming
     │   ├── niche_export.py     niche videos to TSV/CSV
     │   ├── packaging.py        thumbnail fingerprinting, repackaging feed and history
+    │   ├── sponsors.py         sponsor scan (worker step + backfill), sponsor_map, channel_sponsors
     │   ├── template_risk.py    per-channel and per-niche template risk
     │   ├── briefs.py           outlier -> brief for your own video (+ draft)
     │   ├── transcripts.py      manual transcript queue and hybrid search
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 66 tools
+    │   ├── mcp/server.py       MCP server, 68 tools
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
     │   └── worker/main.py      background collector's entry point

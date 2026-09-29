@@ -441,6 +441,21 @@ def test_template_risk_tools_delegate_with_their_arguments(monkeypatch):
     assert calls == [("ch", "UC1", 12), ("niche", "abc", 30, 4)]
 
 
+# --------------------------------------------------- sponsor_map / channel_sponsors
+
+def test_sponsor_tools_route_to_the_application_layer(monkeypatch):
+    from application import sponsors as sponsors_mod
+    calls = []
+    monkeypatch.setattr(sponsors_mod, "sponsor_map",
+                        lambda *a, **kw: calls.append(("niche", a, kw)) or {"niche": True})
+    monkeypatch.setattr(sponsors_mod, "channel_sponsors",
+                        lambda *a, **kw: calls.append(("channel", a, kw)) or {"channel": True})
+    assert srv.sponsor_map("n1", period="30d", top_n=3) == {"niche": True}
+    assert calls[-1] == ("niche", ("n1",), {"period": "30d", "top_n": 3})
+    assert srv.channel_sponsors("UC1") == {"channel": True}
+    assert calls[-1] == ("channel", ("UC1",), {"period": "all", "top_n": 10})
+
+
 # --------------------------------------------------- daily_digest
 
 def test_daily_digest_reads_the_summary_without_sending(monkeypatch):

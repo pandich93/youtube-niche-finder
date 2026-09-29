@@ -139,6 +139,10 @@ DELEGATIONS = [
     ("get", "/api/packaging?channel_id=UC1&field=title", "PKG", "packaging_feed", (),
      {"channel_id": "UC1", "field": "title", "period": "30d", "limit": 50}, None),
     ("get", "/api/videos/v1/packaging", "PKG", "packaging_history", ("v1",), {}, None),
+    ("get", "/api/niches/n1/sponsors?period=30d&top_n=4", "SP", "sponsor_map", ("n1",),
+     {"period": "30d", "top_n": 4}, None),
+    ("get", "/api/channels/UC1/sponsors", "SP", "channel_sponsors", ("UC1",),
+     {"period": "all", "top_n": 10}, None),
     ("get", "/api/digest?period=48h", "DG", "build_digest", (), {"period": "48h", "top_n": 5},
      None),
     ("post", "/api/digest/send", "DG", "send_digest", (), {"force": True}, None),
@@ -316,6 +320,8 @@ VALUE_ERROR_ROUTES = [
     ("post", "/api/titles/suggest", {"topic": ""}, "EN", "suggest_titles"),
     ("get", "/api/niche/n1/export.xlsx", None, "NE", "export_niche"),
     ("get", "/api/packaging?field=bogus", None, "PKG", "packaging_feed"),
+    ("get", "/api/niches/n1/sponsors?period=bogus", None, "SP", "sponsor_map"),
+    ("get", "/api/channels/UC1/sponsors?period=bogus", None, "SP", "channel_sponsors"),
 ]
 
 

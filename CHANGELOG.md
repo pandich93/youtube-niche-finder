@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Sponsor map** (plan 09) — MCP `sponsor_map` / `channel_sponsors`,
+  `/api/niches/{slug}/sponsors`, `/api/channels/{id}/sponsors` and "Спонсоры"
+  cards on the niche and channel screens. Finds sponsor mentions, promo codes
+  and affiliate links in video descriptions (English and Russian, including
+  `erid`-marked ads), normalises brands (`nordvpn.com/xyz` and `NordVPN` become
+  `nordvpn`), and ignores social links, Patreon, calls to become the channel's
+  own sponsor, disclaimers and the creator's own merch. A new worker step
+  `sponsors` (`WORKER_SPONSORS`, `WORKER_SPONSORS_INTERVAL_MIN`,
+  `WORKER_SPONSORS_LIMIT`) scans new or edited descriptions and backfills
+  existing ones; shared tables `video_sponsors` and `sponsor_scan`. Zero quota.
+  A lower bound: sponsorship not named in a description is invisible.
+
 - **Outlier to brief** (plan 02) — MCP `build_brief`, `POST /api/briefs`, a
   `#/brief/<videoId>` dashboard screen, a "бриф" link on every video card and
   a "Бриф" button in the extension. One outlier becomes a working brief for

@@ -401,6 +401,58 @@ function funnelBlock(res) {
     ${res.hint ? `<div style="margin-top:12px">${notice(esc(res.hint))}</div>` : ''}</div>`;
 }
 
+/* Карта спонсоров (plan 09) -- один блок для ниши и канала. Данные из
+   /api/niches/{slug}/sponsors и /api/channels/{id}/sponsors. Всегда подписан
+   как нижняя граница: видно только то, что указано в описании видео. */
+const SPONSOR_FLOOR = 'Нижняя граница: только то, что указано в описании видео. '
+  + 'Интеграция, которую автор лишь произносит в ролике, здесь не видна.';
+
+function sponsorBrandBars(brands) {
+  return barList((brands || []).map((b) => ({
+    name: b.brand, value: b.videos,
+    display: `${num(b.videos)} ${plural(b.videos, 'видео', 'видео', 'видео')}`
+      + (b.channels > 1 ? ` · ${num(b.channels)} ${plural(b.channels, 'канал', 'канала', 'каналов')}` : ''),
+    tip: `${esc(b.brand)}: ${num(b.videos)} видео, ${num(b.channels)} кан.`
+      + (b.lastSeen ? `<br>последнее: ${esc(String(b.lastSeen).slice(0, 10))}` : '')
+      + (b.examples || []).slice(0, 2).map((e) =>
+        `<br>· ${esc(String(e.title || e.videoId).slice(0, 60))}`).join(''),
+  })));
+}
+
+function sponsorBlock(d, title, sub) {
+  const head = sectionHead(title, sub);
+  if (!d) return `<div class="card">${head}${empty('не удалось загрузить данные о спонсорах')}</div>`;
+  if (d.found === false) return `<div class="card">${head}${empty(d.hint || 'данных пока нет')}</div>`;
+  if (!d.videos) return `<div class="card">${head}${empty('в выбранном окне нет видео')}
+    <div class="section-sub" style="margin-top:10px">${esc(SPONSOR_FLOOR)}</div></div>`;
+  const pct = (x) => `${Math.round((x || 0) * 100)}%`;
+  const cover = d.scanCoverage < 1
+    ? notice(`Описания просканированы у ${pct(d.scanCoverage)} видео — воркер дочитает остальные `
+      + 'при следующем запуске шага sponsors. Доли считаются по просканированным.') : '';
+  const brands = d.topBrands || [];
+  const aff = d.affiliateBrands || [];
+  return `<div class="card">${head}${cover}
+    <div class="tiles">
+      ${tile('Видео со спонсором', pct(d.sponsorShare),
+        `${num(d.videosWithSponsor)} из ${num(d.videos)}`)}
+      ${tile('Просмотры со спонсором', compact(d.avgViewsWithSponsor),
+        `среднее · медиана ${compact(d.medianViewsWithSponsor)}`)}
+      ${tile('Просмотры без спонсора', compact(d.avgViewsWithout),
+        `среднее · медиана ${compact(d.medianViewsWithout)}`)}
+      ${tile('Партнёрские ссылки', pct(d.affiliateShare),
+        `${num(d.videosWithAffiliate)} видео`)}
+    </div>
+    <div class="grid-2" style="margin-top:16px">
+      <div><div class="section-sub" style="margin-bottom:8px">Бренды-спонсоры и промокоды</div>
+        ${brands.length ? sponsorBrandBars(brands) : empty('спонсоров в описаниях не нашлось')}</div>
+      <div><div class="section-sub" style="margin-bottom:8px">Партнёрские ссылки (не спонсорство)</div>
+        ${aff.length ? sponsorBrandBars(aff) : empty('партнёрских ссылок не нашлось')}</div>
+    </div>
+    <div class="section-sub" style="margin-top:12px">${esc(SPONSOR_FLOOR)}</div>
+  </div>`;
+}
+
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
-         lineChart, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock, nicheTemplateRiskBlock };
+         lineChart, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
+         nicheTemplateRiskBlock, sponsorBlock };

@@ -43,6 +43,7 @@ from application import niche_clusters as NCL
 from application import niche_export as NE
 from application import packaging as PKG
 from application import search as Q
+from application import sponsors as SP
 from application import tags as TG
 from application import template_risk as TRK
 from application import transcripts as TR
@@ -424,6 +425,16 @@ def niche_videos(slug: str, period: str = "all", channels: str = None,
                           include_shorts=include_shorts)
 
 
+@app.get("/api/niches/{slug}/sponsors")
+def niche_sponsors(slug: str, period: str = "all", top_n: int = 10):
+    """Sponsor map (plan 09): share of the niche's videos with a named sponsor,
+    top brands, affiliate brands apart. A lower bound -- descriptions only."""
+    try:
+        return SP.sponsor_map(slug, period=period, top_n=top_n)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.get("/api/channels/tracked")
 def tracked(faceless: bool = None, content_format: str = None, topic: str = None):
     return {"channels": T.list_tracked(faceless=faceless, content_format=content_format,
@@ -456,6 +467,14 @@ def similar_channels(channel_id: str, niche: str = None, limit: int = 10):
 @app.get("/api/channels/{channel_id}/niche-overview")
 def channel_niche_overview(channel_id: str, period: str = "all", limit: int = 15):
     return Q.niche_overview_from_channel(channel_id, limit=limit, period=period)
+
+
+@app.get("/api/channels/{channel_id}/sponsors")
+def channel_sponsors(channel_id: str, period: str = "all", top_n: int = 10):
+    try:
+        return SP.channel_sponsors(channel_id, period=period, top_n=top_n)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/videos/{video_id}/similar")

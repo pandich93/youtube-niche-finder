@@ -265,6 +265,31 @@ CREATE TABLE IF NOT EXISTS thumbnail_archive (
     PRIMARY KEY (video_id, captured_at)
 );
 
+-- ---------- sponsor map (plan 09) ----------
+-- Brands a creator names in a video description (domain/sponsors.py), found by
+-- the worker step `sponsors`. Shared public-data tables, no user_id. A lower
+-- bound: a sponsor spoken only in the video never shows up here.
+-- sponsor_scan remembers which description (md5) and rules version each video
+-- was scanned with, so a changed description or new rules trigger a rescan.
+
+CREATE TABLE IF NOT EXISTS video_sponsors (
+    video_id TEXT,
+    brand TEXT,
+    kind TEXT,               -- 'sponsor' | 'affiliate' | 'promo_code'
+    evidence TEXT,           -- the description line the signal came from
+    detected_at TEXT,
+    PRIMARY KEY (video_id, brand, kind)
+);
+
+CREATE INDEX IF NOT EXISTS idx_video_sponsors_brand ON video_sponsors(brand);
+
+CREATE TABLE IF NOT EXISTS sponsor_scan (
+    video_id TEXT PRIMARY KEY,
+    desc_hash TEXT,
+    rules_version INTEGER,
+    scanned_at TEXT
+);
+
 -- ---------- v9: manually-pasted transcripts + hybrid search (stage 19) ----------
 -- Never fetched automatically -- the user copies a transcript off YouTube's
 -- own UI and pastes it in; see PRIVACY.md.
