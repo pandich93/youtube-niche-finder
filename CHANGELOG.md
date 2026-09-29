@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Outlier to brief** (plan 02) — MCP `build_brief`, `POST /api/briefs`, a
+  `#/brief/<videoId>` dashboard screen, a "бриф" link on every video card and
+  a "Бриф" button in the extension. One outlier becomes a working brief for
+  your own video: its numbers and hook (first ~75 words of a pasted
+  transcript), niche title patterns and best time, whether the topic is already
+  covered (the source itself excluded), title candidates and why it worked
+  (both need an LLM) and similar videos as thumbnail references. Every part
+  that could not run is listed in `skipped` with the reason — without an LLM
+  there is no angle and no new titles, and no template stands in. The preview
+  writes nothing; saving stores a draft linked to the source
+  (`drafts.source_video_id`) and queues a missing transcript. Zero quota.
+
 - **Template-risk check** (plan 01) — MCP `template_risk` / `niche_template_risk`,
   `/api/channels/{id}/template-risk`, `/api/niches/{slug}/template-risk`, a card
   on the channel and niche screens and a line in the extension's channel panel.

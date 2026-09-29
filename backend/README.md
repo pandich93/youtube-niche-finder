@@ -5,7 +5,7 @@
 [![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square&logo=python&logoColor=white)](Dockerfile)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-65%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-66%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -402,6 +402,7 @@ Delivery to Telegram or a webhook is optional -- see [Configuration](#configurat
 | `suggest_titles` | generate up to n titles in the style of the best performers, then score them — requires an LLM |
 | `review_metadata` | check a draft title/description/tags against your corpus: signals with sample sizes, never one made-up score |
 | `save_draft` / `list_drafts` / `link_draft` | keep a draft, then link it to the real video_id after publishing |
+| `build_brief` | one outlier -> a brief for your own video: hook (first ~75 words of a pasted transcript), why it worked (LLM), niche title patterns and best time, whether the topic is already covered (source excluded), title candidates (LLM) and thumbnail references; unavailable parts are listed in `skipped`; `save=true` stores a draft (`drafts.source_video_id`) and queues a missing transcript, `save=false` writes nothing |
 | `draft_outcomes` | the review snapshot next to the actual outcome, for linked drafts old enough to have views |
 
 ### Swipe file
@@ -624,11 +625,12 @@ youtube-niche-finder/
     │   ├── niche_export.py     niche videos to TSV/CSV
     │   ├── packaging.py        thumbnail fingerprinting, repackaging feed and history
     │   ├── template_risk.py    per-channel and per-niche template risk
+    │   ├── briefs.py           outlier -> brief for your own video (+ draft)
     │   ├── transcripts.py      manual transcript queue and hybrid search
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 65 tools
+    │   ├── mcp/server.py       MCP server, 66 tools
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
     │   └── worker/main.py      background collector's entry point

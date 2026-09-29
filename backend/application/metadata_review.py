@@ -184,19 +184,20 @@ def _shape_draft(r) -> dict:
            "description": r["description"], "tags": _j(r["tags"]) or [],
            "niche": r["niche"], "channelId": r["channel_id"], "isShort": bool(r["is_short"]),
            "review": _j(r["review"]), "createdAt": r["created_at"],
-           "publishedAt": r["published_at"]}
+           "publishedAt": r["published_at"], "sourceVideoId": r["source_video_id"]}
 
 
 def save_draft(title: str, description: str = "", tags=None, niche: str = None,
-              channel_id: str = None, is_short: bool = False, review: dict = None) -> dict:
+              channel_id: str = None, is_short: bool = False, review: dict = None,
+              source_video_id: str = None) -> dict:
     conn = db.get_conn()
     now = db.now_iso()
     row = conn.execute(
         "INSERT INTO drafts (title, description, tags, niche, channel_id, is_short, review, "
-        "created_at) VALUES (?,?,?,?,?,?,?,?) RETURNING id",
+        "created_at, source_video_id) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id",
         (title, description, json.dumps(tags or [], ensure_ascii=False), niche, channel_id,
          1 if is_short else 0,
-         json.dumps(review, ensure_ascii=False) if review else None, now),
+         json.dumps(review, ensure_ascii=False) if review else None, now, source_video_id),
     ).fetchone()
     conn.commit()
     conn.close()

@@ -222,6 +222,8 @@
           <button class="nf-btn nf-collect">${c.videosStored ? 'Обновить канал в базе' : 'Собрать канал (100 видео)'}</button>
           <button class="nf-btn nf-track">${c.tracked ? 'Не отслеживать' : 'Отслеживать'}</button>
           <button class="nf-btn nf-ghost nf-save">В избранное</button>
+          <a class="nf-btn nf-ghost nf-brief" target="_blank" rel="noopener"
+             title="Собрать бриф для своего видео из этого ролика">Бриф</a>
           <a class="nf-btn nf-ghost nf-dash" target="_blank" rel="noopener">Дашборд</a>
         </div>
         ${similarList.length ? `<div class="nf-sec">
@@ -297,6 +299,8 @@
 
     const dash = root.querySelector('.nf-dash');
     if (dash) dash.href = (SETTINGS?.baseUrl || 'http://127.0.0.1:8080');
+    const brief = root.querySelector('.nf-brief');
+    if (brief) brief.href = (SETTINGS?.baseUrl || 'http://127.0.0.1:8080') + '/#/brief/' + encodeURIComponent(videoId);
 
     const copy = root.querySelector('.nf-copy-tags');
     if (copy) copy.addEventListener('click', async () => {

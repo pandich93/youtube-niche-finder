@@ -264,7 +264,8 @@ function videoCard(v) {
       ${v.outlierScore != null ? `<span class="badge badge-right" data-tip="Множитель против медианы предыдущих загрузок канала">${mult(v.outlierScore)}</span>` : ''}
     </a>
     <div class="vcard-title">${esc(v.title)}</div>
-    <div class="vcard-meta">${compact(v.views)} просмотров · ${ago(v.publishedAt)}</div>
+    <div class="vcard-meta">${compact(v.views)} просмотров · ${ago(v.publishedAt)}
+      · <a href="#/brief/${esc(v.videoId)}" data-tip="Собрать бриф для своего видео из этого outlier">бриф</a></div>
     <div class="vcard-meta"><a href="#/channel/${esc(v.channelId)}">${esc(v.channelTitle || '')}</a>
       · ${compact(v.channelSubscribers)} подп.</div>
     <div class="vcard-chips">

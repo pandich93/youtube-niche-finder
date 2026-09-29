@@ -343,6 +343,7 @@ def test_thumbnail_route_serves_archived_jpeg_or_404(stub):
 
 MISSING_FIELD_ROUTES = [
     ("/api/drafts/1/link", {}, "videoId"),
+    ("/api/briefs", {"niche": "n1"}, "videoId"),
     ("/api/transcripts/request", {"reason": "x"}, "videoId"),
     ("/api/transcripts/v1/save", {"text": "   "}, "text"),
     ("/api/inspect/videos", {"ids": "v1,v2"}, "ids"),
@@ -356,6 +357,24 @@ def test_missing_or_malformed_field_is_400(url, body, field):
     resp = client.post(url, json=body)
     assert resp.status_code == 400
     assert field in resp.json()["detail"]
+
+
+def test_briefs_route_passes_the_options_and_accepts_both_key_styles(stub):
+    br = stub("BR", "build_brief")
+    resp = client.post("/api/briefs", json={"videoId": "v1", "niche": "n1",
+                                            "useLlm": False, "save": False})
+    assert resp.status_code == 200 and resp.json() == {"stub": True}
+    assert br.args == ("v1",)
+    assert br.kwargs == {"niche": "n1", "use_llm": False, "save": False}
+    client.post("/api/briefs", json={"video_id": "v2"})           # defaults: LLM on, saved
+    assert br.args == ("v2",)
+    assert br.kwargs == {"niche": None, "use_llm": True, "save": True}
+
+
+def test_briefs_route_unknown_video_is_404(stub):
+    stub("BR", "build_brief", result={"found": False, "videoId": "nope", "hint": "collect it"})
+    resp = client.post("/api/briefs", json={"videoId": "nope"})
+    assert resp.status_code == 404 and "collect it" in resp.json()["detail"]
 
 
 def test_valid_bodies_reach_the_application(stub):

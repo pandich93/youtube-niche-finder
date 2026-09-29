@@ -414,6 +414,19 @@ def test_packaging_changes_routes_to_feed_or_one_video_history(monkeypatch):
     assert calls[-1] == ("history", "v1")
 
 
+# --------------------------------------------------- build_brief
+
+def test_build_brief_delegates_with_its_options(monkeypatch):
+    from application import briefs as briefs_mod
+    calls = []
+    monkeypatch.setattr(briefs_mod, "build_brief",
+                        lambda vid, **kw: calls.append((vid, kw)) or {"found": True})
+    assert srv.build_brief("v1") == {"found": True}
+    assert srv.build_brief("v2", niche="n1", use_llm=False, save=False) == {"found": True}
+    assert calls == [("v1", {"niche": None, "use_llm": True, "save": True}),
+                     ("v2", {"niche": "n1", "use_llm": False, "save": False})]
+
+
 # --------------------------------------------------- template risk
 
 def test_template_risk_tools_delegate_with_their_arguments(monkeypatch):

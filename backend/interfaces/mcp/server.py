@@ -1000,6 +1000,25 @@ def scan_for_alerts() -> dict:
 
 
 @mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=False, open_world_hint=False))
+def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
+                save: bool = True) -> dict:
+    """Turn one outlier video into a working brief for YOUR OWN video: its
+    numbers and hook (first ~75 words of a pasted transcript), why it worked
+    (LLM), niche title patterns and best publish time, whether the topic is
+    already covered (the source video itself excluded), title candidates
+    (LLM) and similar videos as thumbnail references. Every part that could
+    not run is listed in `skipped` with the reason -- without an LLM there is
+    no angle and no new titles, and no template pretends otherwise. save=true
+    stores a draft (drafts.source_video_id = the outlier) and queues a missing
+    transcript; save=false writes nothing. Research, not a script: choose your
+    own angle. Zero YouTube quota; use_llm=true may spend LLM budget."""
+    from application import briefs as briefs_mod
+    return briefs_mod.build_brief(video_id, niche=niche, use_llm=use_llm, save=save)
+
+
+@mcp.tool(annotations=ToolAnnotations(
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
 def template_risk(channel_id: str, last_n: int = 30) -> dict:

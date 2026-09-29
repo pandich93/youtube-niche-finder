@@ -19,6 +19,7 @@ import { viewMetadata } from './screens/metadata.js';
 import { viewNiches } from './screens/niches.js';
 import { viewNiche } from './screens/niche.js';
 import { viewChannel } from './screens/channel.js';
+import { viewBrief } from './screens/brief.js';
 import { viewData } from './screens/data.js';
 import { viewHelp } from './screens/help.js';
 import { viewMcp } from './screens/mcp.js';
@@ -70,6 +71,10 @@ async function render() {
   if (name === 'channel' && arg) {
     $('#crumbSection').textContent = 'Канал'; setActive(null);
     return guard(() => viewChannel(decodeURIComponent(arg)));
+  }
+  if (name === 'brief' && arg) {
+    $('#crumbSection').textContent = 'Бриф'; setActive(null);
+    return guard(() => viewBrief(decodeURIComponent(arg)));
   }
   if (name === 'niche' && arg) {
     $('#crumbSection').textContent = 'Ниша'; setActive('#/niches');

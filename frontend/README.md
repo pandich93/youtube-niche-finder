@@ -173,6 +173,18 @@ hours before vs after the swap. Filters: what changed, tracked channel; the
 period comes from the top bar. Thumbnails are fingerprinted by the worker for
 tracked channels only, so their history starts when a channel is tracked.
 
+### Brief (`#/brief/<videoId>`)
+
+Opened from the "бриф" link on any video card (or the extension's "Бриф"
+button). Builds a brief for your own video from one outlier
+(`POST /api/briefs`): the source's numbers, its hook from a pasted transcript,
+niche title patterns and best time, whether the topic is already covered
+(without the source itself), title candidates and similar videos as thumbnail
+references. It opens as a free preview without an LLM; "Добавить LLM-разбор"
+adds the angle and title candidates, "Сохранить в черновики" stores it as a
+draft linked to the source and queues a missing transcript. Parts that could
+not be built are listed with the reason instead of being faked.
+
 ### Metadata review (`#/metadata`)
 
 Checks a draft title/description/tags against your own corpus (`POST

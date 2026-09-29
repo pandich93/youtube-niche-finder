@@ -21,6 +21,7 @@ The extension never talks to the outside world — only to `127.0.0.1`.
   same channel;
 * "Repackaged N times" — when the backend saw this video's title or
   thumbnail change, with a link to the before/after on the dashboard;
+* "Бриф" — opens the dashboard's brief for your own video built from this one;
 * "Show comments" — a live fetch of up to 50 comments (1 quota unit) with how
   many arrived in the first 24 hours; raw text, no sentiment analysis;
 * "Why did it take off?" — an LLM explanation of why the video beat its

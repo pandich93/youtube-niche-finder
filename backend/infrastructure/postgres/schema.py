@@ -349,6 +349,10 @@ MIGRATIONS = {
     "video_tags": {
         "proposed": "INTEGER",
     },
+    # plan 02: a draft born from an outlier brief points back at that outlier.
+    "drafts": {
+        "source_video_id": "TEXT",
+    },
 }
 
 

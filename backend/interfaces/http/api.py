@@ -29,6 +29,7 @@ except Exception:  # pragma: no cover
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import alerts as AL
+from application import briefs as BR
 from application import channel_tracking as T
 from application import collecting as collector
 from application import digest as DG
@@ -638,6 +639,22 @@ def digest_send():
     """Send the digest now, ignoring DIGEST_HOUR and "already sent today" --
     for checking the Telegram/webhook setup."""
     return DG.send_digest(force=True)
+
+
+@app.post("/api/briefs")
+def make_brief(payload: dict = Body(...)):
+    """Outlier -> brief (plan 02). save=false previews without writing anything;
+    save=true also stores a draft linked to the source video. Zero quota."""
+    video_id = payload.get("videoId") or payload.get("video_id")
+    if not video_id:
+        raise HTTPException(status_code=400, detail="videoId required")
+    brief = BR.build_brief(
+        video_id, niche=payload.get("niche"),
+        use_llm=payload.get("useLlm", payload.get("use_llm", True)),
+        save=payload.get("save", True))
+    if not brief.get("found", True):
+        raise HTTPException(status_code=404, detail=brief.get("hint") or "video not found")
+    return brief
 
 
 @app.get("/api/channels/{channel_id}/template-risk")
