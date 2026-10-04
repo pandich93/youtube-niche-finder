@@ -53,3 +53,22 @@ def _per_file_isolation(request):
         stack.callback(reset_process_caches)  # runs first on exit, inside the file's world
         yield
     reset_process_caches()  # and again in the shared world the next file sees
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Free the ONNX models fastembed loaded while the interpreter is still
+    whole. Left to interpreter shutdown, onnxruntime on macOS sometimes dies
+    with "libc++abi: ... recursive_mutex lock failed" AFTER every test has
+    passed, and make local-test reports Abort trap (exit 134)."""
+    import gc
+    for name, attrs in (("infrastructure.embeddings.fastembed_provider", ("_model",)),
+                        ("infrastructure.embeddings.image_provider", ("_image_model", "_text_model"))):
+        mod = sys.modules.get(name)
+        for attr in attrs:
+            fn = getattr(mod, attr, None) if mod else None
+            if hasattr(fn, "cache_clear"):
+                fn.cache_clear()
+    collecting = sys.modules.get("application.collecting")
+    if collecting is not None and hasattr(collecting, "_EMB"):
+        collecting._EMB = None
+    gc.collect()
