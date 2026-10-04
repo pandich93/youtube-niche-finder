@@ -93,9 +93,12 @@ def status(user_id: int = LOCAL_USER_ID) -> dict:
             "mode": mode(), "redirectUri": _redirect_uri(), "connectedChannels": n}
 
 
-def _require_configured():
+def _require_configured(connecting: bool = True):
+    """connecting=False (a sync of channels already connected) needs the
+    client and the key but not the redirect: a wrong redirect in web mode
+    must not stop the daily numbers."""
     st = status()
-    if not st["configured"]:
+    if not st["configured"] and (connecting or st["missing"]):
         what = ", ".join(st["missing"]) if st["missing"] else "; ".join(st["problems"])
         raise NotConfigured(("set " if st["missing"] else "") + what
                             + " -- see backend/README.md \"Your own channels\"")
@@ -230,7 +233,7 @@ def sync(user_id: int = LOCAL_USER_ID, channel_id: str = None, today: date = Non
     """Refresh the last 28 days and lifetime per-video numbers of your
     connected channels (or one). Uses the Analytics API quota, not the Data
     API key's. A quota error is recorded and the old numbers are kept."""
-    _require_configured()
+    _require_configured(connecting=False)
     today = today or date.today()
     end = today - timedelta(days=LAG_DAYS)
     start28 = end - timedelta(days=WINDOW_DAYS - 1)

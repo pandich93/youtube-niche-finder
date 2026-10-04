@@ -139,3 +139,11 @@ def test_privacy_and_terms_are_public_and_name_the_operator(monkeypatch):
     assert t.status_code == 200 and "https://www.youtube.com/t/terms" in t.text
     monkeypatch.setenv("NF_SERVICE_NAME", "<script>x</script>")
     assert "<script>x</script>" not in c.get("/privacy").text
+
+
+def test_a_wrong_redirect_blocks_connecting_but_not_the_daily_sync(monkeypatch):
+    monkeypatch.setenv("OWN_OAUTH_MODE", "web")
+    monkeypatch.setenv("OWN_OAUTH_REDIRECT_URI", "http://nf.example.com/api/own/oauth/callback")
+    with pytest.raises(OWN.NotConfigured):
+        OWN.start_connect()
+    assert OWN.sync()["channels"] == []          # no channels, but no NotConfigured either
