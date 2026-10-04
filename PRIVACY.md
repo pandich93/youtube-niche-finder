@@ -108,6 +108,21 @@ hash of that text, not the text itself. `score_hook_text` (the "Проверит
 вступление" card) scores a draft intro in memory: it does not save it, log
 it, or send it anywhere.
 
+## How long it is kept
+
+Nothing is deleted automatically. Rows you collected stay until you delete
+them (see "Deleting everything" below).
+
+Once a day the worker re-reads from the YouTube API every stored video and
+channel not refreshed for 25 days (`REFRESH_STALE_DAYS`), oldest first, up to
+`REFRESH_STALE_MAX_VIDEOS` videos and `REFRESH_STALE_MAX_CHANNELS` channels:
+titles, descriptions, tags and counters are replaced with what YouTube shows
+now, and a new snapshot is added. A video or channel the API no longer
+returns is marked "gone" and kept. The "Данные" screen shows how many rows
+are older than that. The history (stats snapshots, title and thumbnail
+changes, archived thumbnails) is kept without limit; YouTube's API policies
+allow that only with their approval, see SECURITY.md.
+
 ## Where network traffic goes
 
 By default — `LLM_PROVIDER=none`, the setting nothing changes out of the

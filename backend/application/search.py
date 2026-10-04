@@ -10,7 +10,7 @@ import statistics as st
 
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
-from application import collecting, llm_gateway, maturity_curve
+from application import collecting, freshness, llm_gateway, maturity_curve
 from application import discovery as trends
 from application import monetization as MON
 from application import saturation as SAT
@@ -377,6 +377,8 @@ def db_stats() -> dict:
         "oldest_video": one("SELECT MIN(published_at) FROM videos"),
         "newest_video": one("SELECT MAX(published_at) FROM videos"),
         "history_since": one("SELECT MIN(captured_at) FROM video_stats_history"),
+        # plan 16: rows older than the refresh age; nothing is ever deleted
+        "freshness": freshness.status(),
         "db_path": db.display_dsn(),
         "search_quota": {
             "search_calls_today": calls_today,

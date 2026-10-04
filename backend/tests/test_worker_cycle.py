@@ -22,6 +22,7 @@ from application import alerts as alerts_mod  # noqa: E402
 from application import collecting as collector  # noqa: E402
 from application import digest as digest_mod  # noqa: E402
 from application import enrichment as enrich_mod  # noqa: E402
+from application import freshness as freshness_mod  # noqa: E402
 from application import maturity_curve as curve_mod  # noqa: E402
 from application import niche_clusters as clusters_mod  # noqa: E402
 from application import own_channels as own_mod  # noqa: E402
@@ -32,7 +33,7 @@ from application import worker_cycle as worker  # noqa: E402
 from domain import periods as P  # noqa: E402
 
 SCHEDULE_KEYS = ("rss", "hot", "alerts", "embed", "enrich", "daily", "clusters",
-                 "calibrate", "thumbs", "sponsors", "thumb_embed", "own_sync", "digest")
+                 "calibrate", "thumbs", "sponsors", "thumb_embed", "freshness", "own_sync", "digest")
 
 
 def setup_module(_=None):
@@ -75,6 +76,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(worker, "DO_SPONSORS", True)
     monkeypatch.setattr(worker, "DO_THUMB_EMBED", True)
     monkeypatch.setattr(worker, "DO_OWN_SYNC", True)
+    monkeypatch.setattr(worker, "DO_FRESHNESS", True)
     monkeypatch.setattr(alerts_mod, "NOTIFY_MODE", "digest")
     monkeypatch.setattr(worker, "_llm_enrichment_enabled", lambda: True)
     monkeypatch.setattr(collector, "discover_new_videos_via_rss", rec("rss"))
@@ -96,6 +98,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(thumbsearch_mod, "embed_thumbnails", rec("thumb_embed"))
     monkeypatch.setattr(own_mod, "status", lambda: {"configured": True, "connectedChannels": 1})
     monkeypatch.setattr(own_mod, "sync_all", rec("own_sync"))
+    monkeypatch.setattr(freshness_mod, "refresh_stale", rec("freshness"))
     return seen
 
 
@@ -113,6 +116,7 @@ ALL_STEPS = [
     "thumbs",
     "sponsors",
     "thumb_embed",
+    "freshness",
     "own_sync",
 ]
 
@@ -147,13 +151,15 @@ def test_optional_steps_are_skipped_when_switched_off(calls, monkeypatch):
     monkeypatch.setattr(worker, "DO_SPONSORS", False)
     monkeypatch.setattr(worker, "DO_THUMB_EMBED", False)
     monkeypatch.setattr(worker, "DO_OWN_SYNC", False)
+    monkeypatch.setattr(worker, "DO_FRESHNESS", False)
     monkeypatch.setattr(alerts_mod, "NOTIFY_MODE", "instant")
     monkeypatch.setattr(worker, "DO_TRENDING", False)
     monkeypatch.setattr(worker, "QUERIES", [])
     monkeypatch.setattr(worker, "_llm_enrichment_enabled", lambda: False)
     worker.cycle()
     for step in ("embed", "enrich_channels", "enrich_videos", "collect_trending",
-                 "collect:q1", "collect:q2", "thumbs", "sponsors", "thumb_embed", "own_sync", "digest"):
+                 "collect:q1", "collect:q2", "thumbs", "sponsors", "thumb_embed", "own_sync", "digest",
+                 "freshness"):
         assert step not in calls, step
     # enrich is still marked, so it does not re-check the provider every cycle
     assert worker._get_meta("worker_last_enrich")

@@ -127,6 +127,16 @@ subscriber growth, period comparisons, and thumbnail/title-change detection
 only exist because something is regularly recording the numbers. That's the
 worker's job.
 
+It also keeps old rows fresh (plan 16): once a day it re-reads, with
+`videos.list` / `channels.list`, every stored video and channel not refreshed
+for `REFRESH_STALE_DAYS` (25) -- titles, descriptions and counters -- oldest
+first, at most `REFRESH_STALE_MAX_VIDEOS` / `REFRESH_STALE_MAX_CHANNELS` (2,500
+each, ~100 units a day at most). YouTube's API policies allow keeping data
+fetched with a key at most 30 days unrefreshed. Nothing is ever deleted: a row
+the API stopped returning is marked gone, and the history stays (see
+SECURITY.md for what that means under the policies). `db_stats` reports the
+counts under `freshness`.
+
 Claude Desktop connection — in
 `~/Library/Application Support/Claude/claude_desktop_config.json`:
 

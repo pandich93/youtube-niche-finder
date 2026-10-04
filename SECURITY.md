@@ -96,7 +96,18 @@ What you have to do before you give anyone an account:
    - III.D.1.c: one API project per application. That is why the installation
      uses one key, and users do not bring their own.
    - III.E.4.d: non-authorized YouTube data may be kept at most 30 days, then
-     refreshed or deleted. niche-finder keeps history without limit.
+     refreshed or deleted. The worker re-reads every stored video and channel
+     not refreshed for 25 days (`REFRESH_STALE_DAYS`, under a daily cap), so
+     current rows stay fresh. But niche-finder never deletes anything: the
+     stats history, title and thumbnail changes and archived thumbnails are
+     kept without limit.
+   - Keeping statistics longer, and computing scores from them, is allowed
+     only to API clients approved under YouTube's derived-metrics policy
+     (statistics and derived metrics up to 36 months; titles, descriptions
+     and other text still 30 days):
+     <https://developers.google.com/youtube/terms/derived-metrics-policy>.
+     The approval is per Google Cloud project, so each installation's owner
+     applies for their own.
    - For yourself this is your own risk. For a service other people use, you
      must solve it before you open the service.
 6. **Keep MCP over HTTP behind the TLS front door (`mcp-https`)** and set

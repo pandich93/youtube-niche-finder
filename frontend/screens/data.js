@@ -23,6 +23,7 @@ async function viewData() {
         ${tile('Видео в окне', num(cov.videosPublishedInPeriod), plabel(state.period))}
       </div>
     </div>
+    ${freshnessCard(h.db.freshness)}
     ${collectForm()}
     <div class="card">
       ${sectionHead('Обновить статистику', 'перечитывает счётчики и дописывает снимок — из этого берутся скорости')}
@@ -38,6 +39,27 @@ async function viewData() {
       render();
     } catch (err) { toast(err.message, 'err'); } finally { e.target.disabled = false; }
   });
+}
+
+/* План 16: правило YouTube API (III.E.4) — данные, полученные по ключу, хранить
+   не дольше 30 дней без обновления. Воркер раз в сутки перечитывает самые старые
+   строки; ничего не удаляется (решение владельца) — история остаётся на его риске. */
+function freshnessCard(f) {
+  if (!f) return '';
+  const day = (iso) => (iso ? new Date(iso).toLocaleDateString('ru-RU') : '—');
+  return `<div class="card">
+      ${sectionHead('Хранение данных', `правило YouTube API: данные, полученные по ключу, — не дольше 30 дней без обновления`)}
+      <div class="tiles">
+        ${tile('Видео не обновлялись', num(f.videos.stale), `больше ${f.staleDays} дн. из ${num(f.videos.total)}`)}
+        ${tile('Каналы не обновлялись', num(f.channels.stale), `больше ${f.staleDays} дн. из ${num(f.channels.total)}`)}
+        ${tile('История снимков с', day(f.historySince))}
+      </div>
+      <div class="section-sub" style="margin-top:10px">Воркер раз в сутки перечитывает из API до
+        ${num(f.dailyCap.videos)} видео и ${num(f.dailyCap.channels)} каналов, начиная с самых старых:
+        названия, описания и счётчики. <b>Ничего не удаляется</b> — история снимков и перепаковок хранится
+        без срока, а это правилами YouTube не разрешено без отдельного одобрения. Для себя это ваш риск;
+        перед тем как давать доступ другим людям, прочитайте SECURITY.md и PRIVACY.md.</div>
+    </div>`;
 }
 
 /* План 15 (5.9): свои уведомления -- Telegram или webhook и режим. Секреты

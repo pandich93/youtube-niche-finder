@@ -24,6 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Old rows are re-read from YouTube daily** (plan 16) — YouTube's API
+  policies allow keeping data fetched with a key at most 30 days unrefreshed,
+  while the worker only refreshed videos up to 30 days old, and through
+  `videos.batchGetStats`, which returns counters, not titles or descriptions.
+  A new daily worker step re-reads every stored video and channel not
+  refreshed for `REFRESH_STALE_DAYS` (25) with `videos.list` /
+  `channels.list`, oldest first, capped by `REFRESH_STALE_MAX_VIDEOS` /
+  `REFRESH_STALE_MAX_CHANNELS` (2,500 each, ~100 units a day at most);
+  `WORKER_FRESHNESS=0` switches it off. Nothing is deleted: a row the API no
+  longer returns is marked gone. `db_stats` gains `freshness`, the "Данные"
+  screen a "Хранение данных" card, and SECURITY.md / PRIVACY.md say what is
+  kept and what YouTube's derived-metrics approval would change.
 - **Velocity across the 2026-08-24 view-count change** (plan 18) — YouTube
   now counts a public view from the first frame, so `vph24h` and
   `acceleration` no longer pair a snapshot from before 2026-08-24 with one

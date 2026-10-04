@@ -15,6 +15,8 @@ Default daily budget (well inside the free tier):
   sponsors     every 1h   new/changed video descriptions    0 units (local DB only)
   thumb_embed  every 1h   thumbnail CLIP vectors, opt-in     0 units (i.ytimg.com)
   own_sync     once a day your connected channels            Analytics API quota only
+  freshness    once a day rows not refreshed for 25 days      ~1 unit / 50 rows, capped
+                          (titles, descriptions, counters; nothing is ever deleted)
 
 Configure with env vars (see .env.example). Set WORKER_QUERIES to keep a set of
 topics continuously fresh, e.g. "ai automation,faceless history,нейросети".
@@ -32,6 +34,7 @@ from application import alerts as alerts_mod
 from application import collecting as collector
 from application import digest as digest_mod
 from application import enrichment as enrich_mod
+from application import freshness as freshness_mod
 from application import maturity_curve as curve_mod
 from application import niche_clusters as clusters_mod
 from application import own_channels as own_mod
@@ -98,6 +101,10 @@ OWN_SYNC_INTERVAL_MIN = int(os.environ.get("WORKER_OWN_SYNC_INTERVAL_MIN", "1440
 # Daily digest (plan 07): only when NOTIFY_MODE is digest/both. Checked this
 # often; application/digest.py itself decides whether today's is due.
 DIGEST_CHECK_INTERVAL_MIN = int(os.environ.get("WORKER_DIGEST_CHECK_INTERVAL_MIN", "10"))
+# Plan 16: re-read stored rows not refreshed for REFRESH_STALE_DAYS (YouTube's
+# 30-day rule); caps and age live in application/freshness.py
+DO_FRESHNESS = os.environ.get("WORKER_FRESHNESS", "1") not in ("0", "false", "no")
+FRESHNESS_INTERVAL_MIN = int(os.environ.get("WORKER_FRESHNESS_INTERVAL_MIN", "1440"))
 
 _stop = False
 
@@ -245,6 +252,10 @@ def cycle():
     if DO_THUMB_EMBED and _due("thumb_embed", THUMB_EMBED_INTERVAL_MIN):
         _safe("thumbnail vectors", lambda: thumbsearch_mod.embed_thumbnails(limit=THUMB_EMBED_LIMIT))
         _mark("thumb_embed")
+
+    if DO_FRESHNESS and _due("freshness", FRESHNESS_INTERVAL_MIN):
+        _safe("refresh stale rows", lambda: freshness_mod.refresh_stale(API_KEY))
+        _mark("freshness")
 
     if DO_OWN_SYNC and _due("own_sync", OWN_SYNC_INTERVAL_MIN):
         st = _safe("own channels status", own_mod.status) or {}
