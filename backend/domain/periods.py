@@ -68,6 +68,18 @@ def window(period: str, ref: datetime = None, offset: int = 0):
     return start.isoformat(), end.isoformat()
 
 
+def parse_utc(iso) -> datetime | None:
+    """ISO-8601 text (a trailing Z, or no zone = UTC) -> aware datetime; None
+    for empty or unparseable input. The one parser new code should use."""
+    if not iso:
+        return None
+    try:
+        d = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+
+
 def hours_since(iso_ts: str, ref: datetime = None) -> float:
     if not iso_ts:
         return 0.0

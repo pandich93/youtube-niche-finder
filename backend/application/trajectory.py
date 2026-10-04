@@ -6,22 +6,16 @@ marks for title/thumbnail swaps and the 2026-08-24 view-count change.
 Zero quota: only what the worker already recorded. A video found days after
 publishing has no start of its curve; observedFromHours says from when.
 """
-from datetime import datetime, timezone
-
 import infrastructure.postgres as db
 from application import discovery as trends
 from domain import metrics as M
+from domain import periods as P
 
 MAX_VIDEOS = 5
 EXPECTED_AGES_DAYS = (0.25, 0.5, 1, 2, 3, 5, 7, 10, 14, 21, 30)
 NOTE = ("Points are the worker's snapshots (every 3 h for a week, then daily up to 30 days); "
         "the expected curve is an estimate of niche-finder: the channel's median views times "
         "the maturity curve.")
-
-
-def _ts(iso):
-    d = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
 
 
 def _hours(a, b) -> float:
@@ -55,7 +49,8 @@ def video_trajectory(video_ids) -> dict:
         conn.close()
 
     channel_ids = sorted({v["channel_id"] for v in vids.values() if v["channel_id"]})
-    rows = trends.load_window(period="all", channel_ids=channel_ids) if channel_ids else []
+    rows = (trends.load_window(period="all", channel_ids=channel_ids, video_ids=list(vids))
+            if channel_ids else [])
     baseline = {r["video_id"]: r.get("baselineMedianViews") for r in rows}
 
     out = []
@@ -63,11 +58,12 @@ def video_trajectory(video_ids) -> dict:
         v = vids.get(vid)
         if not v:
             continue
-        pub = _ts(v["published_at"]) if v["published_at"] else None
+        pub = P.parse_utc(v["published_at"]) if v["published_at"] else None
         points = []
         if pub:
-            points = [{"ageHours": _hours(_ts(h["captured_at"]), pub), "views": h["view_count"],
-                       "t": h["captured_at"]} for h in history.get(vid, [])]
+            points = [{"ageHours": _hours(P.parse_utc(h["captured_at"]), pub), "views": h["view_count"],
+                       "t": h["captured_at"]} for h in history.get(vid, [])
+                      if P.parse_utc(h["captured_at"])]
         base = baseline.get(vid)
         max_age_days = max([p["ageHours"] / 24 for p in points] + [1])
         expected = []
@@ -79,9 +75,9 @@ def video_trajectory(video_ids) -> dict:
                     break
         marks = []
         if pub:
-            marks = [{"ageHours": _hours(_ts(c["changed_at"]), pub), "kind": c["field"],
+            marks = [{"ageHours": _hours(P.parse_utc(c["changed_at"]), pub), "kind": c["field"],
                       "t": c["changed_at"]} for c in changes.get(vid, [])]
-            if points and pub < M.VIEW_COUNT_CHANGE_AT <= _ts(points[-1]["t"]):
+            if points and pub < M.VIEW_COUNT_CHANGE_AT <= P.parse_utc(points[-1]["t"]):
                 marks.append({"ageHours": _hours(M.VIEW_COUNT_CHANGE_AT, pub),
                               "kind": "view_count_change",
                               "t": M.VIEW_COUNT_CHANGE_AT.isoformat()})

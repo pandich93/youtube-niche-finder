@@ -46,7 +46,8 @@ def format_repeatability(video_id: str, min_similarity: float = DEFAULT_MIN_SIMI
                 "titleOpening": {"opening": None, "otherChannels": 0}}
     close = [s for s in sim.get("similar", []) if s["similarity"] >= min_similarity]
     channel_ids = sorted({s["channelId"] for s in close})
-    rows = trends.load_window(period="all", channel_ids=channel_ids) if channel_ids else []
+    rows = (trends.load_window(period="all", channel_ids=channel_ids,
+                               video_ids=[s["videoId"] for s in close]) if channel_ids else [])
     scores = {r["video_id"]: _score(r) for r in rows}
     matches = [{**s, "outlierScore": scores.get(s["videoId"])} for s in close]
     conn = db.get_conn()

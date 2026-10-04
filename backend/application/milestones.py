@@ -2,16 +2,10 @@
 domain/milestones.py. Reads the subscriber snapshots the worker takes; zero
 quota, nothing fetched from YouTube.
 """
-from datetime import datetime, timezone
-
 import infrastructure.postgres as db
 from domain import milestones as MS
 from domain import monetization as MZ
-
-
-def _ts(iso):
-    d = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-    return d if d.tzinfo else d.replace(tzinfo=timezone.utc)
+from domain import periods as P
 
 
 def for_channel(channel_id: str) -> dict:
@@ -28,7 +22,8 @@ def for_channel(channel_id: str) -> dict:
     if not ch or ch["hidden_subs"] or ch["subscriber_count"] is None:
         return {"subscribers": None, "forecasts": [], "reason": "subscribers-hidden",
                 "note": MS.NOTE}
-    points = [(_ts(r["captured_at"]), r["subscriber_count"]) for r in rows]
+    points = [(P.parse_utc(r["captured_at"]), r["subscriber_count"]) for r in rows
+              if P.parse_utc(r["captured_at"])]
     current = points[-1][1] if points else ch["subscriber_count"]
     forecasts = [MS.forecast(points, t) for t in MS.next_targets(current)]
     out = {"subscribers": current, "forecasts": forecasts, "note": MS.NOTE}

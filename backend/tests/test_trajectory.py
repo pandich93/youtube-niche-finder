@@ -98,3 +98,14 @@ def test_http_and_mcp_doors():
     r = TestClient(api.app).get("/api/videos/trajectory?ids=tv,nope")
     assert r.status_code == 200 and r.json()["missing"] == ["nope"]
     assert srv.video_trajectory(["tv"])["videos"][0]["videoId"] == "tv"
+
+
+def test_load_window_by_video_ids_keeps_the_channel_baseline():
+    # review: trajectory and repeatability need a few videos' scores, not
+    # every video of their channels; the baseline still comes from the channel
+    from application import discovery as trends
+    full = {r["video_id"]: r for r in trends.load_window(period="all", channel_ids=[CH])}
+    narrow = trends.load_window(period="all", channel_ids=[CH], video_ids=["tv"])
+    assert [r["video_id"] for r in narrow] == ["tv"]
+    assert narrow[0]["baselineMedianViews"] == full["tv"]["baselineMedianViews"] == 10_000
+    assert narrow[0]["outlierScore"] == full["tv"]["outlierScore"]

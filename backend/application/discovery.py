@@ -41,7 +41,7 @@ FROM videos v JOIN channels c ON c.channel_id = v.channel_id
 
 def _filters(niche=None, languages=None, region=None, category_id=None,
              max_subscribers=None, min_subscribers=None, min_views=None,
-             channel_ids=None):
+             channel_ids=None, video_ids=None):
     joins, where, params = "", [], []
     if niche:
         joins += " JOIN video_niches vn ON vn.video_id = v.video_id AND vn.niche_slug = ?"
@@ -64,6 +64,11 @@ def _filters(niche=None, languages=None, region=None, category_id=None,
     if channel_ids:
         where.append("v.channel_id IN (%s)" % ",".join("?" * len(channel_ids)))
         params += list(channel_ids)
+    if video_ids:
+        # only these rows (and their histories); a video's baseline still comes
+        # from its whole channel in _channel_baselines
+        where.append("v.video_id IN (%s)" % ",".join("?" * len(video_ids)))
+        params += list(video_ids)
     return joins, where, params
 
 

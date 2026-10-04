@@ -30,7 +30,10 @@ Found in a code review of v0.2.0..v0.3.0 and the plan-25 work:
   emoji** ("How To: Make…", "🔥 how to make…").
 - **`/api/health` is light again** — the freshness counts moved to their own
   `GET /api/freshness`, which only the "Данные" screen asks for; niche policy
-  signals reuse one database connection instead of one per channel.
+  signals reuse one database connection instead of one per channel; video
+  trajectories and format repeatability load only the videos they score
+  (`load_window(video_ids=...)`, the channel baseline unchanged) -- on a
+  real database the repeatability check went from 0.14 s to 0.03 s.
 
 ### Added
 
