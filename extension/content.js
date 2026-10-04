@@ -460,8 +460,22 @@
       'shorts-path-met': `достигнут через Shorts (≥${seen} за 90 дней)`,
       unknown: 'неизвестно (подписчики скрыты)',
     }[e.status] || e.status;
-    return `<div class="nf-row"><span class="nf-muted">Порог YPP:</span> ${esc(text)}
+    // план 17: с 01.02.2027 полный уровень -- 8 000 часов или 20 млн просмотров Shorts
+    const next = e.upcoming ? ' · с 01.02.2027 порог выше: 8 000 ч или 20 млн Shorts'
+      : e.rules === '2027' ? ' · правила 2027' : '';
+    return `<div class="nf-row"><span class="nf-muted">Порог YPP:</span> ${esc(text + next)}
       <span class="nf-hint" title="${esc(e.note || '')}">Не статус монетизации: YouTube его не публикует.</span></div>`;
+  }
+
+  // Рубежи подписчиков (план 17) -- прямая по темпу наших снимков, не данные YouTube.
+  function milestonesRow(ms) {
+    const f = (ms?.forecasts || []).find((x) => !x.reached);
+    if (!f) return '';
+    const eta = f.eta30 || f.eta90;
+    const text = eta ? `${compact(f.target)} ≈ ${new Date(eta).toLocaleDateString('ru-RU')}`
+      : `${compact(f.target)}: нельзя оценить`;
+    return `<div class="nf-row"><span class="nf-muted">Рубеж:</span> ${esc(text)}
+      <span class="nf-hint" title="${esc(ms.note || '')}">оценка по темпу снимков</span></div>`;
   }
 
   function channelHtml(d, deep, risk) {
@@ -491,6 +505,7 @@
           <span class="nf-hint">${d.snapshots} ${plural(d.snapshots, 'снапшот', 'снапшота', 'снапшотов')}</span></div>
         ${riskRow(risk)}
         ${yppRow(d.yppEligibility)}
+        ${milestonesRow(d.milestones)}
 
         <div class="nf-row"><span class="nf-muted">Доход в месяц, оценка:</span>
           <b>$${decimal(m.revenue.low_usd, 0)}–$${decimal(m.revenue.high_usd, 0)}</b>

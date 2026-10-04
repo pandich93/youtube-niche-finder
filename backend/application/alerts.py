@@ -11,6 +11,7 @@ import os
 import infrastructure.postgres as db
 from application import channel_tracking as T
 from application import discovery as trends
+from application import milestones as MSA
 from domain import alerts as A
 from domain.users import LOCAL_USER_ID
 from infrastructure.notify.null import NullNotifier
@@ -101,7 +102,7 @@ def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
     # sees it is decided when reading (list_events)
     channel_ids = T.tracked_channel_ids()
     empty_counts = {"outlier": 0, "acceleration": 0, "title_change": 0, "silence_break": 0,
-                    "channel_gone": 0, "video_gone": 0}
+                    "channel_gone": 0, "video_gone": 0, "milestone": 0}
     if not channel_ids:
         return {"channelsScanned": 0, "videosScanned": 0, "emitted": empty_counts,
                 "hint": "no tracked channels -- track_channel first"}
@@ -143,6 +144,7 @@ def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
         "silence_break": A.detect_silence_breaks(channel_uploads, silence_days=silence_days),
         "channel_gone": [],
         "video_gone": [],
+        "milestone": A.detect_milestones(MSA.latest_pairs(conn, channel_ids)),
     }
     for ev in A.detect_gone(_gone_rows(conn, channel_ids)):
         candidates[ev["kind"]].append(ev)
@@ -251,6 +253,9 @@ def _format_message(ev: dict) -> str:
                f"было {p.get('subscribers')} подписчиков · {p.get('views')} просмотров · "
                f"{p.get('videoCount')} видео\n"
                f"не отвечает API с {(p.get('goneSince') or '')[:10]}")
+    elif kind == "milestone":
+        text = (f"\U0001F3C1 <b>Рубеж</b>: {_html_escape(p.get('title'))}\n"
+               f"{p.get('milestone')} подписчиков (сейчас {p.get('subscribers')})")
     elif kind == "video_gone":
         text = (f"\U0001F6AB <b>Видео больше не доступно</b>: {_html_escape(p.get('title'))}\n"
                f"было outlier ×{p.get('outlierScore')} · {p.get('views')} просмотров")

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **YPP rules from 2027-02-01 and subscriber milestones** (plan 17) — YouTube
+  raises the Partner Program bar for new creators on 2027-02-01 (1,000
+  subscribers and 8,000 watch hours in 365 days or 20M Shorts views in 90
+  days, plus an activity bar). `yppEligibility` switches to those rules on
+  that day and until then carries the same check under them as `upcoming`;
+  the expanded tier keeps its 2026 numbers, since YouTube's page does not say
+  it changes. `channel_analytics` and the extension's channel panel gain
+  `milestones`: when the next subscriber milestones come at the pace of the
+  last 30 and 90 days of snapshots, and whether 1,000 comes before the rules
+  change -- an estimate, not YouTube data. A tracked channel passing a
+  milestone between its two latest snapshots raises a new `milestone` alert
+  (dashboard, extension, Telegram/webhook).
+
 ### Changed
 
 - **Velocity across the 2026-08-24 view-count change** (plan 18) — YouTube

@@ -12,6 +12,7 @@ const KINDS = {
   silence_break: ['Вернулись после паузы', (p) => `молчали ${p.gapDays} дн`],
   channel_gone: ['Канал исчез', (p) => `было ${compact(p.subscribers)} подп. · ${compact(p.views)} просмотров · ${num(p.videoCount)} видео`],
   video_gone: ['Видео исчезло', (p) => `было outlier ×${p.outlierScore} · ${compact(p.views)} просмотров`],
+  milestone: ['Рубеж', (p) => `${num(p.milestone)} подписчиков · сейчас ${num(p.subscribers)}`],
 };
 const GONE = new Set(['channel_gone', 'video_gone']);
 

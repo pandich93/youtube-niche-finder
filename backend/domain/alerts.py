@@ -13,6 +13,8 @@ bar) dedupes on the bare id -- it only ever needs to fire once.
 """
 from datetime import datetime, timezone
 
+from domain import milestones as MS
+
 OUTLIER_THRESHOLD_DEFAULT = 3.0
 ACCELERATION_THRESHOLD_DEFAULT = 2.0
 SILENCE_DAYS_DEFAULT = 14
@@ -179,4 +181,17 @@ def detect_gone(rows) -> list:
                             "outlierScore": r.get("outlier_score"),
                             "goneSince": r.get("first_missing_at")},
             })
+    return out
+
+
+def detect_milestones(rows) -> list:
+    """rows: [{channel_id, title, previous, current}] -- the two latest
+    subscriber snapshots of a channel (plan 17). One event per round number
+    passed between them; refId channel:milestone keeps it to one per channel."""
+    out = []
+    for r in rows or []:
+        for m in MS.crossed(r.get("previous"), r.get("current")):
+            out.append({"kind": "milestone", "refId": f"{r['channel_id']}:{m}",
+                        "payload": {"channelId": r["channel_id"], "title": r.get("title"),
+                                    "milestone": m, "subscribers": r["current"]}})
     return out

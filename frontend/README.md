@@ -256,7 +256,10 @@ A "template risk" card (`/api/channels/{id}/template-risk`) scores how much the 
 uploads look like one template repeated, with the reasons; a heuristic, not YouTube's
 verdict. A channel the API stopped returning (confirmed after two misses 6+ hours
 apart) gets a red note at the top: it was deleted, hidden or banned, and the numbers
-are the last ones seen. Below that: similar channels by video embeddings
+are the last ones seen. Under the revenue card: the YPP-threshold line (with the
+rules from 2027-02-01 next to it until then) and the next subscriber milestones with
+the date they come at the recent pace -- an estimate from the snapshots, not YouTube data.
+Below that: similar channels by video embeddings
 (`/api/channels/{id}/similar`), and per-video buttons for live comments
 (`POST /api/videos/{id}/comments`, 1 quota unit) and a "why did it take
 off" LLM explanation (`/api/video/{id}/why`, cached; shows a hint instead

@@ -22,7 +22,7 @@ SCHEMA = """
 CREATE TABLE channels (
   channel_id TEXT PRIMARY KEY, title TEXT, custom_url TEXT, country TEXT,
   subscriber_count INTEGER, video_count INTEGER, view_count INTEGER,
-  llm_labels TEXT, llm_labeled_at TEXT, updated_at TEXT
+  llm_labels TEXT, llm_labeled_at TEXT, updated_at TEXT, hidden_subs INTEGER
 );
 CREATE TABLE videos (
   video_id TEXT PRIMARY KEY, channel_id TEXT, title TEXT, tags TEXT,
@@ -153,7 +153,32 @@ def seed():
 
 
 NONE_EMITTED = {"outlier": 0, "acceleration": 0, "title_change": 0, "silence_break": 0,
-                "channel_gone": 0, "video_gone": 0}
+                "channel_gone": 0, "video_gone": 0, "milestone": 0}
+
+
+def _subs(ch, *values):
+    for i, v in enumerate(values):
+        RAW.execute("INSERT INTO channel_stats_history (channel_id, captured_at, subscriber_count) "
+                    "VALUES (?,?,?)", (ch, iso(NOW - timedelta(hours=len(values) - i)), v))
+    RAW.commit()
+
+
+def test_scan_emits_a_milestone_once_when_subscribers_cross_it():
+    # plan 17: the two latest snapshots of a tracked channel straddle 1,000
+    reset(); seed()
+    _subs(CH_SILENCE, 900, 990, 1_010)
+    res = AL.scan(period="180d")
+    assert res["emitted"]["milestone"] == 1
+    assert AL.scan(period="180d")["emitted"]["milestone"] == 0
+    ev = [e for e in AL.list_events(kind="milestone")][0]
+    assert ev["payload"]["milestone"] == 1_000 and ev["payload"]["channelId"] == CH_SILENCE
+
+
+def test_a_hidden_subscriber_count_never_fires_a_milestone():
+    reset(); seed()
+    RAW.execute("UPDATE channels SET hidden_subs = 1 WHERE channel_id = ?", (CH_SILENCE,))
+    _subs(CH_SILENCE, 990, 1_010)
+    assert AL.scan(period="180d")["emitted"]["milestone"] == 0
 
 
 def test_scan_emits_exactly_one_event_of_each_kind():

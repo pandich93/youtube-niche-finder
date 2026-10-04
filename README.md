@@ -80,7 +80,9 @@ by the server. An LLM is optional and off by default.
 ### Study channels and videos
 
 - Channel tracking: growth by window, views-per-hour of every upload, a
-  revenue range, which YPP thresholds it visibly meets, and a "gone" mark
+  revenue range, which YPP thresholds it visibly meets (and how it fares
+  under the rules from 2027-02-01), the next subscriber milestones with an
+  estimated date, and a "gone" mark
   when a channel disappears from YouTube.
 - Repackaging: title and thumbnail swaps after publishing, before and after
   side by side, with views per hour around the swap.
@@ -112,7 +114,8 @@ by the server. An LLM is optional and off by default.
 ### Stay on top of it
 
 - Alerts for your watchlist: a new outlier, view acceleration, a title change,
-  a channel breaking its silence, a channel or video that vanished — on the
+  a channel breaking its silence, a channel or video that vanished, a subscriber
+  milestone passed — on the
   dashboard, in the extension's badge, and to Telegram or a webhook (one by one
   or as a morning digest).
 - A swipe file for videos and channels you want to come back to.

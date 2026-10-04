@@ -1213,7 +1213,7 @@ def daily_digest(period: str = "24h", top_n: int = 5) -> dict:
 def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100) -> list:
     """List alert events, optionally filtered to unseen ones or one kind
     ('outlier'/'acceleration'/'title_change'/'silence_break'/'channel_gone'/
-    'video_gone')."""
+    'video_gone'/'milestone')."""
     from application import alerts as alerts_mod
     return alerts_mod.list_events(unseen_only=unseen_only, kind=kind, limit=limit, user_id=_uid())
 

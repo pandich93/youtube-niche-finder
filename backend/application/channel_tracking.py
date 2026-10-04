@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 import infrastructure.postgres as db
 from application import collecting
 from application import maturity_curve as MC
+from application import milestones as MILESTONES
 from application import monetization as MON
 from domain import keywords as K
 from domain import metrics as M
@@ -322,6 +323,8 @@ def channel_analytics(channel_id: str, period: str = "30d",
         "found": True,
         # plan 12: YPP thresholds it visibly meets -- not a monetization status
         "yppEligibility": MON.for_channel(channel_id),
+        # plan 17: when the next subscriber milestones come at the recent pace
+        "milestones": MILESTONES.for_channel(channel_id),
         # plan 04: the API stopped returning it (deleted, private or banned);
         # the numbers below are the last ones seen
         "gone": ({"missingSince": gone["first_missing_at"], "confirmedAt": gone["confirmed_at"]}

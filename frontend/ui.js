@@ -544,10 +544,45 @@ function yppText(e) {
   }[e.status] || e.status;
 }
 
+/* План 17: с 01.02.2027 полный уровень YPP — 8 000 часов за 365 дней или
+   20 млн просмотров Shorts за 90 дней (1 000 подписчиков остаётся). */
+const YPP_2027 = 'с 01.02.2027 полный уровень потребует 8 000 часов за 365 дней или 20 млн просмотров Shorts за 90 дней';
+
 function yppLine(e) {
   if (!e) return '';
+  const next = e.upcoming
+    ? `<br><b>Правила 2027:</b> ${YPP_2027}; по видимым данным — ${
+      e.upcoming.status === e.status ? 'то же самое' : esc(yppText(e.upcoming))}.`
+    : e.rules === '2027' ? ' Действуют правила YPP с 01.02.2027.' : '';
   return `<div class="section-sub" style="margin-top:8px"><b>Порог YPP:</b> ${esc(yppText(e))}.
-    Это не статус монетизации — YouTube его не публикует; загрузки и Shorts считаются по собранным видео.</div>`;
+    Это не статус монетизации — YouTube его не публикует; загрузки и Shorts считаются по собранным видео.${next}</div>`;
+}
+
+/* Рубежи подписчиков (план 17): прямая по темпу наших снимков — оценка, не данные YouTube. */
+const MILESTONE_REASON = {
+  'few-snapshots': 'мало снимков', 'short-history': 'история короче недели',
+  'no-growth': 'роста нет', 'too-slow': 'дольше 10 лет при таком темпе',
+};
+
+function milestoneText(f) {
+  if (f.reached) return `${num(f.target)} — уже есть`;
+  const d = (iso) => new Date(iso).toLocaleDateString('ru-RU');
+  if (f.eta30 || f.eta90) {
+    const parts = [];
+    if (f.eta30) parts.push(`≈ ${d(f.eta30)} по темпу 30 дней (+${num(f.pace30PerDay)}/день)`);
+    if (f.eta90) parts.push(`≈ ${d(f.eta90)} по темпу 90 дней`);
+    return `${num(f.target)}: ${parts.join(', ')}`;
+  }
+  return `${num(f.target)}: нельзя оценить — ${MILESTONE_REASON[f.reason] || f.reason}`;
+}
+
+function milestonesLine(ms) {
+  if (!ms || !ms.forecasts?.length) return '';
+  const ypp = ms.ypp1000BeforeRules2027 === true ? ' 1 000 подписчиков — до смены правил YPP 01.02.2027.'
+    : ms.ypp1000BeforeRules2027 === false ? ' 1 000 подписчиков — уже после смены правил YPP 01.02.2027.' : '';
+  return `<div class="section-sub" style="margin-top:8px"><b>Рубежи:</b>
+    ${ms.forecasts.map((f) => esc(milestoneText(f))).join('; ')}.${ypp}
+    Оценка niche-finder по темпу наших снимков, не данные YouTube.</div>`;
 }
 
 /* Фильтр поиска по порогам YPP (plan 12): пороги, которые канал видимо прошёл. */
@@ -563,4 +598,4 @@ function yppSelect(id, cur) {
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
          lineChart, VIEW_COUNT_CHANGE, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
-         nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock, yppLine, yppSelect };
+         nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock, yppLine, milestonesLine, yppSelect };

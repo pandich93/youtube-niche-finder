@@ -445,7 +445,7 @@ separately (or via cron), otherwise the velocity fields stay empty.
 | Tool | What it gives you |
 |---|---|
 | `track_channel` / `untrack_channel` / `list_tracked_channels` | a watchlist for history |
-| `channel_analytics` | profile, cadence, median vs. mean, viral skew, 24h/7d/30d/90d growth, momentum, grade, projections, two revenue models, top outliers; `yppEligibility` -- which YouTube Partner Program thresholds it visibly meets (500/1,000 subscribers, uploads and Shorts views in 90 days as a lower bound from collected videos; watch hours are not in the API). Not a monetization status: YouTube does not publish one |
+| `channel_analytics` | profile, cadence, median vs. mean, viral skew, 24h/7d/30d/90d growth, momentum, grade, projections, two revenue models, top outliers; `yppEligibility` -- which YouTube Partner Program thresholds it visibly meets (500/1,000 subscribers, uploads and Shorts views in 90 days as a lower bound from collected videos; watch hours are not in the API). Not a monetization status: YouTube does not publish one. Until 2027-02-01 it also carries `upcoming` -- the same check under the rules from that date (8,000 watch hours in 365 days or 20M Shorts views in 90 days, plus the activity bar: 2 long videos or 5 Shorts or 1M Shorts views in 90 days); `milestones` -- when the next subscriber milestones come at the pace of the last 30 and 90 days of snapshots (an estimate, not YouTube data) |
 | `compare_channels` | comparison, ranked by views per subscriber |
 | `template_risk` | how templated a channel's last N uploads look, 0-100: title similarity, shared openings/endings, uniform lengths, metronome rhythm; Shorts and long-form never mixed; needs 10+ videos; a heuristic, not YouTube's verdict |
 | `niche_template_risk` | the same for every channel in a niche: low/medium/high counts, share of high-risk channels, the most templated ones |
@@ -462,7 +462,7 @@ separately (or via cron), otherwise the velocity fields stay empty.
 
 | Tool | What it gives you |
 |---|---|
-| `scan_for_alerts` | run the alert scan now: new outlier, acceleration, title change, a channel posting again after silence, a channel or an alerted outlier video that the API stopped returning (tracked channels only; "gone" needs two misses at least 6h apart, and a failed or over-quota API call never counts as a miss) |
+| `scan_for_alerts` | run the alert scan now: new outlier, acceleration, title change, a channel posting again after silence, a channel or an alerted outlier video that the API stopped returning, a channel passing a subscriber milestone (100, 1k, 10k, ...) between its two latest snapshots (tracked channels only; "gone" needs two misses at least 6h apart, and a failed or over-quota API call never counts as a miss) |
 | `list_events` / `mark_events_seen` | the event feed, optionally unseen-only or one kind |
 | `daily_digest` | the last 24h in one summary -- new outliers, accelerating videos, rising channels, title/thumbnail swaps, disappeared channels/videos -- without sending it |
 

@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, VIEW_COUNT_CHANGE, aiLabelsBadge, sponsorBlock, state, rpmRange, templateRiskBlock, yppLine } from '../ui.js';
+import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, VIEW_COUNT_CHANGE, aiLabelsBadge, sponsorBlock, state, rpmRange, templateRiskBlock, yppLine, milestonesLine } from '../ui.js';
 import { view, nicheOverviewBlock } from '../shared.js';
 
 /* ----------------------------------------------------------------- Канал */
@@ -79,6 +79,7 @@ async function viewChannel(id) {
           интеграций. Публичные оценки дохода регулярно ошибаются в 2–4 раза — читайте это
           как порядок величины, а не как сумму.</div>
         ${yppLine(a.yppEligibility)}
+        ${milestonesLine(a.milestones)}
       </div>
     </div>
 

@@ -162,3 +162,20 @@ def _run_all():
 
 if __name__ == "__main__":
     sys.exit(0 if _run_all() else 1)
+
+
+# ------------------------------------------------- plan 17: milestones
+
+def test_milestone_fires_when_subscribers_cross_a_round_number():
+    evs = A.detect_milestones([{"channel_id": "UCa", "title": "A", "previous": 980,
+                                "current": 1_004}])
+    assert evs == [{"kind": "milestone", "refId": "UCa:1000",
+                    "payload": {"channelId": "UCa", "title": "A", "milestone": 1_000,
+                                "subscribers": 1_004}}]
+
+
+def test_milestone_needs_two_snapshots_and_a_crossing():
+    assert A.detect_milestones([{"channel_id": "UCa", "title": "A", "previous": None,
+                                 "current": 5_000}]) == []
+    assert A.detect_milestones([{"channel_id": "UCa", "title": "A", "previous": 1_100,
+                                 "current": 1_200}]) == []
