@@ -15,6 +15,7 @@ from domain import metrics as M
 from domain import milestones as MS
 from domain import monetization as MZ
 from domain import niche_ranking as NRK
+from domain import outlier_traits as OTR
 from domain import policy_signals as PS
 from domain import repeatability as RP
 from domain import saturation as SAT
@@ -129,6 +130,14 @@ CATALOG = {
                     "inputs": ["эмбеддинги", "множители", "язык видео"],
                     "minSample": f"{LG.THIN_CORPUS_VIDEOS}+ видео на целевом языке, иначе «не снято» "
                                  "может значить «не собрано»"},
+    "outlierTraits": {"name": "Что общего у выстреливших", "source": ESTIMATE,
+                      "formula": f"outlier'ы (≥ ×{OTR.OUTLIER_MIN:g}) против обычных видео "
+                                 f"(≤ ×{OTR.ORDINARY_MAX:g}) внутри формата (Shorts и длинные отдельно): "
+                                 f"доля с признаком (заметно — разница от {OTR.MIN_DIFF_PP} п.п.) или "
+                                 f"медиана (заметно — в {OTR.MIN_RATIO:g} раза и больше). Корреляция, "
+                                 "не причина; при дюжине признаков один-два сходятся случайно",
+                      "inputs": ["заголовки", "длительность", "теги", "время публикации", "множители"],
+                      "minSample": f"{OTR.MIN_GROUP}+ видео в каждой группе"},
     "nicheRank": {"name": "Где заходить", "source": ESTIMATE,
                   "formula": "0–100 из шести слагаемых с весами: " + ", ".join(
                       f"{NRK.LABELS[k].lower()} {w}" for k, w in NRK.WEIGHTS.items()) +

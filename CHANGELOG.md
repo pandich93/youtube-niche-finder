@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **What outliers of a niche have in common — by the numbers, no LLM** (plan
+  29). `outlier_traits` compares a niche's outliers (age-adjusted ×3 and up)
+  with its ordinary videos (up to ×1.5), Shorts and long-form apart: number,
+  "?", brackets, CAPS word or emoji in the title, video and title length,
+  tags, weekend and time of day (UTC) of publishing. A difference is shown only
+  with 10+ videos in each group and a gap of 15+ points (or medians 1.3×
+  apart), with both sample sizes; a group where over half of the outliers are
+  one channel's is flagged. MCP (93 tools),
+  `GET /api/niches/{slug}/outlier-traits`, a card on the niche screen and in
+  the brief, an `outlierTraits` entry in `explain_scores`. Zero quota.
 - **Where to enter — a score and a comparison for every niche** (plan 27).
   `rank_niches` scores each niche 0–100 from six terms it already computes
   (demand trend 25, supply growth 20, newcomers breaking out 20, RPM of the

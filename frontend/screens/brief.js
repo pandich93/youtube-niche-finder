@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, trajectoryChart, compareHref, qmark } from '../ui.js';
+import { $, api, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, trajectoryChart, compareHref, qmark, outlierTraitsBlock } from '../ui.js';
 import { view } from '../shared.js';
 
 /* ------------------------------------------------------- Бриф из outlier */
@@ -81,6 +81,7 @@ function briefHtml(b, llm) {
 
     <div id="briefTraj"></div>
     <div id="briefRepeat"></div>
+    <div id="briefTraits"></div>
     <div id="briefThumbs"></div>
 
     ${skippedBlock(b.skipped)}
@@ -142,6 +143,17 @@ async function fillRepeatability(videoId) {
   } catch { /* не критично: бриф и без этого блока полный */ }
 }
 
+/* «Что общего у выстреливших» (план 29): признаки outlier'ов ниши того же формата,
+   что исходное видео. Без ниши блок не показывается. */
+async function fillOutlierTraits(b) {
+  const box = $('#briefTraits');
+  if (!box || !b.niche) return;
+  try {
+    const d = await api(`/api/niches/${encodeURIComponent(b.niche)}/outlier-traits`);
+    box.innerHTML = outlierTraitsBlock(d, b.source?.isShort ? 'short' : 'long');
+  } catch { /* не критично: бриф и без этого блока полный */ }
+}
+
 /* Траектория исходного видео (план 20): как оно набирало просмотры по сравнению
    с обычным видео своего канала. Без снимков блок не показывается. */
 async function fillTrajectory(videoId) {
@@ -164,6 +176,7 @@ async function viewBrief(videoId, gapTopic = null) {
     view.innerHTML = briefHtml(b, useLlm);
     fillSimilarThumbs(videoId);
     fillRepeatability(videoId);
+    fillOutlierTraits(b);
     fillTrajectory(videoId);
     const saveBtn = $('#saveBrief');
     if (saveBtn) saveBtn.addEventListener('click', async () => {

@@ -752,7 +752,52 @@ function yppSelect(id, cur) {
       opt('shorts-path-met', 'порог пройден по Shorts')}</select></label>`;
 }
 
+/* «Что общего у выстреливших» (план 29): признаки, по которым outlier'ы ниши заметно
+   отличаются от обычных видео. Корреляция, не причина. only: 'long' | 'short' | null. */
+function traitValue(t, v) {
+  if (t.kind === 'share') return `${v}%`;
+  return t.key === 'duration' ? `${v} с` : `${v}`;
+}
+
+function traitLine(t) {
+  const n = `${num(t.nOutliers)} и ${num(t.nOrdinary)} видео`;
+  if (t.kind === 'share') {
+    const pp = Math.abs(t.diff);
+    return `<b>${esc(t.label)}</b>: у outlier'ов ${t.outliers}% против ${t.ordinary}% у обычных
+      (${t.diff > 0 ? '+' : '−'}${pp} п.п.) <span class="section-sub" style="display:inline">· ${n}</span>`;
+  }
+  return `<b>${esc(t.label)}</b>: медиана ${traitValue(t, t.outliers)} против ${traitValue(t, t.ordinary)}
+    (×${t.diff}) <span class="section-sub" style="display:inline">· ${n}</span>`;
+}
+
+function outlierTraitsBlock(d, only = null) {
+  if (!d || !d.formats) return '';
+  const names = { long: 'длинные видео', short: 'Shorts' };
+  const parts = Object.keys(names).filter((k) => !only || k === only).map((k) => {
+    const f = d.formats[k];
+    if (!f || (only === null && !f.videos)) return '';
+    const head = `${f.outliers} outlier'ов (≥ ×${d.minOutlier}) против ${f.ordinary} обычных (≤ ×${d.maxOrdinary})`;
+    if (!f.reliable) {
+      return `<div><b>${names[k]}</b>: мало данных — нужно ${d.minGroup}+ видео в каждой группе, сейчас ${head}.</div>`;
+    }
+    const sig = f.traits.filter((t) => t.significant);
+    const rest = f.traits.filter((t) => !t.significant && t.diff !== null);
+    return `<div style="margin-bottom:12px"><b>${names[k]}</b> <span class="section-sub" style="display:inline">· ${head}</span>
+      ${f.concentrated ? notice(`${Math.round(f.topChannelShare * 100)}% outlier'ов — один канал: это привычки канала, а не ниши.`, 'warn') : ''}
+      ${sig.length ? `<ul class="digest-list">${sig.map((t) => `<li style="white-space:normal">${traitLine(t)}</li>`).join('')}</ul>`
+        : '<div class="section-sub">Заметных отличий нет: ни один признак не разошёлся достаточно.</div>'}
+      ${rest.length ? `<details><summary class="section-sub" style="cursor:pointer">Без заметной разницы (${rest.length})</summary>
+        <ul class="digest-list">${rest.map((t) => `<li style="white-space:normal">${traitLine(t)}</li>`).join('')}</ul></details>` : ''}
+    </div>`;
+  }).join('');
+  if (!parts) return '';
+  return `<div class="card">${sectionHead('Что общего у выстреливших',
+    'чем outlier\'ы отличаются от обычных видео ниши — по числам, без ИИ', qmark('outlierTraits'))}
+    ${parts}<div class="section-sub">Корреляция, не причина. Заметно — разница от ${d.minDiffPp} п.п. (доли) или в ${d.minRatio} раза (медианы);
+      признаков проверено много, один-два могут сойтись случайно. Время — UTC. Оценка по собранной базе.</div></div>`;
+}
+
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
          lineChart, VIEW_COUNT_CHANGE, trajectoryChart, compareHref, loadScores, scoreTip, qmark, policyBlock, nichePolicyBlock, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
-         nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock, yppLine, milestonesLine, yppSelect };
+         nicheTemplateRiskBlock, outlierTraitsBlock, sponsorBlock, saturationChip, saturationBlock, yppLine, milestonesLine, yppSelect };

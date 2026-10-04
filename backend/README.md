@@ -492,6 +492,7 @@ Delivery to Telegram or a webhook is optional -- see [Configuration](#configurat
 | `explain_scores` | plan 23: what a number is -- YouTube data or an estimate of niche-finder (`source`), its formula, inputs and minimum sample; one key or the whole catalog (`domain/score_catalog.py`, the same text as the dashboard's "?" tips and the help page) |
 | `video_trajectory` | plan 20: views by age (hours since publishing) for 1-5 videos from the worker's snapshots, each with its channel's expected curve (median views x maturity curve) and marks for title/thumbnail swaps; `observedFromHours` says from when a late-found video is watched. Zero quota |
 | `format_repeatability` | plan 21: did this video's format work for OTHER channels too? Its embedding neighbours on other channels (cosine >= `min_similarity`, 0.6), each scored with the usual outlier baseline, one channel counted once by its best video: `repeatable` (3+ channels got >= 2x), `mixed`, `one_off`, or `unknown` (fewer than 5 similar videos or 3 channels collected). Plus how many other channels start their titles the same way. Zero quota |
+| `outlier_traits` | plan 29: what the outliers of a niche have in common, without an LLM. Outliers (`min_outlier`, 3x age-adjusted) against ordinary videos (`max_ordinary`, 1.5x) inside each format (long-form and Shorts never mixed): share with a number, "?", brackets, a CAPS word or an emoji in the title, weekend and time of day (UTC) of publishing; medians of video length, title length and tags. A feature is `significant` with 10+ videos in each group and a gap of 15+ points (shares) or medians 1.3x apart; every number carries both sample sizes, `concentrated` flags a group where over half of the outliers are one channel's. A correlation, not a cause; with a dozen features, one or two pass by chance. Zero quota |
 | `rank_niches` / `compare_niches` | plan 27: which niche to enter. Every niche with a 0-100 score from six terms, each shown with its weight, points (0-100 on a stated linear ramp) and raw value: demand (25; median projected views, last 30 days vs the 90 before), supply (20; output growth, inverted), newcomers (20; share of young channels with a break-out), RPM (15; of the niche's dominant category -- a guess), templated channels (10; inverted), policy signals (10; worst share over the three categories, inverted). Unknown terms are left out and the rest re-weighted; no score when the trend is `insufficient-data` or under 60% of the weight is known -- "not ranked", not "ranked low". Cached for an hour (`refresh`). `compare_niches` puts 2-3 niches side by side with the overview numbers. Zero quota |
 | `language_gaps` | plan 26: formats that took off in one language and may be free in another. Outliers in `source_lang` (`min_outlier`, 3x; at most 5 per channel, 100 in all) and, for each, its nearest videos in `target_lang` by embedding (cosine >= `min_similarity`, 0.62 -- cross-language similarity of the multilingual model runs lower than within a language): `open` (nothing close), `thin` (close, none an outlier >= 2x), `covered` (a close one is an outlier). Each card carries the best multiplier, how many OTHER source-language channels repeated the format, and the closest target-language videos; the result gives the target corpus size and a hint to collect more when it is under 200 videos ("open" can mean "not collected"). `niche` narrows the source outliers only. Zero quota |
 | `draft_outcomes` | the review snapshot next to the actual outcome, for linked drafts old enough to have views |
@@ -763,6 +764,13 @@ revenue             = monthly views / 1000 * niche RPM * 0.70
 rpm range           = that effective RPM / 2 ... * 2    # published estimates disagree by up to 7x
 ```
 
+Outlier traits (plan 29, `domain/outlier_traits.py`): outliers (score >= 3,
+age-adjusted) against ordinary videos (<= 1.5), videos in between left out,
+per format. A share is called different at 15+ points, a median at a 1.3x
+ratio, and only with 10+ videos in each group. Thumbnail looks are not
+repeated: `thumbnail_styles` already shows each CLIP style's median outlier
+score.
+
 Niche score (plan 27, `domain/niche_ranking.py`): each of six terms becomes
 0-100 points on a linear ramp (demand ratio 0.6 -> 0, 1.4 -> 100; supply ratio
 1.6 -> 0, 0.6 -> 100; newcomers share 0 -> 0, 0.3 -> 100; RPM $1 -> 0, $8 -> 100;
@@ -878,7 +886,7 @@ youtube-niche-finder/
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 92 tools
+    │   ├── mcp/server.py       MCP server, 93 tools
     │   ├── mcp/prompts.py      7 ready-made scenarios (MCP prompts)
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)

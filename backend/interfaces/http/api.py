@@ -50,6 +50,7 @@ from application import niche_clusters as NCL
 from application import niche_export as NE
 from application import niche_ranking as NRK
 from application import notify_settings as NS
+from application import outlier_traits as OT
 from application import own_channels as OWN
 from application import packaging as PKG
 from application import repeatability as RP
@@ -528,6 +529,15 @@ def niche_videos(slug: str, period: str = "all", channels: str = None,
     channel_ids = [c for c in (channels or "").split(",") if c] or None
     return Q.niche_videos(slug, period=period, channel_ids=channel_ids,
                           include_shorts=include_shorts)
+
+
+@app.get("/api/niches/{slug}/outlier-traits")
+def niche_outlier_traits(slug: str, period: str = "all", min_outlier: float = 3.0,
+                         max_ordinary: float = 1.5):
+    """Plan 29: what the niche's outliers have in common (title, length, tags,
+    publishing time) against ordinary videos, long-form and Shorts apart.
+    Zero quota."""
+    return OT.outlier_traits(slug, period=period, min_outlier=min_outlier, max_ordinary=max_ordinary)
 
 
 @app.get("/api/niches/{slug}/sponsors")

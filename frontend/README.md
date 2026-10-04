@@ -146,6 +146,17 @@ One idea per line → a verdict for each against your own corpus
 are adjustable; every idea expands to the matching videos, and the result
 can be exported to CSV client-side.
 
+### What outliers share (niche screen, brief)
+
+A card on the niche screen (`GET /api/niches/{slug}/outlier-traits`, loaded
+apart so the screen does not wait): long videos and Shorts separately, the
+features where the niche's outliers differ from its ordinary videos -- "number
+in the title: 61% against 18% (+43 points)", "median length ×0.4" -- each with
+both sample sizes, the rest folded under "Без заметной разницы". A group under
+10 videos says "мало данных"; a warning appears when over half of the outliers
+are one channel's. The same card, for the source video's format, sits in the
+brief. Correlation, not cause.
+
 ### Where to enter (`#/enter`)
 
 Every niche in one table (`GET /api/niches/ranking`, cached for an hour,

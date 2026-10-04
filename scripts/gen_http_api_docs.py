@@ -60,6 +60,7 @@ SUMMARY = {
     "GET /api/niches/compare": ("niches", "2-3 comma-separated niches side by side: score breakdown plus overview numbers (plan 27)."),
     "GET /api/niches/{slug}": ("niches", "Niche density (channel sizes, viral skew, Shorts share), top videos by multiplier and the niche trend."),
     "GET /api/niches/{slug}/videos": ("niches", "Flat per-video list for the niche scatter chart, filterable by channel and Shorts."),
+    "GET /api/niches/{slug}/outlier-traits": ("niches", "What the niche's outliers have in common against ordinary videos: title, length, tags, publishing time; Shorts and long apart (plan 29)."),
     "GET /api/niches/{slug}/sponsors": ("niches", "Sponsor map of a niche: brands named in descriptions, promo codes, affiliate links kept apart."),
     "GET /api/niches/{slug}/template-risk": ("niches", "Share of the niche's channels whose recent uploads look like one repeated template."),
     "GET /api/niches/{slug}/thumbnail-styles": ("niches", "Thumbnail style clusters of a niche (CLIP vectors) and how each style performs."),

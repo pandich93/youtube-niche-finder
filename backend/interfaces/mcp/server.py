@@ -1308,6 +1308,27 @@ def format_repeatability(video_id: str, min_similarity: float = 0.6, niche: str 
     return rp.format_repeatability(video_id, min_similarity=min_similarity, niche=niche)
 
 
+# --------------------------------------------- what outliers share (plan 29)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def outlier_traits(niche: str = None, period: str = "all", min_outlier: float = 3.0,
+                   max_ordinary: float = 1.5) -> dict:
+    """What the outliers of a niche (or of everything collected) have in common,
+    without an LLM: outliers (>= min_outlier x their channel's usual, age-
+    adjusted) against ordinary videos (<= max_ordinary) on a number, "?",
+    brackets, CAPS word or emoji in the title, the length of the video and the
+    title, tags, weekend and time-of-day (UTC) of publishing. Long videos and
+    Shorts are compared apart. A feature is 'significant' only with 10+ videos
+    in each group and a gap of 15+ points (or medians 1.3x apart); each comes
+    with its sample sizes. 'concentrated' means over half of the outliers are
+    one channel's. A correlation, not a cause. Zero quota."""
+    from application import outlier_traits as ot
+    return ot.outlier_traits(niche, period=period, min_outlier=min_outlier,
+                             max_ordinary=max_ordinary)
+
+
 # ------------------------------------------------ where to enter (plan 27)
 
 @mcp.tool(annotations=ToolAnnotations(
