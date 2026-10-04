@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-04
+
+The second round of plans (16-24): data kept fresh under YouTube's API
+policies, the 2027 Partner Program rules, and tools for deciding what to
+make -- topic alerts, format repeatability, video trajectories, signals for
+the monetization policies, your channel by format -- with every number
+saying whether it is YouTube data or an estimate. 89 MCP tools, 113 HTTP
+routes. Highlights:
+
+- **Decide what to make:** topic alerts, "Формат повторяем?", video
+  trajectories and a comparison of up to five videos.
+- **Stay on the right side of YouTube:** signals for the three
+  inauthentic-content categories, the 2027 YPP thresholds with subscriber
+  milestones and a `milestone` alert, your channel's Shorts against long
+  videos and watch hours toward the bar.
+- **Trust the numbers:** a catalog of every score (formula, inputs, minimum
+  sample, YouTube data or estimate) behind "?" tips and the help page; old
+  rows re-read from YouTube daily, nothing deleted; velocity kept on one
+  view-counting rule across 2026-08-24.
+- **Fixes:** similar videos of other channels no longer empty behind a
+  crowded channel (pgvector), tooltips no longer render HTML from YouTube
+  data, niche-map clusters named without an LLM.
+
 ### Added
 
 - **Your channel by format** (plan 24) — the daily sync of a connected
@@ -932,6 +955,7 @@ Initial public release.
   coverage badge.
 - MIT license.
 
-[Unreleased]: https://github.com/pandich93/youtube-niche-finder/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/pandich93/youtube-niche-finder/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/pandich93/youtube-niche-finder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/pandich93/youtube-niche-finder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/pandich93/youtube-niche-finder/releases/tag/v0.1.0

@@ -159,6 +159,10 @@ by the server. An LLM is optional and off by default.
 <td width="50%"><img src="assets/packaging.jpg" alt="Repackaging history"><br><sub><b>Repackaging</b> — title and thumbnail changes, before / after</sub></td>
 <td width="50%"><img src="assets/ideas.jpg" alt="Idea checker"><br><sub><b>Idea checker</b> — free, recently covered, proven demand or flop</sub></td>
 </tr>
+<tr>
+<td width="50%"><img src="assets/compare.jpg" alt="Compare trajectories"><br><sub><b>Compare</b> — views by age for up to five videos, side by side</sub></td>
+<td width="50%"><img src="assets/policy.jpg" alt="Monetization-policy signals"><br><sub><b>Policy signals</b> — YouTube's three inauthentic-content categories, no risk percentage</sub></td>
+</tr>
 </table>
 
 The dashboard has 21 sections in the sidebar plus niche, channel and brief
