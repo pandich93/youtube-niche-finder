@@ -134,8 +134,8 @@ first, at most `REFRESH_STALE_MAX_VIDEOS` / `REFRESH_STALE_MAX_CHANNELS` (2,500
 each, ~100 units a day at most). YouTube's API policies allow keeping data
 fetched with a key at most 30 days unrefreshed. Nothing is ever deleted: a row
 the API stopped returning is marked gone, and the history stays (see
-SECURITY.md for what that means under the policies). `db_stats` reports the
-counts under `freshness`.
+SECURITY.md for what that means under the policies). `GET /api/freshness`
+reports the counts (the "Данные" screen shows them).
 
 Claude Desktop connection — in
 `~/Library/Application Support/Claude/claude_desktop_config.json`:

@@ -25,7 +25,11 @@ def _title_opening(conn, video_id, title, channel_id) -> dict:
     opening, _ = TR._skeleton_keys(title)
     if not opening or len(opening.split()) < MIN_OPENING_WORDS:
         return {"opening": None, "otherChannels": 0}
-    like = opening.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+    # SQL only narrows by the first word anywhere in the title: the opening
+    # is punctuation-free ("how to make"), the title may not be ("How To: Make",
+    # "🔥 how to make"); the exact comparison is _skeleton_keys below
+    first = opening.split()[0]
+    like = "%" + first.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
     rows = conn.execute("SELECT channel_id, title FROM videos WHERE channel_id != ? "
                         "AND LOWER(title) LIKE ?", (channel_id, like)).fetchall()
     same = {r["channel_id"] for r in rows if TR._skeleton_keys(r["title"])[0] == opening}

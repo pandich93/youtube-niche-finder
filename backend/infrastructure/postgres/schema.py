@@ -513,6 +513,9 @@ MIGRATIONS = {
         # logged after it (video_changes, field='thumbnail_image') re-embeds it
         "thumb_embedding": "BYTEA",
         "thumb_embedded_at": "TEXT",
+        # plan 16 (review): when titles/descriptions were last re-read --
+        # updated_at moves with every counters-only refresh
+        "texts_refreshed_at": "TEXT",
     },
     "channels": {
         "published_at": "TEXT",

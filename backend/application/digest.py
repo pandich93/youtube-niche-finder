@@ -32,6 +32,9 @@ EVENT_SECTIONS = {
     "outliers": (("outlier",), "outlierScore"),
     "acceleration": (("acceleration",), "acceleration"),
     "gone": (("channel_gone", "video_gone"), None),
+    # plans 17 and 19: digest-mode users get these only here
+    "topics": (("topic_match",), "similarity"),
+    "milestones": (("milestone",), "milestone"),
 }
 
 
@@ -105,7 +108,8 @@ def build_digest(period: str = "24h", top_n: int = 5, user_id: int = LOCAL_USER_
     out["period"] = period
     out["eventIds"] = event_ids
     out["empty"] = not any(out[s]["total"] for s in
-                           ("outliers", "acceleration", "gone", "risingChannels", "repackaging"))
+                           ("outliers", "acceleration", "gone", "risingChannels", "repackaging",
+                            "topics", "milestones"))
     return out
 
 
@@ -119,6 +123,10 @@ def _event_line(e) -> str:
         return f"• ×{p.get('acceleration')} · {_esc(_cut(p.get('title') or p.get('videoId')))}"
     if e["kind"] == "channel_gone":
         return f"• канал {_esc(_cut(p.get('title') or p.get('channelId')))}"
+    if e["kind"] == "topic_match":
+        return f"• «{_esc(_cut(p.get('topic'), 40))}»: {_esc(_cut(p.get('title') or p.get('videoId')))}"
+    if e["kind"] == "milestone":
+        return f"• {_esc(_cut(p.get('title') or p.get('channelId')))} — {_compact(p.get('milestone'))} подп."
     if e["kind"] == "video_gone":
         return f"• видео {_esc(_cut(p.get('title') or p.get('videoId')))}"
     return f"• {_esc(e['kind'])}"
@@ -141,6 +149,8 @@ SECTIONS = (
     ("acceleration", "⚡ <b>Ускоряются</b>", _event_line),
     ("risingChannels", "\U0001F4C8 <b>Растущие каналы</b>", _channel_line),
     ("repackaging", "✏️ <b>Перепаковки</b>", _swap_line),
+    ("topics", "\U0001F3AF <b>Ваши темы</b>", _event_line),
+    ("milestones", "\U0001F3C1 <b>Рубежи</b>", _event_line),
     ("gone", "\U0001F6AB <b>Пропали</b>", _event_line),
 )
 

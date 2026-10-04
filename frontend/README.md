@@ -312,7 +312,7 @@ stored encrypted and never reaches the browser.
 
 Key, database, and history state (how many channels/videos/snapshots have
 been collected), plus the same collection forms and a manual stats refresh.
-A "Хранение данных" card shows how many videos and channels were not
+A "Хранение данных" card (`/api/freshness`) shows how many videos and channels were not
 refreshed for 25 days, since when the history goes back, and that the worker
 re-reads the oldest rows daily and never deletes anything.
 

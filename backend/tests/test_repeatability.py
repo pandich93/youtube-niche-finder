@@ -94,6 +94,17 @@ def test_a_format_that_worked_on_three_other_channels_is_repeatable():
     assert r["titleOpening"] == {"opening": "i built an", "otherChannels": 5}
 
 
+def test_title_openings_match_through_punctuation_and_emoji():
+    conn = db.get_conn()
+    _channel(conn, "UCpunct")
+    _video(conn, "UCpunct-1", "UCpunct", 10, 30, _far(), title="I: Built an AI that cooks")
+    _channel(conn, "UCemoji")
+    _video(conn, "UCemoji-1", "UCemoji", 10, 30, _far(), title="🔥 I built an AI for my cat")
+    conn.commit()
+    conn.close()
+    assert RP.format_repeatability("UCsrc-hit")["titleOpening"]["otherChannels"] == 2
+
+
 def test_nobody_else_got_an_outlier_is_one_off():
     _others(900, 800, 1_000, 700, 950)
     assert RP.format_repeatability("UCsrc-hit")["verdict"] == "one_off"

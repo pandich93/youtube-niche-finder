@@ -5,8 +5,9 @@ import { view, plabel, collectForm, wireCollect, render } from '../shared.js';
 /* ----------------------------------------------------------------- Данные */
 
 async function viewData() {
-  const [h, cov] = await Promise.all([
-    api('/api/health'), api(`/api/coverage${q({ period: state.period })}`)]);
+  const [h, cov, fresh] = await Promise.all([
+    api('/api/health'), api(`/api/coverage${q({ period: state.period })}`),
+    api('/api/freshness').catch(() => null)]);
   view.innerHTML = `
     ${h.hasApiKey ? notice('Ключ YouTube API задан — сбор доступен.', 'ok')
                   : notice('Ключ YouTube API не задан. Впишите <code>YOUTUBE_API_KEY</code> в <code>.env</code> и перезапустите <code>docker compose up -d web</code>.', 'error')}
@@ -23,7 +24,7 @@ async function viewData() {
         ${tile('Видео в окне', num(cov.videosPublishedInPeriod), plabel(state.period))}
       </div>
     </div>
-    ${freshnessCard(h.db.freshness)}
+    ${freshnessCard(fresh)}
     ${collectForm()}
     <div class="card">
       ${sectionHead('Обновить статистику', 'перечитывает счётчики и дописывает снимок — из этого берутся скорости')}

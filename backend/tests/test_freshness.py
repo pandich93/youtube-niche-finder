@@ -147,3 +147,36 @@ def test_quota_exceeded_changes_nothing(monkeypatch):
         F.refresh_stale(KEY)
     assert _row("videos", "video_id", "vstale1")["title"] == "old vstale1"
     assert _count("gone_items") == 0
+
+
+def _stale(table="videos", col="video_id", kind="video"):
+    conn = db.get_conn()
+    try:
+        return F._stale_ids(conn, table, col, kind, F._cutoff(25), 100)
+    finally:
+        conn.close()
+
+
+def test_a_daily_counters_refresh_does_not_hide_an_old_description(api):
+    # review: batchGetStats moves updated_at every day but never re-reads the
+    # description, so freshness goes by texts_refreshed_at / first_seen_at
+    conn = db.get_conn()
+    conn.execute("UPDATE videos SET updated_at = ?, first_seen_at = ? WHERE video_id = 'vfresh'",
+                 (_iso(0), _iso(40)))
+    conn.commit()
+    conn.close()
+    assert "vfresh" in _stale()
+    F.refresh_stale(KEY)
+    assert _row("videos", "video_id", "vfresh")["texts_refreshed_at"] is not None
+    assert "vfresh" not in _stale()
+
+
+def test_freshness_has_its_own_route_and_stays_out_of_health():
+    # review: two full-table counts are too heavy for the polled /api/health
+    from fastapi.testclient import TestClient
+
+    import interfaces.http.api as api
+    from application import search as Q
+    client = TestClient(api.app)
+    assert client.get("/api/freshness").json()["videos"]["stale"] == 3
+    assert "freshness" not in Q.db_stats()

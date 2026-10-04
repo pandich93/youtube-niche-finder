@@ -179,3 +179,11 @@ def test_milestone_needs_two_snapshots_and_a_crossing():
                                  "current": 5_000}]) == []
     assert A.detect_milestones([{"channel_id": "UCa", "title": "A", "previous": 1_100,
                                  "current": 1_200}]) == []
+
+
+def test_milestone_needs_snapshots_close_in_time():
+    old = {"channel_id": "UCa", "title": "A", "previous": 900, "current": 1_050,
+           "previousAt": "2026-05-01T00:00:00+00:00", "currentAt": "2026-10-01T00:00:00+00:00"}
+    assert A.detect_milestones([old]) == []
+    recent = {**old, "previousAt": "2026-09-30T00:00:00+00:00"}
+    assert [e["refId"] for e in A.detect_milestones([recent])] == ["UCa:1000"]

@@ -50,8 +50,8 @@ def latest_pairs(conn, channel_ids) -> list:
         return []
     marks = ",".join("?" * len(channel_ids))
     rows = conn.execute(
-        "SELECT x.channel_id, x.subscriber_count, x.rn, c.title FROM ("
-        "  SELECT channel_id, subscriber_count, ROW_NUMBER() OVER "
+        "SELECT x.channel_id, x.subscriber_count, x.captured_at, x.rn, c.title FROM ("
+        "  SELECT channel_id, subscriber_count, captured_at, ROW_NUMBER() OVER "
         "  (PARTITION BY channel_id ORDER BY captured_at DESC) AS rn "
         f"  FROM channel_stats_history WHERE channel_id IN ({marks})) x "
         "JOIN channels c ON c.channel_id = x.channel_id "
@@ -59,6 +59,8 @@ def latest_pairs(conn, channel_ids) -> list:
     by = {}
     for r in rows:
         d = by.setdefault(r["channel_id"], {"channel_id": r["channel_id"], "title": r["title"],
-                                            "previous": None, "current": None})
-        d["current" if r["rn"] == 1 else "previous"] = r["subscriber_count"]
+                                            "previous": None, "current": None,
+                                            "previousAt": None, "currentAt": None})
+        key = "current" if r["rn"] == 1 else "previous"
+        d[key], d[key + "At"] = r["subscriber_count"], r["captured_at"]
     return list(by.values())

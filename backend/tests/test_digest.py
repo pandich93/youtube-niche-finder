@@ -103,6 +103,23 @@ def test_build_groups_the_last_day_by_kind_and_ranks_by_strength(monkeypatch):
     assert "36.8M подп." in digest.format_digest(d)
 
 
+def test_topic_matches_and_milestones_reach_the_digest():
+    # plans 17 and 19: digest-mode users get these alerts only through it
+    _event("milestone", "UCm:1000", {"channelId": "UCm", "title": "Growing", "milestone": 1000,
+                                     "subscribers": 1004})
+    conn = db.get_conn()
+    conn.execute("INSERT INTO events (kind, ref_id, payload, created_at, channel_id, user_id) "
+                 "VALUES ('topic_match', '1:vt', ?, ?, 'UCany', 1)",
+                 (__import__("json").dumps({"topic": "ai tools", "title": "New AI agent",
+                                            "videoId": "vt", "similarity": 0.8}), db.now_iso()))
+    conn.commit()
+    conn.close()
+    d = digest.build_digest()
+    assert d["topics"]["total"] == 1 and d["milestones"]["total"] == 1 and d["empty"] is False
+    text = digest.format_digest(d)
+    assert "Ваши темы" in text and "«ai tools»: New AI agent" in text and "Рубежи" in text
+
+
 def test_repackaging_section_is_per_user_only_in_multi_user_mode(monkeypatch):
     seen = []
     monkeypatch.setattr(PKG, "packaging_feed",

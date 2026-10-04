@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+Found in a code review of v0.2.0..v0.3.0 and the plan-25 work:
+
+- **The worker kept skipping the daily sync of connected channels** when a
+  web-mode redirect was wrong: it still checked the overall "configured"
+  flag. It now syncs whenever the client and the key are set.
+- **Policy signals no longer read parts of words as sensitive topics** —
+  "Реакция" was finance ("акци"), "Аналог" finance ("налог"), "secure"
+  health ("cure"), "syntax" finance, "Выбор ноутбука" politics. Every pattern
+  now starts at a word boundary, and "выбор" counts only as "выборы".
+- **Descriptions are re-read within the 30-day window** — a video's
+  `updated_at` moves with every counters-only refresh, which hid old
+  descriptions from the daily re-read for up to ~55 days. Videos now go by a
+  new `texts_refreshed_at` (else when first seen).
+- **Topic matches and milestones reach the morning digest** for users who
+  get alerts that way; they were only in the dashboard feed.
+- **No "milestone" alert for an old crossing** — two subscriber snapshots
+  more than 14 days apart no longer raise one.
+- **"Так же начинают заголовки" counts titles with punctuation or a leading
+  emoji** ("How To: Make…", "🔥 how to make…").
+- **`/api/health` is light again** — the freshness counts moved to their own
+  `GET /api/freshness`, which only the "Данные" screen asks for; niche policy
+  signals reuse one database connection instead of one per channel.
+
 ### Added
 
 - **Customers can connect their own channels to a hosted installation**

@@ -84,3 +84,15 @@ def test_too_few_videos_is_insufficient_not_none():
                   videos=_videos(2), faceless=None)
     assert r["categories"]["unsatisfying"]["level"] == "insufficient-data"
     assert r["categories"]["generic_repetitive"]["level"] == "insufficient-data"
+
+
+def test_sensitive_words_match_whole_words_not_parts_of_others():
+    for title in ("Реакция на новый клип", "Аналог iPhone", "Fixing the issue",
+                  "How to secure your wifi", "Python syntax", "Выбор ноутбука",
+                  "Taxi driver vlog", "Free stock footage pack"):
+        assert P.sensitive_topic(title, []) is None, title
+    assert P.sensitive_topic("Акции Tesla: покупать?", []) == "finance"
+    assert P.sensitive_topic("Pay less tax this year", []) == "finance"
+    assert P.sensitive_topic("Выборы 2026: итоги", []) == "politics"
+    assert P.sensitive_topic("Can they sue you for this?", []) == "legal"
+    assert P.sensitive_topic("A cure for insomnia?", []) == "health"

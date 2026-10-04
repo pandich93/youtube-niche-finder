@@ -101,7 +101,10 @@ def niche_policy_signals(niche: str) -> dict:
             "SELECT channel_id, title FROM channels WHERE channel_id IN (%s)"
             % ",".join("?" * len(ids)), ids).fetchall()}
         for cid in ids:
-            res = _for(conn, cid, TRA.template_risk(cid))
+            # template risk on the same connection, as niche_template_risk does
+            # -- not one new connection per channel through TRA.template_risk
+            template = TRA._score(TRA._load_videos(conn, cid, TRA.DEFAULT_LAST_N))
+            res = _for(conn, cid, template)
             for key, cat in res["categories"].items():
                 counts[key][cat["level"]] += 1
                 if cat["level"] in ("high", "watch"):

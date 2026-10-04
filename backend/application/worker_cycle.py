@@ -261,7 +261,9 @@ def cycle():
 
     if DO_OWN_SYNC and _due("own_sync", OWN_SYNC_INTERVAL_MIN):
         st = _safe("own channels status", own_mod.status) or {}
-        if st.get("configured"):
+        # plan 25: a sync needs the client and the key, not the redirect -- a
+        # wrong web-mode redirect blocks connecting only, never the numbers
+        if st and not st.get("missing", ["?"]):
             _safe("own channels sync", own_mod.sync_all)   # every user's channels
         _mark("own_sync")
 

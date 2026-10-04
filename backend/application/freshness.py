@@ -32,13 +32,22 @@ def _cutoff(days: int) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
 
 
+# How old a row's TEXTS are. A video's updated_at moves with every daily
+# counters-only refresh (videos.batchGetStats has no description), so videos
+# go by texts_refreshed_at, else when they were first seen; channels are
+# always re-read whole (channels.list), so updated_at is right for them.
+_AGE = {"videos": "COALESCE(t.texts_refreshed_at, t.first_seen_at, t.updated_at)",
+        "channels": "t.updated_at"}
+
+
 def _stale_ids(conn, table, col, kind, cutoff, limit) -> list:
     if limit <= 0:
         return []
+    age = _AGE[table]
     return [r[col] for r in conn.execute(
-        f"SELECT t.{col} FROM {table} t WHERE (t.updated_at IS NULL OR t.updated_at < ?) "
+        f"SELECT t.{col} FROM {table} t WHERE ({age} IS NULL OR {age} < ?) "
         f"AND {_NOT_GONE.format(kind=kind, col=col)} "
-        "ORDER BY t.updated_at ASC NULLS FIRST LIMIT ?", (cutoff, limit)).fetchall()]
+        f"ORDER BY {age} ASC NULLS FIRST LIMIT ?", (cutoff, limit)).fetchall()]
 
 
 def status(stale_days: int = None) -> dict:
@@ -50,11 +59,12 @@ def status(stale_days: int = None) -> dict:
     conn = db.get_conn()
     try:
         def block(table, col, kind):
+            age = _AGE[table]
             r = conn.execute(
                 f"SELECT COUNT(*) AS total, "
-                f"SUM(CASE WHEN (t.updated_at IS NULL OR t.updated_at < ?) "
+                f"SUM(CASE WHEN ({age} IS NULL OR {age} < ?) "
                 f"AND {_NOT_GONE.format(kind=kind, col=col)} THEN 1 ELSE 0 END) AS stale, "
-                f"MIN(t.updated_at) AS oldest FROM {table} t", (cutoff,)).fetchone()
+                f"MIN({age}) AS oldest FROM {table} t", (cutoff,)).fetchone()
             return {"total": r["total"], "stale": int(r["stale"] or 0),
                     "oldestUpdatedAt": r["oldest"]}
         return {"staleDays": days, "videos": block("videos", "video_id", "video"),
@@ -94,6 +104,10 @@ def refresh_stale(api_key: str, stale_days: int = None, max_videos: int = None,
             # embed=False: a refresh keeps the stored vector; the embedding
             # backfill recomputes it when it is missing
             out["videos"]["refreshed"] += collector.store_videos(conn, items, embed=False, now=now)
+            got = [it["id"] for it in items]
+            if got:
+                conn.execute("UPDATE videos SET texts_refreshed_at = ? WHERE video_id IN (%s)"
+                             % ",".join("?" * len(got)), [now, *got])
             gone = collector._track_gone(conn, "video", chunk, [it["id"] for it in items], now)
             out["videos"]["missing"] += gone["missing"]
             conn.commit()

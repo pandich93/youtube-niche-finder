@@ -259,7 +259,7 @@ alerts and the optional background jobs. The backend follows DDD layers —
 | [backend/README.md](backend/README.md) | YouTube quota, running with and without Docker, the CLI, all 89 MCP tools and 7 scenarios, configuration, formulas, code structure |
 | [frontend/README.md](frontend/README.md) | every dashboard screen, where its data comes from, what costs quota |
 | [extension/README.md](extension/README.md) | what the extension shows on each YouTube page, installation, quota cost |
-| [docs/http-api.md](docs/http-api.md) | all 113 HTTP routes with parameters, costs and MCP twins (generated from the code) |
+| [docs/http-api.md](docs/http-api.md) | all 114 HTTP routes with parameters, costs and MCP twins (generated from the code) |
 | [`.env.example`](.env.example) | every setting, commented in place |
 | [SECURITY.md](SECURITY.md) · [PRIVACY.md](PRIVACY.md) | reporting a problem, what protects each mode, what is stored and where traffic goes |
 | [CONTRIBUTING.md](CONTRIBUTING.md) · [CHANGELOG.md](CHANGELOG.md) | dev setup and tests; what changed in each release |

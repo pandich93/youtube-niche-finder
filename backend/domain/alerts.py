@@ -184,12 +184,21 @@ def detect_gone(rows) -> list:
     return out
 
 
+MILESTONE_MAX_GAP_DAYS = 14
+
+
 def detect_milestones(rows) -> list:
-    """rows: [{channel_id, title, previous, current}] -- the two latest
-    subscriber snapshots of a channel (plan 17). One event per round number
-    passed between them; refId channel:milestone keeps it to one per channel."""
+    """rows: [{channel_id, title, previous, current, previousAt, currentAt}]
+    -- the two latest subscriber snapshots of a channel (plan 17). One event
+    per round number passed between them; refId channel:milestone keeps it to
+    one per channel. Snapshots more than MILESTONE_MAX_GAP_DAYS apart say
+    nothing about WHEN it was passed (a channel seen months ago at 900 and
+    tracked today at 1,050), so they raise nothing."""
     out = []
     for r in rows or []:
+        prev_at, cur_at = _dt(r.get("previousAt")), _dt(r.get("currentAt"))
+        if prev_at and cur_at and (cur_at - prev_at).total_seconds() > MILESTONE_MAX_GAP_DAYS * 86400:
+            continue
         for m in MS.crossed(r.get("previous"), r.get("current")):
             out.append({"kind": "milestone", "refId": f"{r['channel_id']}:{m}",
                         "payload": {"channelId": r["channel_id"], "title": r.get("title"),

@@ -48,13 +48,17 @@ _SHOCK_EMOJI = re.compile("[\U0001F631\U0001F6A8\U0001F480\U0001F92F‼❗]")
 # YouTube's topicDetails names (stored as "Health"; a full Wikipedia URL works too)
 _SENSITIVE_TOPICS = {"health": "health", "medicine": "health", "politics": "politics",
                      "law": "legal", "finance": "finance", "economics": "finance"}
-_SENSITIVE_WORDS = {
-    "health": r"doctor|symptom|disease|diet|cure|medical|health|врач|симптом|болезн|лечени|здоровь",
-    "legal": r"lawyer|legal|lawsuit|court|sue\b|attorney|юрист|адвокат|суд\b|в суд|закон",
-    "finance": r"invest|stock|crypto|bitcoin|tax|loan|mortgage|trading|инвест|акци|крипт|налог|кредит|ипотек",
-    "politics": r"election|politic|president|senate|government|выбор|политик|президент|правительств",
+_SENSITIVE_WORDS = {   # each starts at a word boundary: "реакция" is not "акци", "secure" not "cure"
+    "health": r"doctors?|symptoms?|disease|diet|cure[sd]?\b|medical|health|"
+              r"врач|симптом|болезн|лечени|здоровь",
+    "legal": r"lawyers?|legal|lawsuit|court\b|sue[sd]?\b|attorney|юрист|адвокат|суд\b|в суд|закон",
+    "finance": r"invest|stocks\b|stock market|crypto|bitcoin|tax(es|ation)?\b|loans?\b|mortgage|trading|"
+               r"инвест|акци|крипт|налог|кредит|ипотек",
+    "politics": r"election|politic|president|senate|government|выбор(ы|ах|ов)\b|политик|президент|"
+                r"правительств",
 }
-_SENSITIVE_RE = {k: re.compile(v, re.IGNORECASE | re.UNICODE) for k, v in _SENSITIVE_WORDS.items()}
+_SENSITIVE_RE = {k: re.compile(rf"\b(?:{v})", re.IGNORECASE | re.UNICODE)
+                 for k, v in _SENSITIVE_WORDS.items()}
 
 
 def shock_markers(title: str) -> list:

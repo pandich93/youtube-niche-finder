@@ -774,6 +774,15 @@ def niche_policy_signals(slug: str):
     return PSA.niche_policy_signals(slug)
 
 
+@app.get("/api/freshness")
+def data_freshness():
+    """Plan 16: how many stored rows are older than the refresh age. Its own
+    route -- two full-table counts are too heavy for /api/health, which the
+    extension and the footer poll."""
+    from application import freshness as FR
+    return FR.status()
+
+
 @app.get("/api/scores")
 def scores(key: str = None):
     """Plan 23: what every number is -- YouTube data or an estimate of
