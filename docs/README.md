@@ -8,7 +8,7 @@ five-minute tour; everything below goes deeper into one part.
 | Document | Read it when you want to |
 |---|---|
 | [README](../README.md) | see what the project does, install it, connect Claude Desktop and the extension |
-| [backend/README.md](../backend/README.md) | understand YouTube quota, run with or without Docker, use the CLI, look up any of the 98 MCP tools and the 7 ready-made scenarios, read the formulas |
+| [backend/README.md](../backend/README.md) | understand YouTube quota, run with or without Docker, use the CLI, look up any of the 100 MCP tools and the 7 ready-made scenarios, read the formulas |
 | [frontend/README.md](../frontend/README.md) | find your way around the dashboard: every screen, where its data comes from, what costs quota |
 | [extension/README.md](../extension/README.md) | install the Chrome extension and know what each panel, badge and popup section shows |
 | [HTTP API reference](http-api.md) | call the backend from your own scripts: all routes, parameters, costs and their MCP twins |

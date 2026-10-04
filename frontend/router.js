@@ -4,6 +4,7 @@ import { view, setRender } from './shared.js';
 import { viewOverview } from './screens/overview.js';
 import { viewFind } from './screens/find.js';
 import { viewViral } from './screens/viral.js';
+import { viewCalendar } from './screens/calendar.js';
 import { viewChannels } from './screens/channels.js';
 import { viewCategories } from './screens/categories.js';
 import { viewKeywords } from './screens/keywords.js';
@@ -61,6 +62,7 @@ const ROUTES = {
   saved: { title: 'Избранное', run: viewSaved },
   packaging: { title: 'Перепаковки', run: viewPackaging },
   metadata: { title: 'Разбор метаданных', run: viewMetadata },
+  calendar: { title: 'Календарь', run: viewCalendar },
   niches: { title: 'Ниши', run: viewNiches },
   enter: { title: 'Где заходить', run: viewEnter },
   own: { title: 'Мои каналы', run: viewOwn },

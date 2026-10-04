@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Content calendar** (plan 33). Drafts get a release time (`drafts.planned_at`,
+  UTC; a new column) with `plan_draft`, which also returns the best
+  publishing slots of the draft's niche or channel and whether the time is one
+  of them; `content_calendar` lists a range with each draft's state (planned,
+  overdue, published) and the drafts with no date. The worker raises a
+  personal `draft_due` event the day before and when the time comes, sent to
+  Telegram/webhook and shown in a new "Календарь" section of the digest, until
+  the draft is linked to its video. MCP (100 tools), `POST /api/drafts/{id}/plan`,
+  `GET /api/calendar` and the "Календарь" screen (week or month, drag a draft
+  onto a day). Zero quota.
 - **Collaboration partners** (plan 31). `collab_candidates` takes the 200
   most similar channels (embedding centroids) and keeps those at cosine 0.5+,
   between ×0.5 and ×2 of the channel's subscribers, with an upload in the last

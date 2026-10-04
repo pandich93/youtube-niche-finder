@@ -33,6 +33,7 @@ import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import alerts as alerts_mod
 from application import collecting as collector
+from application import content_calendar as calendar_mod
 from application import digest as digest_mod
 from application import enrichment as enrich_mod
 from application import freshness as freshness_mod
@@ -193,6 +194,7 @@ def cycle():
     if _due("alerts", ALERTS_INTERVAL_MIN):
         _safe("alerts scan", lambda: alerts_mod.scan())
         _safe("topic matches", lambda: topic_mod.match_new())
+        _safe("draft reminders", lambda: calendar_mod.remind_due())
         _safe("alerts deliver", lambda: alerts_mod.deliver_all())
         _mark("alerts")
 

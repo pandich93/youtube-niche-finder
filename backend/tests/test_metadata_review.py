@@ -37,7 +37,7 @@ CREATE TABLE drafts (
   id INTEGER PRIMARY KEY AUTOINCREMENT, video_id TEXT, title TEXT, description TEXT,
   tags TEXT, niche TEXT, channel_id TEXT, is_short INTEGER, review TEXT,
   created_at TEXT, published_at TEXT, source_video_id TEXT,
-  user_id INTEGER NOT NULL DEFAULT 1
+  user_id INTEGER NOT NULL DEFAULT 1, planned_at TEXT
 );
 -- plan 14: draft_outcomes looks up real numbers of your own channels here
 CREATE TABLE own_video_metrics (

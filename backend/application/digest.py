@@ -35,6 +35,8 @@ EVENT_SECTIONS = {
     # plans 17 and 19: digest-mode users get these only here
     "topics": (("topic_match",), "similarity"),
     "milestones": (("milestone",), "milestone"),
+    # plan 33: reminders of planned drafts
+    "drafts": (("draft_due",), None),
 }
 
 
@@ -109,7 +111,7 @@ def build_digest(period: str = "24h", top_n: int = 5, user_id: int = LOCAL_USER_
     out["eventIds"] = event_ids
     out["empty"] = not any(out[s]["total"] for s in
                            ("outliers", "acceleration", "gone", "risingChannels", "repackaging",
-                            "topics", "milestones"))
+                            "topics", "milestones", "drafts"))
     return out
 
 
@@ -127,6 +129,9 @@ def _event_line(e) -> str:
         return f"• «{_esc(_cut(p.get('topic'), 40))}»: {_esc(_cut(p.get('title') or p.get('videoId')))}"
     if e["kind"] == "milestone":
         return f"• {_esc(_cut(p.get('title') or p.get('channelId')))} — {_compact(p.get('milestone'))} подп."
+    if e["kind"] == "draft_due":
+        from application import content_calendar as CAL
+        return f"• {_esc(_cut(p.get('title') or str(p.get('draftId'))))} — {_esc(CAL.event_text(p))}"
     if e["kind"] == "video_gone":
         return f"• видео {_esc(_cut(p.get('title') or p.get('videoId')))}"
     return f"• {_esc(e['kind'])}"
@@ -149,6 +154,7 @@ SECTIONS = (
     ("acceleration", "⚡ <b>Ускоряются</b>", _event_line),
     ("risingChannels", "\U0001F4C8 <b>Растущие каналы</b>", _channel_line),
     ("repackaging", "✏️ <b>Перепаковки</b>", _swap_line),
+    ("drafts", "\U0001F4C5 <b>Календарь</b>", _event_line),
     ("topics", "\U0001F3AF <b>Ваши темы</b>", _event_line),
     ("milestones", "\U0001F3C1 <b>Рубежи</b>", _event_line),
     ("gone", "\U0001F6AB <b>Пропали</b>", _event_line),

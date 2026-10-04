@@ -9,7 +9,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white)](backend/README.md#running-without-docker)
 [![PostgreSQL 16 + pgvector](https://img.shields.io/badge/postgres-16%20%2B%20pgvector-336791?style=flat-square&logo=postgresql&logoColor=white)](docker-compose.yml)
 [![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-98%20tools-8A2BE2?style=flat-square)](backend/README.md#tools)
+[![MCP](https://img.shields.io/badge/MCP-100%20tools-8A2BE2?style=flat-square)](backend/README.md#tools)
 [![Stars](https://img.shields.io/github/stars/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/stargazers)
 
 Find niches, viral videos from small channels, outlier channels, trending
@@ -17,7 +17,7 @@ categories and keywords over any period (24 hours to 90 days and beyond);
 track channels and watch their growth; check a title, hook or idea against
 what actually worked in a niche — and get the same numbers in three places:
 
-- **Claude Desktop** (or any MCP client) — 98 tools and 7 ready-made scenarios;
+- **Claude Desktop** (or any MCP client) — 100 tools and 7 ready-made scenarios;
 - **a web dashboard** on `localhost:8080`;
 - **a Chrome extension** that puts the metrics on top of YouTube itself.
 
@@ -75,6 +75,9 @@ by the server. An LLM is optional and off by default.
   channels and videos via pgvector.
 - Idea checker: is a topic free, recently covered, proven or a flop in this
   niche?
+- Content calendar: drafts on a week or month grid, drag one onto a day, the
+  niche's best hours as a hint, a Telegram/digest reminder the day before and
+  when it is due.
 - Collaboration partners: similar channels of your size (×0.5–×2 subscribers),
   active in the last 30 days and not templated, each with the numbers that
   picked it, one click to the tracker.
@@ -180,7 +183,7 @@ by the server. An LLM is optional and off by default.
 </tr>
 </table>
 
-The dashboard has 23 sections in the sidebar plus niche, channel and brief
+The dashboard has 24 sections in the sidebar plus niche, channel and brief
 pages — alerts, idea checker, transcripts, niche map, title check,
 repackaging, metadata review, your own channels and more;
 [frontend/README.md](frontend/README.md#screens) walks through each one.
@@ -271,7 +274,7 @@ alerts and the optional background jobs. The backend follows DDD layers —
 
 | Document | What's inside |
 |---|---|
-| [backend/README.md](backend/README.md) | YouTube quota, running with and without Docker, the CLI, all 98 MCP tools and 7 scenarios, configuration, formulas, code structure |
+| [backend/README.md](backend/README.md) | YouTube quota, running with and without Docker, the CLI, all 100 MCP tools and 7 scenarios, configuration, formulas, code structure |
 | [frontend/README.md](frontend/README.md) | every dashboard screen, where its data comes from, what costs quota |
 | [extension/README.md](extension/README.md) | what the extension shows on each YouTube page, installation, quota cost |
 | [docs/http-api.md](docs/http-api.md) | all 115 HTTP routes with parameters, costs and MCP twins (generated from the code) |

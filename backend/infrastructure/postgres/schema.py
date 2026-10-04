@@ -555,6 +555,8 @@ MIGRATIONS = {
     "drafts": {
         "source_video_id": "TEXT",
         "user_id": _USER_ID,          # plan 15 (drafts is keyed once: a second key would win)
+        # plan 33: when the draft is planned to come out (UTC ISO), for the calendar
+        "planned_at": "TEXT",
     },
 }
 

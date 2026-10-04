@@ -186,7 +186,8 @@ def _shape_draft(r) -> dict:
            "description": r["description"], "tags": _j(r["tags"]) or [],
            "niche": r["niche"], "channelId": r["channel_id"], "isShort": bool(r["is_short"]),
            "review": _j(r["review"]), "createdAt": r["created_at"],
-           "publishedAt": r["published_at"], "sourceVideoId": r["source_video_id"]}
+           "publishedAt": r["published_at"], "sourceVideoId": r["source_video_id"],
+           "plannedAt": r["planned_at"]}
 
 
 def save_draft(title: str, description: str = "", tags=None, niche: str = None,

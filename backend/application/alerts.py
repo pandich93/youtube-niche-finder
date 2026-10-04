@@ -265,6 +265,12 @@ def _format_message(ev: dict) -> str:
         text = (f"\U0001F3AF <b>Тема «{_html_escape(p.get('topic'))}»</b>: "
                f"{_html_escape(p.get('title'))}\n"
                f"{_html_escape(p.get('channelTitle') or '')} · похожесть {p.get('similarity')}")
+    elif kind == "draft_due":
+        # plan 33: a planned draft -- the day before and when its time comes
+        from application import content_calendar as CAL
+        text = (f"\U0001F4C5 <b>Черновик</b>: {_html_escape(p.get('title'))}\n"
+                f"{_html_escape(CAL.event_text(p))}\n"
+                f'<a href="{DASHBOARD_URL}/#/calendar">календарь</a>')
     elif kind == "video_gone":
         text = (f"\U0001F6AB <b>Видео больше не доступно</b>: {_html_escape(p.get('title'))}\n"
                f"было outlier ×{p.get('outlierScore')} · {p.get('views')} просмотров")

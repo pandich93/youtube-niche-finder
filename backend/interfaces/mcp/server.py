@@ -1112,6 +1112,38 @@ def link_draft(draft_id: int, video_id: str) -> dict:
 
 
 @mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def plan_draft(draft_id: int, planned_at: str = None) -> dict:
+    """Put a saved draft on the content calendar: planned_at is the release
+    time as ISO UTC ("2026-10-10T15:00:00Z"); None takes it off. Returns the
+    draft's state and the best publishing slots (UTC) of its niche or
+    channel, with whether the planned time is one of them. The worker then
+    reminds you (Telegram/webhook, digest) the day before and when it is due,
+    until the draft is linked to the real video with link_draft."""
+    from application import content_calendar as cal
+    try:
+        return cal.plan_draft(draft_id, planned_at, user_id=_uid())
+    except (LookupError, ValueError) as e:
+        return {"error": str(e)}
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def content_calendar(start: str = None, end: str = None) -> dict:
+    """Your content calendar: drafts planned or published between start and
+    end (ISO UTC; default this week and the next three, at most 62 days),
+    each with its state (planned / overdue / published), plus the drafts not
+    planned yet."""
+    from application import content_calendar as cal
+    try:
+        return cal.content_calendar(start, end, user_id=_uid())
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool(annotations=ToolAnnotations(
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
 def draft_outcomes(min_age_days: float = 7.0) -> list:

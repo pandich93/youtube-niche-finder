@@ -37,6 +37,7 @@ from application import briefs as BR
 from application import channel_tracking as T
 from application import collabs as CLB
 from application import collecting as collector
+from application import content_calendar as CAL
 from application import content_gaps as CG
 from application import digest as DG
 from application import discovery as trends
@@ -727,6 +728,28 @@ def link_draft(request: Request, draft_id: int, payload: dict = Body(...)):
         return MR.link_draft(draft_id, video_id, user_id=_uid(request))
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/drafts/{draft_id}/plan")
+def plan_draft(request: Request, draft_id: int, payload: dict = Body(default={})):
+    """Plan 33: give a draft a release time (`plannedAt`, ISO UTC; null takes it
+    off the calendar), with the best hours of its niche or channel."""
+    try:
+        return CAL.plan_draft(draft_id, payload.get("plannedAt"), user_id=_uid(request))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/calendar")
+def content_calendar(request: Request, start: str = None, end: str = None):
+    """Plan 33: planned and published drafts between start and end (ISO UTC;
+    default: this week and the next three), plus the unplanned ones."""
+    try:
+        return CAL.content_calendar(start, end, user_id=_uid(request))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/drafts/outcomes")

@@ -146,6 +146,17 @@ One idea per line → a verdict for each against your own corpus
 are adjustable; every idea expands to the matching videos, and the result
 can be exported to CSV client-side.
 
+### Calendar (`#/calendar`)
+
+Drafts by release day (`GET /api/calendar`), a week or a month at a time,
+in the browser's time zone (stored as UTC). Drag a draft -- from the grid or
+from "Без даты" -- onto a day to plan it (`POST /api/drafts/{id}/plan`; the
+time of day is kept, a new draft gets 12:00); click it to set the exact time
+or take it off. The editor shows the best publishing hours of the draft's
+niche (UTC) and whether the time is one of them. States: запланировано,
+просрочено, вышло (linked to a video on "Разбор метаданных"). Reminders come
+to Telegram and the digest the day before and when it is due.
+
 ### Collaboration partners (channel screen, "Мои каналы")
 
 A "Партнёры для коллабораций" card on the channel screen and on "Мои каналы"
