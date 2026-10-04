@@ -96,6 +96,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Niche map clusters get a name without an LLM** — with `LLM_PROVIDER=none`
+  a cluster was named after its channels' curated tags, which are usually
+  empty, so most read "Untitled cluster". It now falls back to the words
+  several of its channels share in their titles (one channel's brand never
+  names a cluster), and only with neither stays untitled.
+
 - **Tooltips no longer render HTML from YouTube data** — a tooltip's text
   sits in a `data-tip` attribute, which the browser decodes back, and it was
   shown with `innerHTML`: a video title, tag or channel name containing

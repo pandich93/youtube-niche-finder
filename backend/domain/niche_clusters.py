@@ -50,3 +50,19 @@ def choose_k(n_items: int, target_cluster_size: int = 5, k_min: int = 2, k_max: 
     so a small corpus doesn't get shredded into singleton clusters and a
     huge one doesn't get one giant blob."""
     return max(k_min, min(k_max, n_items // target_cluster_size))
+
+
+def title_words_name(rows, top: int = 3, min_channels: int = 2) -> list:
+    """Words for a cluster's name when no LLM and no curated tags: the words
+    most channels of the cluster use in their titles (stopwords and pure
+    numbers out). A word has to appear at 2+ channels, so one channel's brand
+    or artist name never names the whole cluster. rows: [{channel_id, title}]."""
+    from domain import keywords as KW
+    channels_per_word = {}
+    for r in rows:
+        for w in set(KW.clean_tokens(KW.tokenize(r.get("title") or ""), min_len=3)):
+            if not w.isdigit():
+                channels_per_word.setdefault(w, set()).add(r.get("channel_id"))
+    ranked = sorted(((len(c), w) for w, c in channels_per_word.items() if len(c) >= min_channels),
+                    key=lambda t: (-t[0], t[1]))
+    return [w for _, w in ranked[:top]]

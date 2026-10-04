@@ -86,3 +86,21 @@ if __name__ == "__main__":
             traceback.print_exc()
     print(f"\n{len(fns) - failed}/{len(fns)} passed")
     sys.exit(1 if failed else 0)
+
+
+# ---------------------------------- names without an LLM or curated tags
+
+def test_title_words_name_uses_words_shared_by_several_channels():
+    from domain import niche_clusters as NCD
+    rows = [{"channel_id": "a", "title": "AUREL — Into The Blue | melodic deep house 2026"},
+            {"channel_id": "a", "title": "AUREL — Zahara | melodic afro house 2026"},
+            {"channel_id": "b", "title": "Night drive — deep house mix"},
+            {"channel_id": "c", "title": "Melodic deep house for focus"}]
+    words = NCD.title_words_name(rows)
+    assert words[:2] == ["deep", "house"] and "melodic" in words
+    assert "aurel" not in words and "2026" not in words
+
+
+def test_title_words_name_is_empty_when_nothing_is_shared():
+    from domain import niche_clusters as NCD
+    assert NCD.title_words_name([{"channel_id": "a", "title": "one two three"}]) == []

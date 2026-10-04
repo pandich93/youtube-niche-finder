@@ -59,11 +59,20 @@ def _channel_centroids(conn):
     return {cid: np.mean(vecs, axis=0) for cid, vecs in by_channel.items()}
 
 
-def _fallback_name(tags: list) -> dict:
+def _fallback_name(tags: list, video_rows=()) -> dict:
+    """Without an LLM: the cluster's curated tags, else the words its
+    channels share in their titles (domain.niche_clusters.title_words_name),
+    and only with neither "Untitled cluster"."""
     top = [t for t, _ in tags[:3]]
-    name = " / ".join(top) if top else "Untitled cluster"
-    return {"name": name, "description": f"Channels tagged {', '.join(top)}" if top else "",
-           "audience": ""}
+    if top:
+        return {"name": " / ".join(top), "description": f"Channels tagged {', '.join(top)}",
+                "audience": ""}
+    words = NC.title_words_name(video_rows)
+    if words:
+        return {"name": " / ".join(words),
+                "description": f"Titles of several channels share: {', '.join(words)}",
+                "audience": ""}
+    return {"name": "Untitled cluster", "description": "", "audience": ""}
 
 
 def compute_clusters(k: int = None) -> dict:
@@ -110,7 +119,7 @@ def compute_clusters(k: int = None) -> dict:
                 naming = gw.run("cluster_name", _CLUSTER_NAME_SYSTEM, user_input,
                                 CLUSTER_NAME_SCHEMA)
             if naming is None:
-                naming = _fallback_name(tag_counts)
+                naming = _fallback_name(tag_counts, video_rows)
 
             cluster_id = f"cluster-{label}"
             conn.execute(
