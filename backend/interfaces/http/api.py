@@ -19,7 +19,7 @@ from urllib.parse import quote
 
 from fastapi import Body, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
@@ -977,9 +977,32 @@ def _own_call(fn, *args, **kwargs):
         raise HTTPException(status_code=404, detail="this channel is not connected")
 
 
+# ------------------------------------------- public legal pages (plan 25)
+
+@app.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
+def privacy_page():
+    """Public (outside /api, no sign-in): Google's OAuth verification needs it."""
+    from interfaces.http import legal
+    return HTMLResponse(legal.privacy_html())
+
+
+@app.get("/terms", response_class=HTMLResponse, include_in_schema=False)
+def terms_page():
+    from interfaces.http import legal
+    return HTMLResponse(legal.terms_html())
+
+
 @app.get("/api/own/status")
 def own_status(request: Request):
-    return OWN.status(user_id=_uid(request))
+    """Plan 25: in multi-user mode only an admin sees which settings are
+    missing; a customer is told the service is not set up yet, nothing more."""
+    st = OWN.status(user_id=_uid(request))
+    user = getattr(request.state, "user", None)
+    is_admin = not multi_user_enabled() or bool(user and user.get("isAdmin"))
+    if is_admin:
+        return {**st, "isAdmin": True}
+    return {"configured": st["configured"], "mode": st["mode"], "isAdmin": False,
+            "adminOnly": True, "connectedChannels": st["connectedChannels"]}
 
 
 OAUTH_STATE_COOKIE = "nf_oauth_state"
@@ -987,7 +1010,7 @@ _OAUTH_CALLBACK_PATH = "/api/own/oauth/callback"
 
 
 @app.post("/api/own/connect")
-def own_connect(request: Request, response: Response):
+def own_connect(request: Request, response: Response, payload: dict = Body(default={})):
     """A Google consent URL; the browser opens it and Google sends the user
     back to /api/own/oauth/callback. The state also goes into a short-lived
     cookie of THIS browser: a consent link opened anywhere else (someone else's
@@ -998,7 +1021,9 @@ def own_connect(request: Request, response: Response):
     host = request.headers.get("host", "")
     redirect = (f"{request.url.scheme}://{host}{_OAUTH_CALLBACK_PATH}"
                 if _host_name(host) in ("127.0.0.1", "localhost", "[::1]") else None)
-    out = dict(_own_call(OWN.start_connect, user_id=_uid(request), redirect_uri=redirect))
+    want = (payload or {}).get("includeRevenue")
+    out = dict(_own_call(OWN.start_connect, user_id=_uid(request), redirect_uri=redirect,
+                         include_revenue=None if want is None else bool(want)))
     state = out.pop("state", None)
     if state:
         response.set_cookie(OAUTH_STATE_COOKIE, state, max_age=OWN.STATE_TTL_MINUTES * 60,

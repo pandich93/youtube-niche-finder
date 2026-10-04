@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Customers can connect their own channels to a hosted installation**
+  (plan 25) — `OWN_OAUTH_MODE=web` uses one OAuth client of the service, of
+  type Web application, on an https redirect the status checks; customers
+  only press "Подключить канал", and in multi-user mode only an admin sees
+  which settings are missing. Revenue access is asked for separately — a
+  "показывать доход" box when connecting and "Добавить доход" later — so the
+  base consent is read-only YouTube + Analytics (`OA.BASE_SCOPES`). Public
+  `/privacy` and `/terms` pages carry what Google's app verification and
+  YouTube's API terms ask for (Limited Use, YouTube Terms of Service, Google
+  Privacy Policy, revoking access, deletion), named from `NF_SERVICE_NAME`,
+  `NF_OPERATOR_NAME`, `NF_CONTACT_EMAIL`. One's own installation behaves as
+  before.
+
 ## [0.3.0] - 2026-10-04
 
 The second round of plans (16-24): data kept fresh under YouTube's API

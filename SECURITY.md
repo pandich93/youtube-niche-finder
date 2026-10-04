@@ -110,7 +110,14 @@ What you have to do before you give anyone an account:
      applies for their own.
    - For yourself this is your own risk. For a service other people use, you
      must solve it before you open the service.
-6. **Keep MCP over HTTP behind the TLS front door (`mcp-https`)** and set
+6. **Letting customers connect their own channels (plan 25).** Use
+   `OWN_OAUTH_MODE=web` with one OAuth client of type Web application and an
+   https `OWN_OAUTH_REDIRECT_URI`; fill `NF_SERVICE_NAME`, `NF_OPERATOR_NAME`
+   and `NF_CONTACT_EMAIL` so `/privacy` and `/terms` name you and a contact.
+   Pass Google's OAuth app verification before inviting more than 100 people,
+   and answer deletion requests sent to that contact (the privacy page promises
+   7 days).
+7. **Keep MCP over HTTP behind the TLS front door (`mcp-https`)** and set
    `MCP_PUBLIC_URL` to the address clients use. MCP over stdio is local only.
 
 Known limits (by design, worth knowing before you invite anyone):

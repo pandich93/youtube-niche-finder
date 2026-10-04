@@ -14,11 +14,14 @@ import requests
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
-SCOPES = [
+BASE_SCOPES = [
     "https://www.googleapis.com/auth/youtube.readonly",
     "https://www.googleapis.com/auth/yt-analytics.readonly",
-    "https://www.googleapis.com/auth/yt-analytics-monetary.readonly",
 ]
+# plan 25: revenue is the most sensitive grant; a service asks for it only
+# when the customer wants revenue and RPM (incremental authorization)
+MONETARY_SCOPE = "https://www.googleapis.com/auth/yt-analytics-monetary.readonly"
+SCOPES = BASE_SCOPES + [MONETARY_SCOPE]
 TIMEOUT = 20
 
 
@@ -36,10 +39,11 @@ def new_state() -> str:
     return secrets.token_urlsafe(24)
 
 
-def auth_url(client_id: str, redirect_uri: str, state: str, challenge: str) -> str:
+def auth_url(client_id: str, redirect_uri: str, state: str, challenge: str,
+             scopes=None) -> str:
     return AUTH_URL + "?" + urlencode({
         "client_id": client_id, "redirect_uri": redirect_uri, "response_type": "code",
-        "scope": " ".join(SCOPES), "access_type": "offline", "prompt": "consent",
+        "scope": " ".join(scopes or SCOPES), "access_type": "offline", "prompt": "consent",
         "include_granted_scopes": "true", "state": state,
         "code_challenge": challenge, "code_challenge_method": "S256"})
 

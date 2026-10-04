@@ -594,6 +594,25 @@ One-time setup (each user brings their own OAuth client; nothing is shared):
 5. `docker compose up -d web worker`, open the dashboard → **Мои каналы** →
    **Подключить канал**, sign in and allow read-only access.
 
+**Running it as a service (plan 25, `OWN_OAUTH_MODE=web`).** Customers do not
+create OAuth clients: the service has one, of type **Web application**, and a
+customer only clicks "Подключить канал" and allows read-only access in
+Google's consent window. Set `OWN_OAUTH_MODE=web` and
+`OWN_OAUTH_REDIRECT_URI=https://<your domain>/api/own/oauth/callback`
+(registered as an authorized redirect URI of the client; the status refuses
+anything but https or a localhost dev address). In multi-user mode only an
+admin sees which settings are missing; customers see that connecting is not
+available yet. Revenue (`yt-analytics-monetary.readonly`) is asked for only
+when the customer ticks "показывать доход" or later presses "Добавить доход"
+-- the base consent is `youtube.readonly` + `yt-analytics.readonly`. The
+service serves public `/privacy` and `/terms` pages (Limited Use disclosure,
+YouTube Terms of Service, Google Privacy Policy, revoking access, deletion)
+filled from `NF_SERVICE_NAME`, `NF_OPERATOR_NAME` and `NF_CONTACT_EMAIL`. What
+stays outside the code: Google's OAuth app verification (until it passes,
+only up to 100 test users can connect and Google shows "unverified app"),
+YouTube's API compliance audit for more Data API quota, and the 30-day rule
+for public YouTube data (SECURITY.md, item 5).
+
 Google sends you back to `/api/own/oauth/callback` on the loopback address the
 dashboard is open on (`localhost:8080` or `127.0.0.1:8080`; set
 `OWN_OAUTH_REDIRECT_URI` to pin one); a Desktop app client accepts loopback

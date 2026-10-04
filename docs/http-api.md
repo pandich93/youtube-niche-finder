@@ -197,7 +197,7 @@ The dashboard and the Chrome extension talk to the backend through these 113 rou
 | Route | What it does | Parameters | Cost | MCP twin |
 |---|---|---|---|---|
 | `GET /api/own/status` | Whether OAuth is configured and which `.env` variables are missing. | -- | free | -- |
-| `POST /api/own/connect` | Start the Google consent flow; returns the URL to open. | -- | free | -- |
+| `POST /api/own/connect` | Start the Google consent flow; returns the URL to open. `includeRevenue` also asks for the revenue scope (plan 25). | body: JSON | free | -- |
 | `GET /api/own/oauth/callback` | Google's redirect after consent (stores the refresh token encrypted). | query: `state=''`, `code=''`, `error=''` | free | -- |
 | `GET /api/own/channels` | Your connected channels with last-28-day views, revenue, RPM and retention. | -- | free | -- |
 | `POST /api/own/sync` | Pull fresh YouTube Analytics numbers now (the worker does it daily). | query: `channel_id=None` | YouTube Analytics API (your own OAuth project) | -- |

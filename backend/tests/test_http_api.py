@@ -172,7 +172,6 @@ DELEGATIONS = [
     ("get", "/api/niches/abc/thumbnail-styles", "TS", "thumbnail_styles", ("abc",), {"k": None}, None),
     ("post", "/api/thumbnails/embed?limit=30&niche=n1", "TS", "embed_thumbnails", (),
      {"limit": 30, "niche": "n1"}, None),
-    ("get", "/api/own/status", "OWN", "status", (), {}, None),
     ("get", "/api/own/channels", "OWN", "list_channels", (), {}, None),
     ("get", "/api/own/rpm-calibration", "OWN", "rpm_calibration", (), {}, None),
     ("get", "/api/own/channels/UC1/vs-niche?niche=n1", "OWN", "own_vs_niche", ("UC1", "n1"), {}, None),
@@ -208,6 +207,14 @@ def test_route_delegates_with_the_right_arguments(stub, monkeypatch, method, url
         assert s.kwargs[k] == v, k
     body = resp.json()
     assert (body[wrap] if wrap else body) == {"stub": True}
+
+
+def test_own_status_delegates_and_marks_the_single_user_as_admin(stub):
+    # plan 25: the route adds isAdmin (and hides details from customers in
+    # multi-user mode -- tests/test_saas_oauth.py)
+    s = stub("OWN", "status")
+    body = client.get("/api/own/status").json()
+    assert len(s.calls) == 1 and body == {"stub": True, "isAdmin": True}
 
 
 # ------------------------------------------------ POST bodies are mapped

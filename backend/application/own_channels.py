@@ -25,6 +25,11 @@ from infrastructure.youtube import oauth as OA
 
 CLIENT_ID_ENV, CLIENT_SECRET_ENV = "OWN_OAUTH_CLIENT_ID", "OWN_OAUTH_CLIENT_SECRET"
 REDIRECT_ENV = "OWN_OAUTH_REDIRECT_URI"
+# plan 25: "desktop" -- each installation's owner brings an OAuth client of
+# type Desktop app with a loopback redirect (plan 14); "web" -- a service
+# with ONE client of type Web application on its own https domain, which
+# its customers connect through without touching Google Cloud
+MODE_ENV = "OWN_OAUTH_MODE"
 DEFAULT_REDIRECT = "http://127.0.0.1:8080/api/own/oauth/callback"
 STATE_TTL_MINUTES = 10
 LAG_DAYS = 3                 # Analytics data arrives 1-3 days late
@@ -57,36 +62,61 @@ def _redirect_uri():
     return os.environ.get(REDIRECT_ENV, "").strip() or DEFAULT_REDIRECT
 
 
+def mode() -> str:
+    return "web" if os.environ.get(MODE_ENV, "").strip().lower() == "web" else "desktop"
+
+
+def _problems() -> list:
+    """Settings that are present but wrong: in web mode the redirect must be
+    the service's own https callback (localhost is fine for a dev setup)."""
+    if mode() != "web":
+        return []
+    uri = os.environ.get(REDIRECT_ENV, "").strip()
+    host_ok = uri.startswith("https://") or uri.startswith(("http://localhost", "http://127.0.0.1"))
+    if not uri or not host_ok or not uri.endswith("/api/own/oauth/callback"):
+        return [f"{REDIRECT_ENV} must be https://<your domain>/api/own/oauth/callback in web mode, "
+                "registered as an authorized redirect URI of the Web application client"]
+    return []
+
+
 def status(user_id: int = LOCAL_USER_ID) -> dict:
     cid, secret = _client()
     missing = [name for name, ok in ((CLIENT_ID_ENV, cid), (CLIENT_SECRET_ENV, secret),
                                      (SEC.ENV, SEC.configured())) if not ok]
+    problems = _problems()
     conn = db.get_conn()
     try:
         n = conn.execute("SELECT COUNT(*) FROM own_channels WHERE user_id = ?", (user_id,)).fetchone()[0]
     finally:
         conn.close()
-    return {"configured": not missing, "missing": missing, "redirectUri": _redirect_uri(),
-            "connectedChannels": n}
+    return {"configured": not missing and not problems, "missing": missing, "problems": problems,
+            "mode": mode(), "redirectUri": _redirect_uri(), "connectedChannels": n}
 
 
 def _require_configured():
     st = status()
     if not st["configured"]:
-        raise NotConfigured("set " + ", ".join(st["missing"]) + " -- see backend/README.md "
-                            "\"Your own channels\"")
+        what = ", ".join(st["missing"]) if st["missing"] else "; ".join(st["problems"])
+        raise NotConfigured(("set " if st["missing"] else "") + what
+                            + " -- see backend/README.md \"Your own channels\"")
 
 
 # ---------------------------------------------------------- connect
 
-def start_connect(user_id: int = LOCAL_USER_ID, redirect_uri: str = None) -> dict:
+def start_connect(user_id: int = LOCAL_USER_ID, redirect_uri: str = None,
+                  include_revenue: bool = None) -> dict:
     """A Google consent URL for this user. The state is single-use and
     expires in STATE_TTL_MINUTES; the PKCE verifier stays on the server.
     redirect_uri: the loopback address the dashboard is open on (the HTTP
     layer passes it), so the browser comes back to the same host name its
-    state cookie belongs to; OWN_OAUTH_REDIRECT_URI, when set, wins."""
+    state cookie belongs to; OWN_OAUTH_REDIRECT_URI, when set, wins.
+    include_revenue: also ask for the monetary scope -- by default yes for
+    one's own installation, no in web mode (plan 25: asked separately)."""
     _require_configured()
     redirect = os.environ.get(REDIRECT_ENV, "").strip() or redirect_uri or DEFAULT_REDIRECT
+    if include_revenue is None:
+        include_revenue = mode() != "web"
+    scopes = OA.SCOPES if include_revenue else OA.BASE_SCOPES
     verifier, challenge = OA.pkce_pair()
     state = OA.new_state()
     conn = db.get_conn()
@@ -101,7 +131,7 @@ def start_connect(user_id: int = LOCAL_USER_ID, redirect_uri: str = None) -> dic
         conn.close()
     # `state` is for the HTTP layer to bind to the browser that started this
     # (a short-lived cookie checked at the callback); it never reaches the page.
-    return {"authUrl": OA.auth_url(_client()[0], redirect, state, challenge),
+    return {"authUrl": OA.auth_url(_client()[0], redirect, state, challenge, scopes=scopes),
             "state": state, "expiresInMinutes": STATE_TTL_MINUTES, "redirectUri": redirect}
 
 

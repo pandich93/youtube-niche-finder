@@ -16,7 +16,14 @@ const POSITION = {
 function money(x) { return x == null ? '—' : `$${num(Math.round(x * 100) / 100)}`; }
 function pct(x) { return x == null ? '—' : `${num(x)}%`; }
 
+/* План 25: клиенту сервиса -- только «ещё не настроено»; администратору в режиме
+   web -- шаги для одного OAuth-клиента сервиса типа Web application. */
 function setupHtml(st) {
+  if (st.adminOnly) {
+    return `<div class="card">${sectionHead('Подключение каналов пока недоступно', '')}
+      <div class="section-sub">Администратор сервиса ещё не настроил вход через Google. Загляните позже.</div></div>`;
+  }
+  if (st.mode === 'web') return webSetupHtml(st);
   return `<div class="card">
     ${sectionHead('Подключение не настроено', 'один раз: свой OAuth-клиент Google и ключ шифрования')}
     <div class="prose">
@@ -37,11 +44,37 @@ function setupHtml(st) {
     </div></div>`;
 }
 
+function webSetupHtml(st) {
+  const list = (xs) => xs.map((m) => `<code>${esc(m)}</code>`).join(', ');
+  return `<div class="card">
+    ${sectionHead('Подключение каналов для клиентов не настроено', 'режим сервиса: один OAuth-клиент Google на всех клиентов')}
+    <div class="prose">
+      ${st.missing?.length ? `<p>Не хватает переменных в <code>.env</code>: ${list(st.missing)}.</p>` : ''}
+      ${st.problems?.length ? `<p>${st.problems.map(esc).join('<br>')}</p>` : ''}
+      <ol>
+        <li>В Google Cloud Console включите <b>YouTube Data API v3</b> и <b>YouTube Analytics API</b>.</li>
+        <li>OAuth consent screen: тип External; имя сервиса, домен, ссылки на <code>https://&lt;домен&gt;/privacy</code> и
+          <code>https://&lt;домен&gt;/terms</code> (эти страницы сервис уже отдаёт). Доступы: <code>youtube.readonly</code>,
+          <code>yt-analytics.readonly</code> и, если клиенты захотят видеть доход, <code>yt-analytics-monetary.readonly</code>.</li>
+        <li>Credentials → OAuth client ID → тип <b>Web application</b>. В Authorized redirect URIs впишите
+          <code>${esc(st.redirectUri || 'https://<домен>/api/own/oauth/callback')}</code> — то же, что в <code>OWN_OAUTH_REDIRECT_URI</code>.</li>
+        <li>В <code>.env</code>: <code>OWN_OAUTH_MODE=web</code>, <code>OWN_OAUTH_CLIENT_ID</code>, <code>OWN_OAUTH_CLIENT_SECRET</code>,
+          <code>OWN_OAUTH_REDIRECT_URI</code>, <code>OWN_TOKENS_KEY</code>, а для страниц политики — <code>NF_SERVICE_NAME</code>,
+          <code>NF_OPERATOR_NAME</code>, <code>NF_CONTACT_EMAIL</code>.</li>
+        <li>Пока Google не проверил приложение, подключиться могут только тестовые пользователи (до 100), и Google показывает
+          «приложение не проверено». Для проверки нужны домен, эти страницы, видео-демонстрация и объяснение каждого доступа.</li>
+      </ol>
+      <p>Клиенты не видят этих шагов: им показывается только кнопка «Подключить канал».</p>
+    </div></div>`;
+}
+
 function channelsHtml(d, cal) {
   const byId = Object.fromEntries((cal.channels || []).map((c) => [c.channelId, c]));
   return `<div class="card">
     ${sectionHead('Мои каналы', 'реальные цифры за 28 дней, заканчивая 3 днями назад (задержка Analytics)',
-      `<button class="btn btn-sm" id="ownConnect" type="button">Подключить канал</button>
+      `<label class="field" data-tip="Доход и RPM канала: Google спросит отдельный доступ к денежным отчётам. Можно добавить позже">
+         <input type="checkbox" id="ownRevenue"${d.mode === 'web' ? '' : ' checked'}> показывать доход</label>
+       <button class="btn btn-sm" id="ownConnect" type="button">Подключить канал</button>
        <button class="btn btn-ghost btn-sm" id="ownSync" type="button">Обновить цифры</button>`)}
     ${d.channels.length ? table([
       { label: 'Канал', wrap: true, render: (c) => `<a href="#/channel/${esc(c.channelId)}">${esc(c.title || c.channelId)}</a>
@@ -58,7 +91,8 @@ function channelsHtml(d, cal) {
           <div class="row-sub">${money(k.estimate.low)}–${money(k.estimate.high)}</div>`;
       } },
       { label: 'Обновлено', render: (c) => (c.lastSyncedAt ? ago(c.lastSyncedAt) : '—') },
-      { label: '', render: (c) => `<button class="btn btn-ghost btn-sm js-own-off" data-id="${esc(c.channelId)}" type="button">Отключить</button>` },
+      { label: '', render: (c) => `${c.monetaryScope ? '' : `<button class="btn btn-ghost btn-sm js-own-revenue" type="button"
+          data-tip="Google спросит доступ к денежным отчётам этого канала">Добавить доход</button> `}<button class="btn btn-ghost btn-sm js-own-off" data-id="${esc(c.channelId)}" type="button">Отключить</button>` },
     ], d.channels) : empty('каналов пока нет — нажмите «Подключить канал»')}
     <div class="section-sub" style="margin-top:10px">${esc(d.note)} RPM = доход на 1000 всех просмотров, как в YouTube Studio;
       без монетизации доход пустой. Удержание — медиана среднего процента просмотра по видео.</div>
@@ -98,10 +132,18 @@ function wire() {
   if (connect) connect.addEventListener('click', async () => {
     connect.disabled = true;
     try {
-      const r = await api('/api/own/connect', { method: 'POST' });
+      const r = await api('/api/own/connect', { method: 'POST', body: { includeRevenue: !!$('#ownRevenue')?.checked } });
       window.location.href = r.authUrl;
     } catch (e) { connect.disabled = false; toast(e.message, 'err'); }
   });
+  // план 25: доход -- отдельным согласием, для уже подключённого канала
+  document.querySelectorAll('.js-own-revenue').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try {
+      const r = await api('/api/own/connect', { method: 'POST', body: { includeRevenue: true } });
+      window.location.href = r.authUrl;
+    } catch (e) { b.disabled = false; toast(e.message, 'err'); }
+  }));
   const sync = $('#ownSync');
   if (sync) sync.addEventListener('click', async () => {
     sync.disabled = true; sync.textContent = 'Обновляю…';
@@ -186,7 +228,7 @@ async function viewOwn() {
   const st = await api('/api/own/status');
   if (!st.configured) { view.innerHTML = flash + setupHtml(st); return; }
   const [d, cal] = await Promise.all([api('/api/own/channels'), api('/api/own/rpm-calibration').catch(() => ({}))]);
-  view.innerHTML = flash + channelsHtml(d, cal);
+  view.innerHTML = flash + channelsHtml({ ...d, mode: st.mode }, cal);
   wire();
   $('#ownFmtChannel')?.addEventListener('change', loadFormats);
   loadFormats();

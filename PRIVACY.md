@@ -125,6 +125,15 @@ are older than that. The history (stats snapshots, title and thumbnail
 changes, archived thumbnails) is kept without limit; YouTube's API policies
 allow that only with their approval, see SECURITY.md.
 
+## Running it for others
+
+An installation run as a service serves public `/privacy` and `/terms` pages
+for its customers (plan 25): what the service collects, the Google API
+Services Limited Use disclosure, links to the YouTube Terms of Service and the
+Google Privacy Policy, how to revoke access and ask for deletion, filled with
+the operator's name and contact from `.env`. This document stays the technical
+description of what the code stores.
+
 ## Where network traffic goes
 
 By default — `LLM_PROVIDER=none`, the setting nothing changes out of the

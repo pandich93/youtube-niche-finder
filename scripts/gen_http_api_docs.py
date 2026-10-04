@@ -140,7 +140,7 @@ SUMMARY = {
     "GET /api/inspect/channel": ("inspect", "Everything the channel-page panel shows (`ref` = UC id, @handle or URL)."),
     "POST /api/inspect/videos": ("inspect", "Badge data (multiplier, views per hour) for up to a page of thumbnails at once."),
     "GET /api/own/status": ("own", "Whether OAuth is configured and which `.env` variables are missing."),
-    "POST /api/own/connect": ("own", "Start the Google consent flow; returns the URL to open."),
+    "POST /api/own/connect": ("own", "Start the Google consent flow; returns the URL to open. `includeRevenue` also asks for the revenue scope (plan 25)."),
     "GET /api/own/oauth/callback": ("own", "Google's redirect after consent (stores the refresh token encrypted)."),
     "GET /api/own/channels": ("own", "Your connected channels with last-28-day views, revenue, RPM and retention."),
     "POST /api/own/sync": ("own", "Pull fresh YouTube Analytics numbers now (the worker does it daily)."),
@@ -211,6 +211,8 @@ def routes():
                     and dec.func.attr in ("get", "post", "put", "delete", "patch")):
                 continue
             path = dec.args[0].value
+            if not path.startswith("/api/"):     # /privacy, /terms: pages, not the API
+                continue
             path_params = re.findall(r"{(\w+)}", path)
             args = node.args.args
             defaults = [None] * (len(args) - len(node.args.defaults)) + list(node.args.defaults)
