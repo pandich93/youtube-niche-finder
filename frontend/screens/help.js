@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { sectionHead } from '../ui.js';
+import { api, esc, sectionHead, table } from '../ui.js';
 import { view } from '../shared.js';
 
 /* ------------------------------------------------------------- Справка */
@@ -323,7 +323,27 @@ async function viewHelp() {
             конкретный список того, что чинить.</div>
         </details>
       </div>
-    </div>`;
+    </div>
+    <div class="card" id="helpScores"></div>`;
+  fillScores();
+}
+
+/* План 23: каждое число -- данные YouTube или оценка niche-finder, и как оно
+   посчитано. Тот же каталог, что у подсказок «?» и MCP-инструмента explain_scores. */
+async function fillScores() {
+  const box = document.querySelector('#helpScores');
+  try {
+    const d = await api('/api/scores');
+    const rows = Object.values(d.scores).sort((a, b) => (a.source === b.source ? 0 : a.source === 'youtube' ? -1 : 1));
+    box.innerHTML = `${sectionHead('Откуда каждое число', 'данные YouTube отдельно от оценок niche-finder — правила YouTube API требуют не выдавать свои метрики за данные YouTube')}
+      ${table([
+        { label: 'Число', wrap: true, render: (r) => `<b>${esc(r.name)}</b>` },
+        { label: 'Источник', render: (r) => (r.source === 'youtube' ? 'данные YouTube'
+          : '<span class="est">оценка niche-finder</span>') },
+        { label: 'Как считается', wrap: true, render: (r) => esc(r.formula) },
+        { label: 'С какой выборки', wrap: true, render: (r) => esc(r.minSample || '—') },
+      ], rows)}`;
+  } catch { box.remove(); }
 }
 
 export { viewHelp };

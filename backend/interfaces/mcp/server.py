@@ -1228,6 +1228,23 @@ def mark_events_seen(ids: list = None, all_unseen: bool = False) -> dict:
     return alerts_mod.mark_seen(ids=ids, all_unseen=all_unseen, user_id=_uid())
 
 
+# ------------------------------------------------- score catalog (plan 23)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def explain_scores(key: str = None) -> dict:
+    """What a number in these tools' answers is: YouTube data or an estimate
+    of niche-finder (source), the formula, its inputs and the minimum sample
+    it needs to mean anything. Without `key`, the whole catalog (outlierScore,
+    vsr, vph, acceleration, revenueRange, trendScore, nicheTrend,
+    templateRisk, hookScore, titleScore, ideaVerdict, ypp, milestones,
+    repeatability, ...). Quote it when the user asks "how is this computed?"
+    and never present an estimate as YouTube's own figure."""
+    from domain import score_catalog as sc
+    return sc.catalog(key)
+
+
 # ------------------------------------------------- video trajectory (plan 20)
 
 @mcp.tool(annotations=ToolAnnotations(

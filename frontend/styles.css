@@ -370,6 +370,12 @@ td.wrap { white-space: normal; max-width: 380px; }
 .chart .tline { fill: none; stroke-width: 2; stroke-linejoin: round; }
 .chart .tline.expected { stroke-dasharray: 5 4; stroke-width: 1.5; opacity: .8; }
 .chart .tdot { stroke: var(--surface); stroke-width: 1.5; }
+/* план 23: «?» с формулой оценки; .est -- число, посчитанное niche-finder, а не YouTube */
+.qmark { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px;
+  border-radius: 50%; border: 1px solid var(--axis); color: var(--muted); font-size: 10px; font-weight: 600;
+  cursor: help; vertical-align: middle; line-height: 1; }
+.qmark:hover { color: var(--ink-2); border-color: var(--muted); }
+.est { text-decoration: underline dotted var(--muted); text-underline-offset: 3px; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 12px; color: var(--muted); }
 .chart-legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 .chart text  { fill: var(--muted); font-size: 11px; }

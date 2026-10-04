@@ -312,7 +312,10 @@ re-reads the oldest rows daily and never deletes anything.
 ### Help and FAQ (`#/help`)
 
 What the project is, how the dashboard and MCP server share one database
-and one set of formulas, and a FAQ. Static, no API calls.
+and one set of formulas, and a FAQ. At the bottom, "Откуда каждое число"
+(`/api/scores`): every number on the screens, whether it is YouTube data or an
+estimate of niche-finder, how it is computed and from what sample -- the same
+catalog the "?" marks next to scores show on hover.
 
 ### MCP connection (`#/mcp`)
 

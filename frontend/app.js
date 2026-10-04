@@ -1,6 +1,6 @@
 /* Точка входа дашборда: тема, глобальные фильтры, подвал, первый render().
    Экраны -- screens/*.js, роутинг -- router.js, общее -- shared.js. */
-import { $, api, esc, notice, state } from './ui.js';
+import { $, api, esc, notice, state, loadScores } from './ui.js';
 import { loadFootStat } from './shared.js';
 import { render } from './router.js';
 
@@ -92,6 +92,8 @@ async function start() {
   addEventListener('nf:signin-required', () => showSignIn('Сессия закончилась — войдите снова.'));
   loadNiches();
   loadFootStat();
+  // план 23: каталог оценок до первого экрана -- подсказки «?» берут формулы из него
+  await loadScores();
   render();
 }
 

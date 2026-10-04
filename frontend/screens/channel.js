@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, VIEW_COUNT_CHANGE, aiLabelsBadge, sponsorBlock, state, rpmRange, templateRiskBlock, yppLine, milestonesLine } from '../ui.js';
+import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, VIEW_COUNT_CHANGE, aiLabelsBadge, sponsorBlock, state, rpmRange, templateRiskBlock, yppLine, milestonesLine, qmark } from '../ui.js';
 import { view, nicheOverviewBlock } from '../shared.js';
 
 /* ----------------------------------------------------------------- Канал */
@@ -31,7 +31,7 @@ async function viewChannel(id) {
         ${tile('Загрузок в неделю', a.cadence.uploadsPerWeekLifetime ?? '—')}
         ${tile('Медиана на видео', compact(a.performance.medianViewsPerVideo))}
         ${tile('Viral skew', a.performance.viralSkew ?? '—', 'среднее / медиана')}
-        ${tile('Грейд', a.grade ?? '—', a.momentum ? `momentum ${a.momentum}` : 'нужна история')}
+        ${tile('Грейд', `${esc(a.grade ?? '—')} ${qmark('momentumGrade')}`, a.momentum ? `momentum ${a.momentum}` : 'нужна история')}
       </div>
       ${a.gone ? notice(`<div><b>Канал больше не отвечает API</b> с ${
         new Date(a.gone.missingSince).toLocaleDateString('ru-RU')}: его удалили, скрыли или заблокировали.

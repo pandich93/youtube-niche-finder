@@ -91,7 +91,7 @@ function riskChip(level) {
 
 function templateRiskBlock(r) {
   if (!r || !r.found) return '';
-  const head = sectionHead('Риск шаблонности', 'насколько последние загрузки похожи на один повторяемый шаблон');
+  const head = sectionHead('Риск шаблонности', 'насколько последние загрузки похожи на один повторяемый шаблон', qmark('templateRisk'));
   if (r.level === 'insufficient-data') {
     return `<div class="card">${head}<div class="section-sub">Мало данных: нужно не меньше 10 свежих
       видео с эмбеддингами, сейчас ${num(r.videosAnalysed)}.</div></div>`;
@@ -163,8 +163,15 @@ function delta(v, unit = '%') {
 
 const tip = $('#tooltip');
 
+/* data-tip -- атрибут: браузер раскодирует &lt; обратно в «<», и название видео
+   вида <img onerror=…> стало бы разметкой. Поэтому всё экранируется заново, а
+   разрешены только <br> и <b>, которыми подсказки оформлены. */
+function safeTip(text) {
+  return esc(text).replace(/&lt;(\/?)(br|b)\s*\/?&gt;/g, '<$1$2>');
+}
+
 function showTip(evt, html) {
-  tip.innerHTML = html;
+  tip.innerHTML = safeTip(html);
   tip.hidden = false;
   const pad = 12, r = tip.getBoundingClientRect();
   let x = evt.clientX + pad, y = evt.clientY + pad;
@@ -272,8 +279,8 @@ function videoCard(v) {
   return `<article class="vcard">
     <a class="thumb" href="https://www.youtube.com/watch?v=${esc(v.videoId)}" target="_blank" rel="noopener">
       ${thumb}
-      ${vph != null ? `<span class="badge" data-tip="${esc(vphLabel)}: просмотров в час">${num(vph)} VPH</span>` : ''}
-      ${v.outlierScore != null ? `<span class="badge badge-right" data-tip="Множитель против медианы предыдущих загрузок канала">${mult(v.outlierScore)}</span>` : ''}
+      ${vph != null ? `<span class="badge" data-tip="${scoreTip('vph', vphLabel)}">${num(vph)} VPH</span>` : ''}
+      ${v.outlierScore != null ? `<span class="badge badge-right" data-tip="${scoreTip('outlierScore')}">${mult(v.outlierScore)}</span>` : ''}
     </a>
     <div class="vcard-title">${esc(v.title)}</div>
     <div class="vcard-meta">${compact(v.views)} просмотров · ${ago(v.publishedAt)}
@@ -282,12 +289,12 @@ function videoCard(v) {
     <div class="vcard-meta"><a href="#/channel/${esc(v.channelId)}">${esc(v.channelTitle || '')}</a>
       · ${compact(v.channelSubscribers)} подп.</div>
     <div class="vcard-chips">
-      <span class="chip chip-accent" data-tip="Просмотров на одного подписчика — насколько видео вышло за пределы своей аудитории">VSR ${(+v.viewsPerSubscriber).toFixed(1)}</span>
+      <span class="chip chip-accent est" data-tip="${scoreTip('vsr')}">VSR ${(+v.viewsPerSubscriber).toFixed(1)}</span>
       ${v.outlierBand ? `<span class="chip">${esc(v.outlierBand)}</span>` : ''}
       ${v.estimatedRpmRange ? `<span class="chip" data-tip="${RPM_TIP}">~${rpmRange(v.estimatedRpmRange)} RPM</span>`
         : v.estimatedRpm != null ? `<span class="chip" data-tip="${RPM_TIP}">~$${v.estimatedRpm} RPM</span>` : ''}
       ${v.acceleration != null ? `<span class="chip ${v.acceleration > 1.2 ? 'chip-good' : v.acceleration < 0.8 ? 'chip-bad' : ''}"
-        data-tip="Ускорение: VPH сегодня против вчера">${v.acceleration > 1.2 ? '▲' : v.acceleration < 0.8 ? '▼' : '='} ${v.acceleration}</span>` : ''}
+        data-tip="${scoreTip('acceleration')}">${v.acceleration > 1.2 ? '▲' : v.acceleration < 0.8 ? '▼' : '='} ${v.acceleration}</span>` : ''}
     </div>
   </article>`;
 }
@@ -313,7 +320,7 @@ function commentList(comments) {
 function table(cols, rows) {
   if (!rows.length) return empty('нет данных');
   return `<div class="table-wrap"><table>
-    <thead><tr>${cols.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}</th>`).join('')}</tr></thead>
+    <thead><tr>${cols.map((c) => `<th class="${c.num ? 'num' : ''}">${esc(c.label)}${c.tip ? ` ${qmark(c.tip)}` : ''}</th>`).join('')}</tr></thead>
     <tbody>${rows.map((r) => `<tr>${cols.map((c) => {
       const v = c.render ? c.render(r) : r[c.key];
       return `<td class="${c.num ? 'num' : ''}${c.wrap ? ' wrap' : ''}">${v ?? '—'}</td>`;
@@ -414,6 +421,28 @@ function compareHref(videoId) {
   try { ids = JSON.parse(localStorage.getItem('nf.compare') || '[]'); } catch { ids = []; }
   ids = [...ids.filter((x) => x !== videoId), videoId].slice(-5);
   return `#/compare/${ids.map(encodeURIComponent).join(',')}`;
+}
+
+/* План 23: каталог оценок -- что каждое число: данные YouTube или оценка
+   niche-finder, формула и с какой выборки она что-то значит. Грузится один раз
+   при старте (/api/scores); до загрузки подсказка -- запасной текст. */
+let SCORES = null;
+
+async function loadScores() {
+  try { SCORES = (await api('/api/scores')).scores; } catch { SCORES = {}; }
+}
+
+/* «?» рядом с числом: подсказка из каталога (что это, данные YouTube или оценка). */
+function qmark(key) {
+  return `<span class="qmark" data-tip="${scoreTip(key)}" aria-label="как считается">?</span>`;
+}
+
+function scoreTip(key, lead = '') {
+  const e = SCORES?.[key];
+  if (!e) return esc(lead);
+  const src = e.source === 'youtube' ? 'данные YouTube' : 'оценка niche-finder, не данные YouTube';
+  return [lead ? esc(lead) : '', `&lt;b&gt;${esc(e.name)}&lt;/b&gt; — ${esc(src)}`, esc(e.formula),
+    e.minSample ? `нужно: ${esc(e.minSample)}` : ''].filter(Boolean).join('&lt;br&gt;');
 }
 
 /* Стабильный цвет на channelId -- один и тот же канал везде одного цвета
@@ -567,7 +596,7 @@ function saturationChip(s) {
   if (!s) return '';
   const [label, cls] = SAT_STATUS[s.status] || [s.status, ''];
   const low = s.confidence === 'low' && s.status !== 'insufficient-data';
-  return `<span class="chip ${cls}" title="${low ? 'низкая уверенность: мало видео застали молодыми' : ''}">${esc(label)}${low ? ' ?' : ''}</span>`;
+  return `<span class="chip ${cls}" data-tip="${scoreTip('nicheTrend', low ? 'низкая уверенность: мало видео застали молодыми' : '')}">${esc(label)}${low ? ' ?' : ''}</span>`;
 }
 
 function saturationBlock(s) {
@@ -621,7 +650,7 @@ function yppLine(e) {
     ? `<br><b>Правила 2027:</b> ${YPP_2027}; по видимым данным — ${
       e.upcoming.status === e.status ? 'то же самое' : esc(yppText(e.upcoming))}.`
     : e.rules === '2027' ? ' Действуют правила YPP с 01.02.2027.' : '';
-  return `<div class="section-sub" style="margin-top:8px"><b>Порог YPP:</b> ${esc(yppText(e))}.
+  return `<div class="section-sub" style="margin-top:8px"><b>Порог YPP</b> ${qmark('ypp')}: ${esc(yppText(e))}.
     Это не статус монетизации — YouTube его не публикует; загрузки и Shorts считаются по собранным видео.${next}</div>`;
 }
 
@@ -647,7 +676,7 @@ function milestonesLine(ms) {
   if (!ms || !ms.forecasts?.length) return '';
   const ypp = ms.ypp1000BeforeRules2027 === true ? ' 1 000 подписчиков — до смены правил YPP 01.02.2027.'
     : ms.ypp1000BeforeRules2027 === false ? ' 1 000 подписчиков — уже после смены правил YPP 01.02.2027.' : '';
-  return `<div class="section-sub" style="margin-top:8px"><b>Рубежи:</b>
+  return `<div class="section-sub" style="margin-top:8px"><b>Рубежи</b> ${qmark('milestones')}:
     ${ms.forecasts.map((f) => esc(milestoneText(f))).join('; ')}.${ypp}
     Оценка niche-finder по темпу наших снимков, не данные YouTube.</div>`;
 }
@@ -664,5 +693,5 @@ function yppSelect(id, cur) {
 
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
-         lineChart, VIEW_COUNT_CHANGE, trajectoryChart, compareHref, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
+         lineChart, VIEW_COUNT_CHANGE, trajectoryChart, compareHref, loadScores, scoreTip, qmark, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
          nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock, yppLine, milestonesLine, yppSelect };

@@ -105,6 +105,11 @@ framework — keep it that way. New screens follow the existing pattern in
   `infrastructure/`, or `application/`.
 - Prefer a test against the throwaway Postgres schema over a mock of our own
   code; mock only external services.
+- A new score or estimate goes into `backend/domain/score_catalog.py` in the
+  same pull request: its formula, inputs, minimum sample and `source`
+  (`youtube` or `niche-finder`). YouTube's derived-metrics policy asks API
+  clients never to present their own metrics as YouTube data, and the "?"
+  tips and the help page read their text from there.
 
 ## Documentation
 

@@ -25,12 +25,12 @@ async function viewKeywords() {
     <div class="card">
       ${d.keywords.length ? table([
         { label: 'Фраза', wrap: true, render: (r) => esc(r.keyword) },
-        { label: 'Opportunity', num: true, render: (r) => r.opportunityScore != null
+        { label: 'Opportunity', num: true, tip: 'trendScore', render: (r) => r.opportunityScore != null
             ? `<span class="chip ${r.opportunityScore >= 70 ? 'chip-good' : r.opportunityScore < 30 ? 'chip-bad' : ''}">${r.opportunityScore}</span>`
             : '—' },
         { label: 'Видео', num: true, render: (r) => num(r.videos) },
-        { label: 'Momentum', num: true, render: (r) => r.momentum ?? '—' },
-        { label: 'Lift', num: true, render: (r) => r.outlierLift ?? '—' },
+        { label: 'Momentum', num: true, tip: 'trendScore', render: (r) => r.momentum ?? '—' },
+        { label: 'Lift', num: true, tip: 'trendScore', render: (r) => r.outlierLift ?? '—' },
         { label: 'Доля', num: true, render: (r) => `${r.share}%` },
         { label: 'Медиана просмотров', num: true, render: (r) => compact(r.medianViews) },
         { label: 'Новая', render: (r) => (r.isNew ? 'да' : '') },

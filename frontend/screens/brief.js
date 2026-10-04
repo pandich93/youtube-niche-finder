@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, trajectoryChart, compareHref } from '../ui.js';
+import { $, api, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, trajectoryChart, compareHref, qmark } from '../ui.js';
 import { view } from '../shared.js';
 
 /* ------------------------------------------------------- Бриф из outlier */
@@ -132,7 +132,7 @@ async function fillRepeatability(videoId) {
     const why = d.reason === 'no-embedding' ? 'у видео ещё нет эмбеддинга — воркер посчитает его в течение часа'
       : d.verdict === 'unknown' ? `похожих видео у других каналов собрано мало (${num(d.similarVideos)})`
       : `outlier ≥ ×${d.hitScore} у ${num(d.channelsHit)} из ${num(d.channels)} каналов с похожими видео; медиана лучшего видео канала ×${d.medianChannelBest}`;
-    box.innerHTML = `<div class="card">${sectionHead('Формат повторяем?', 'похожие по смыслу видео других каналов — у кого ещё это сработало')}
+    box.innerHTML = `<div class="card">${sectionHead('Формат повторяем?', 'похожие по смыслу видео других каналов — у кого ещё это сработало', qmark('repeatability'))}
       <div><span class="chip ${cls}">${esc(label)}</span> ${esc(why)}</div>
       ${d.examples?.length ? `<ul class="digest-list">${d.examples.slice(0, 6).map((m) =>
         `<li style="white-space:normal"><a href="https://www.youtube.com/watch?v=${esc(m.videoId)}" target="_blank" rel="noopener">${esc(m.title)}</a>
@@ -152,7 +152,7 @@ async function fillTrajectory(videoId) {
     const v = d.videos[0];
     if (!v || v.points.length < 2) return;
     box.innerHTML = `<div class="card">${sectionHead('Как набирало просмотры', 'по снимкам воркера; пунктир — обычное видео этого канала',
-        `<a class="btn btn-ghost btn-sm" href="${compareHref(videoId)}">Сравнить с другими</a>`)}
+        `${qmark('expectedCurve')} <a class="btn btn-ghost btn-sm" href="${compareHref(videoId)}">Сравнить с другими</a>`)}
       ${trajectoryChart(d.videos)}</div>`;
   } catch { /* не критично: бриф и без этого блока полный */ }
 }

@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Where every number comes from** (plan 23) — one catalog,
+  `domain/score_catalog.py`, says for every number on screen whether it is
+  YouTube data or an estimate of niche-finder, how it is computed, from
+  what, and from how much data it means something; thresholds are read
+  from the modules that use them. A "?" next to the main scores (YPP line,
+  milestones, template risk, niche trend, keyword columns, channel grade,
+  repeatability, expected curve) and the video-card badges show it on
+  hover, the help page lists it, `explain_scores` (MCP, 86 tools) and
+  `GET /api/scores` return it. YouTube's derived-metrics policy asks API
+  clients to keep their metrics visibly apart from API data; CONTRIBUTING.md
+  makes the catalog part of adding any new score.
+
 - **Video trajectories and comparison** (plan 20) — how a video gathered
   views, by age (hours since publishing) rather than by date, from the
   worker's snapshots, next to the curve a usual video of its channel would
@@ -54,6 +66,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   (dashboard, extension, Telegram/webhook).
 
 ### Fixed
+
+- **Tooltips no longer render HTML from YouTube data** — a tooltip's text
+  sits in a `data-tip` attribute, which the browser decodes back, and it was
+  shown with `innerHTML`: a video title, tag or channel name containing
+  markup (`<img onerror=...>`) would run as HTML on hover, for example on the
+  niche scatter chart. Tooltips are now escaped as a whole, and only `<br>`
+  and `<b>` are let through.
 
 - **Similar videos and thumbnails no longer come back empty behind a crowded
   channel** — the pgvector HNSW index hands back about 40 nearest rows and the

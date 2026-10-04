@@ -760,6 +760,17 @@ def delete_topic(request: Request, topic_id: int):
     return out
 
 
+@app.get("/api/scores")
+def scores(key: str = None):
+    """Plan 23: what every number is -- YouTube data or an estimate of
+    niche-finder, its formula, inputs and minimum sample."""
+    from domain import score_catalog as SC
+    try:
+        return SC.catalog(key)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"no score {key!r}")
+
+
 @app.get("/api/videos/trajectory")
 def videos_trajectory(ids: str):
     """Plan 20: views by age for up to 5 comma-separated video ids, each with

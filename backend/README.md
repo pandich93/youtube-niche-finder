@@ -488,6 +488,7 @@ Delivery to Telegram or a webhook is optional -- see [Configuration](#configurat
 | `review_metadata` | check a draft title/description/tags against your corpus: signals with sample sizes, never one made-up score |
 | `save_draft` / `list_drafts` / `link_draft` | keep a draft, then link it to the real video_id after publishing |
 | `build_brief` | `gap_topic` (from `content_gaps`) makes the overlap check and title candidates about that viewer question. One outlier -> a brief for your own video: hook (first ~75 words of a pasted transcript), why it worked (LLM), niche title patterns and best time, whether the topic is already covered (source excluded), title candidates (LLM) and thumbnail references; unavailable parts are listed in `skipped`; `save=true` stores a draft (`drafts.source_video_id`) and queues a missing transcript, `save=false` writes nothing |
+| `explain_scores` | plan 23: what a number is -- YouTube data or an estimate of niche-finder (`source`), its formula, inputs and minimum sample; one key or the whole catalog (`domain/score_catalog.py`, the same text as the dashboard's "?" tips and the help page) |
 | `video_trajectory` | plan 20: views by age (hours since publishing) for 1-5 videos from the worker's snapshots, each with its channel's expected curve (median views x maturity curve) and marks for title/thumbnail swaps; `observedFromHours` says from when a late-found video is watched. Zero quota |
 | `format_repeatability` | plan 21: did this video's format work for OTHER channels too? Its embedding neighbours on other channels (cosine >= `min_similarity`, 0.6), each scored with the usual outlier baseline, one channel counted once by its best video: `repeatable` (3+ channels got >= 2x), `mixed`, `one_off`, or `unknown` (fewer than 5 similar videos or 3 channels collected). Plus how many other channels start their titles the same way. Zero quota |
 | `draft_outcomes` | the review snapshot next to the actual outcome, for linked drafts old enough to have views |
@@ -839,7 +840,7 @@ youtube-niche-finder/
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 85 tools
+    │   ├── mcp/server.py       MCP server, 86 tools
     │   ├── mcp/prompts.py      7 ready-made scenarios (MCP prompts)
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)
