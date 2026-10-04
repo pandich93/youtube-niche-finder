@@ -107,6 +107,67 @@ function templateRiskBlock(r) {
     <div class="section-sub" style="margin-top:8px">${RISK_NOTE}</div></div>`;
 }
 
+/* План 22: сигналы по трём категориям «неаутентичного» контента из правил
+   монетизации YouTube. Уровни, причины и текст правила -- без общего «процента
+   риска»: решение принимает YouTube, вручную. */
+const POLICY_CAT = {
+  generic_repetitive: 'Шаблонный, повторяющийся контент',
+  unsatisfying: 'Шок и эмоциональные манипуляции',
+  ai_persona_sensitive: 'ИИ-персона в чувствительной теме',
+};
+const POLICY_LEVEL = { high: ['chip-bad', 'заметные сигналы'], watch: ['', 'стоит присмотреться'],
+  none: ['chip-good', 'сигналов нет'], 'insufficient-data': ['', 'мало данных'] };
+/* Пересказ правил YouTube по-русски; оригинал -- по ссылке «справка YouTube». */
+const POLICY_TEXT = {
+  generic_repetitive: 'видео, которые кажутся взаимозаменяемыми; сделанные по типовому или неоригинальному шаблону',
+  unsatisfying: 'контент, который держится на эмоциональных манипуляциях или сделан ради шока',
+  ai_persona_sensitive: 'ИИ-персоны, которые дают советы по здоровью, праву, финансам или политике как эксперты',
+};
+const POLICY_TOPIC = { health: 'здоровье', legal: 'право', finance: 'финансы', politics: 'политику' };
+const POLICY_REASON = {
+  thumbSimilarity: (x) => `обложки похожи друг на друга (близость ${(+x.value).toFixed(2)})`,
+  shockShare: (x) => `${Math.round(x.value * 100)}% свежих заголовков с шок-маркерами`,
+  sensitiveShare: (x) => `${Math.round(x.value * 100)}% свежих видео про ${POLICY_TOPIC[x.topic] || x.topic}`,
+  syntheticShare: (x) => `${Math.round(x.value * 100)}% видео с раскрытым ИИ-контентом`,
+  faceless: () => 'канал размечен как безликий',
+};
+function policyReason(x) {
+  if (POLICY_REASON[x.signal]) return POLICY_REASON[x.signal](x);
+  if (RISK_REASON[x.signal]) return RISK_REASON[x.signal](x.value);
+  return x.text || '';
+}
+const POLICY_NOTE = 'Это сигналы, видимые по открытым данным, а не решение YouTube: монетизацию проверяют люди. '
+  + 'ИИ-персону по открытым данным не увидеть, поэтому эта категория не бывает выше «стоит присмотреться».';
+
+function policyBlock(r) {
+  if (!r || !r.found) return '';
+  const rows = Object.entries(r.categories).map(([k, c]) => {
+    const [cls, label] = POLICY_LEVEL[c.level] || ['', c.level];
+    return `<div class="row"><div class="row-main">
+      <div class="row-title">${esc(POLICY_CAT[k] || k)} <span class="chip ${cls}">${esc(label)}</span></div>
+      <div class="row-sub">${c.reasons.length ? esc(c.reasons.map(policyReason).join('; ')) : ''}${
+        c.examples.length && c.level !== 'none' ? `${c.reasons.length ? ' · ' : ''}например: «${esc(c.examples[0])}»` : ''}</div>
+      <div class="row-sub">Правило: ${esc(POLICY_TEXT[k] || c.policy)} · <a href="${esc(c.policyUrl)}" target="_blank" rel="noopener">справка YouTube</a></div>
+    </div></div>`;
+  }).join('');
+  return `<div class="card">${sectionHead('Сигналы по правилам монетизации', 'три категории «неаутентичного» контента YouTube', qmark('policySignals'))}
+    <div class="rows">${rows}</div><div class="section-sub" style="margin-top:8px">${esc(POLICY_NOTE)}</div></div>`;
+}
+
+function nichePolicyBlock(n) {
+  if (!n || !n.found) return '';
+  return `<div class="card">${sectionHead('Сигналы по правилам монетизации в нише', 'сколько каналов ниши показывают сигналы каждой категории', qmark('policySignals'))}
+    ${table([
+      { label: 'Категория', wrap: true, render: (r) => esc(POLICY_CAT[r.key] || r.key) },
+      { label: 'Заметные', num: true, render: (r) => num(r.high) },
+      { label: 'Присмотреться', num: true, render: (r) => num(r.watch) },
+      { label: 'Доля', num: true, render: (r) => (r.shareFlagged == null ? '—' : `${Math.round(r.shareFlagged * 100)}%`) },
+      { label: 'Каналы', wrap: true, render: (r) => r.channels.map((c) =>
+        `<a href="#/channel/${esc(c.channelId)}">${esc(c.channelTitle || c.channelId)}</a>`).join(', ') || '—' },
+    ], Object.entries(n.categories).map(([key, c]) => ({ key, ...c })))}
+    <div class="section-sub" style="margin-top:8px">${esc(POLICY_NOTE)}</div></div>`;
+}
+
 function nicheTemplateRiskBlock(n) {
   if (!n || !n.found) return '';
   const head = sectionHead('Риск шаблонности каналов ниши',
@@ -693,5 +754,5 @@ function yppSelect(id, cur) {
 
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
-         lineChart, VIEW_COUNT_CHANGE, trajectoryChart, compareHref, loadScores, scoreTip, qmark, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
+         lineChart, VIEW_COUNT_CHANGE, trajectoryChart, compareHref, loadScores, scoreTip, qmark, policyBlock, nichePolicyBlock, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
          nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock, yppLine, milestonesLine, yppSelect };

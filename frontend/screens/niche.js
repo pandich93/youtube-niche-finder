@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, sponsorBlock, state, nicheTemplateRiskBlock } from '../ui.js';
+import { $, api, q, num, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, sponsorBlock, state, nicheTemplateRiskBlock, nichePolicyBlock } from '../ui.js';
 import { view, plabel, nicheOverviewBlock, render } from '../shared.js';
 
 /* Доля хитов по тегам одной группы -- barList из tag_stats. Группа вводится
@@ -394,6 +394,7 @@ async function viewNiche(slug) {
       <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.tsv">Экспорт TSV</a>
       <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.csv">Экспорт CSV</a>`))
     + nicheTemplateRiskBlock(risk)
+    + '<div id="nichePolicy"></div>'
     + scatterSection(scatter.videos || [], scatterFilters)
     + sponsorBlock(sponsors, 'Спонсоры ниши', plabel(state.period))
     + gapsBlock(gaps, slug)
@@ -408,6 +409,10 @@ async function viewNiche(slug) {
   wireCommentInsights();
   wireGaps();
   wireThumbStyles(slug);
+  // план 22: считается по всем каналам ниши -- отдельным запросом, экран не ждёт
+  api(`/api/niches/${encodeURIComponent(slug)}/policy-signals`)
+    .then((r) => { const box = $('#nichePolicy'); if (box) box.innerHTML = nichePolicyBlock(r); })
+    .catch(() => {});
 }
 
 export { viewNiche };

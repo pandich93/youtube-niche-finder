@@ -312,6 +312,8 @@ const HANDLERS = {
   'similarVideos': (m) => similarVideos(m.videoId),
   'packaging': (m) => packagingHistory(m.videoId),
   'templateRisk': (m) => templateRisk(m.channelId),
+  // план 22: сигналы по трём категориям правил монетизации (квота 0)
+  'policySignals': (m) => api(`/api/channels/${encodeURIComponent(m.channelId)}/policy-signals`),
   'comments': (m) => videoComments(m.videoId, m.maxResults),
   'batch': (m) => inspectBatch(m.ids || []),
   'collect': async (m) => {

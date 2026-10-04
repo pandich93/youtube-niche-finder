@@ -1228,6 +1228,35 @@ def mark_events_seen(ids: list = None, all_unseen: bool = False) -> dict:
     return alerts_mod.mark_seen(ids=ids, all_unseen=all_unseen, user_id=_uid())
 
 
+# ------------------------------------------- monetization policy (plan 22)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def policy_signals(channel_id: str) -> dict:
+    """Signals a channel shows, from public data, for YouTube's three
+    "inauthentic content" categories of the monetization policies:
+    generic_repetitive (template risk, look-alike thumbnails), unsatisfying
+    (share of shock-marker titles) and ai_persona_sensitive (health / legal /
+    finance / politics topics plus a synthetic-media disclosure or a faceless
+    label -- at most "watch", a persona cannot be seen from outside). Levels
+    none / watch / high with reasons, examples and the policy text; never a
+    single risk percentage. Not YouTube's decision. Zero quota."""
+    from application import policy_signals as ps
+    return ps.channel_policy_signals(channel_id)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def niche_policy_signals(niche: str) -> dict:
+    """policy_signals for every channel of a niche (up to 150): how many are
+    high / watch per category and which. Answers "is a faceless format here
+    one YouTube's reviewers are likely to look at?". Zero quota."""
+    from application import policy_signals as ps
+    return ps.niche_policy_signals(niche)
+
+
 # ------------------------------------------------- score catalog (plan 23)
 
 @mcp.tool(annotations=ToolAnnotations(

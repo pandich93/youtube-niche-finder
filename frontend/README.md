@@ -272,7 +272,12 @@ A "template risk" card (`/api/channels/{id}/template-risk`) scores how much the 
 uploads look like one template repeated, with the reasons; a heuristic, not YouTube's
 verdict. A channel the API stopped returning (confirmed after two misses 6+ hours
 apart) gets a red note at the top: it was deleted, hidden or banned, and the numbers
-are the last ones seen. Under the revenue card: the YPP-threshold line (with the
+are the last ones seen. A "Сигналы по правилам монетизации" card
+(`/api/channels/{id}/policy-signals`, loaded after the screen) shows the three
+"inauthentic content" categories of YouTube's monetization policies with a
+level, the reasons and the policy text -- signals from public data, not
+YouTube's decision, and no overall percentage; the niche screen has the same
+per niche (`/api/niches/{slug}/policy-signals`). Under the revenue card: the YPP-threshold line (with the
 rules from 2027-02-01 next to it until then) and the next subscriber milestones with
 the date they come at the recent pace -- an estimate from the snapshots, not YouTube data.
 Below that: similar channels by video embeddings

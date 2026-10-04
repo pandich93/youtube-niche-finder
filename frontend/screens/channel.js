@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, VIEW_COUNT_CHANGE, aiLabelsBadge, sponsorBlock, state, rpmRange, templateRiskBlock, yppLine, milestonesLine, qmark } from '../ui.js';
+import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, VIEW_COUNT_CHANGE, aiLabelsBadge, sponsorBlock, state, rpmRange, templateRiskBlock, yppLine, milestonesLine, qmark, policyBlock } from '../ui.js';
 import { view, nicheOverviewBlock } from '../shared.js';
 
 /* ----------------------------------------------------------------- Канал */
@@ -98,6 +98,7 @@ async function viewChannel(id) {
     </div>
 
     ${templateRiskBlock(risk)}
+    <div id="chPolicy"></div>
 
     ${sponsorBlock(sponsors, 'Спонсоры канала', 'бренды из описаний его видео')}
 
@@ -190,6 +191,10 @@ async function viewChannel(id) {
       panel.innerHTML = sectionHead(`Почему выстрелило: ${esc(b.dataset.videoTitle)}`, '') + empty(e.message);
     }
   }));
+  // план 22: сигналы по правилам монетизации -- отдельным запросом, экран не ждёт
+  api(`/api/channels/${encodeURIComponent(id)}/policy-signals`)
+    .then((r) => { const box = $('#chPolicy'); if (box) box.innerHTML = policyBlock(r); })
+    .catch(() => {});
 }
 
 export { viewChannel };

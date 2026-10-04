@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Signals for YouTube's monetization policies** (plan 22) — YouTube's
+  channel monetization policies describe inauthentic content in three
+  categories: generic or repetitive, unsatisfying (shock and emotional
+  manipulation), and AI personas presented as experts on health, legal,
+  financial or political topics. `policy_signals` / `niche_policy_signals`
+  (MCP, 88 tools), `GET /api/channels/{id}/policy-signals` and
+  `GET /api/niches/{slug}/policy-signals`, a card on the channel and niche
+  screens and a line in the extension's channel panel show, per category,
+  the signals visible from public data -- template risk and look-alike
+  thumbnails, the share of shock-marker titles (English and Russian), a
+  sensitive topic plus a synthetic-media disclosure or a faceless label --
+  with a level, reasons, examples and the policy text. No overall
+  percentage: the decision is YouTube's, made by people, and the AI-persona
+  category never goes above "watch". Zero quota.
+
 - **Where every number comes from** (plan 23) — one catalog,
   `domain/score_catalog.py`, says for every number on screen whether it is
   YouTube data or an estimate of niche-finder, how it is computed, from

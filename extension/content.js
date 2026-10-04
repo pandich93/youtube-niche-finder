@@ -567,6 +567,7 @@
         <div class="nf-row"><span class="nf-muted">Динамика:</span> ${esc(growthLine)}
           <span class="nf-hint">${d.snapshots} ${plural(d.snapshots, 'снапшот', 'снапшота', 'снапшотов')}</span></div>
         ${riskRow(risk)}
+        <div class="nf-policy"></div>
         ${yppRow(d.yppEligibility)}
         ${milestonesRow(d.milestones)}
 
@@ -664,6 +665,22 @@
 
     root.innerHTML = channelHtml(d, deep, risk);
     wireCommon(root, () => renderChannel(ref, { refresh: true }));
+
+    // план 22: сигналы по правилам монетизации -- одной строкой, без процента риска
+    if (d.hasDeepAnalytics) {
+      send({ type: 'policySignals', channelId: d.channelId }).then((ps) => {
+        const box = root.querySelector('.nf-policy');
+        if (!box || !ps.ok || !ps.data?.found) return;
+        const names = { generic_repetitive: 'шаблонность', unsatisfying: 'шок-заголовки',
+          ai_persona_sensitive: 'ИИ-персона в чувствительной теме' };
+        const flagged = Object.entries(ps.data.categories)
+          .filter(([, c]) => c.level === 'high' || c.level === 'watch')
+          .map(([k, c]) => `${names[k]}${c.level === 'high' ? ' (заметно)' : ''}`);
+        box.innerHTML = `<div class="nf-row"><span class="nf-muted">Правила монетизации:</span>
+          ${esc(flagged.length ? flagged.join(', ') : 'сигналов нет')}
+          <span class="nf-hint" title="${esc(ps.data.note || '')}">сигналы по открытым данным, не решение YouTube</span></div>`;
+      });
+    }
 
     const dash = root.querySelector('.nf-dash');
     if (dash) dash.href = (SETTINGS?.baseUrl || 'http://127.0.0.1:8080');

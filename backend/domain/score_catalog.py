@@ -13,6 +13,7 @@ from domain import hook_scoring as HS
 from domain import metrics as M
 from domain import milestones as MS
 from domain import monetization as MZ
+from domain import policy_signals as PS
 from domain import repeatability as RP
 from domain import saturation as SAT
 from domain import template_risk as TR
@@ -122,6 +123,14 @@ CATALOG = {
                       "formula": "медиана просмотров канала × кривая взросления(возраст)",
                       "inputs": ["медиана канала", "кривая взросления"],
                       "minSample": "4 собранных видео канала"},
+    "policySignals": {"name": "Сигналы по правилам монетизации", "source": ESTIMATE,
+                      "formula": "три категории «неаутентичного» контента: шаблонность (риск шаблонности, "
+                                 "похожие обложки), шок (доля заголовков с шок-маркерами: высокая от "
+                                 f"{round(PS.SHOCK_HIGH * 100)}%), ИИ-персона (чувствительная тема в "
+                                 f"{round(PS.SENSITIVE_SHARE * 100)}%+ видео и раскрытый ИИ или безликий "
+                                 "канал — не выше «присмотреться»). Без общего процента, не решение YouTube",
+                      "inputs": ["заголовки", "темы YouTube", "раскрытие ИИ", "обложки", "ИИ-разметка"],
+                      "minSample": f"{PS.MIN_TITLES} заголовков; шаблонность — {TR.MIN_VIDEOS} загрузок"},
     "topicMatch": {"name": "Совпадение с темой", "source": ESTIMATE,
                    "formula": "косинус эмбеддингов темы и заголовка с описанием видео ≥ порога темы",
                    "inputs": ["эмбеддинги"], "minSample": None},

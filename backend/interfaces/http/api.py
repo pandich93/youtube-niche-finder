@@ -760,6 +760,20 @@ def delete_topic(request: Request, topic_id: int):
     return out
 
 
+@app.get("/api/channels/{channel_id}/policy-signals")
+def channel_policy_signals(channel_id: str):
+    """Plan 22: signals for YouTube's three inauthentic-content categories."""
+    from application import policy_signals as PSA
+    return PSA.channel_policy_signals(channel_id)
+
+
+@app.get("/api/niches/{slug}/policy-signals")
+def niche_policy_signals(slug: str):
+    """Plan 22: how many channels of a niche show each category's signals."""
+    from application import policy_signals as PSA
+    return PSA.niche_policy_signals(slug)
+
+
 @app.get("/api/scores")
 def scores(key: str = None):
     """Plan 23: what every number is -- YouTube data or an estimate of
