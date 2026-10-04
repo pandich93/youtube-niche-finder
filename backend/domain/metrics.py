@@ -293,9 +293,31 @@ def vph_lifetime(views: int, hours_old: float) -> float:
     return views / max(hours_old, 1.0)
 
 
+# Plan 18: since 2026-08-24 YouTube counts a public view the moment a video
+# starts playing (Data API revision history, 2026-08-27; the date is from
+# YouTube Help answer 2991785). Two snapshots on either side of it were
+# counted by different rules, so velocity never pairs them.
+VIEW_COUNT_CHANGE_AT = datetime(2026, 8, 24, tzinfo=timezone.utc)
+
+
+def _utc(dt):
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def crosses_view_count_change(captured_at) -> bool:
+    """True when snapshot times lie on both sides of VIEW_COUNT_CHANGE_AT."""
+    times = [_utc(t) for t in captured_at]
+    return (any(t < VIEW_COUNT_CHANGE_AT for t in times)
+            and any(t >= VIEW_COUNT_CHANGE_AT for t in times))
+
+
 def vph_from_history(rows, hours: float = 24.0):
     """rows: [(captured_at_dt, view_count)] ascending. Returns views/hour over
-    the most recent `hours` window, or None when history is too thin."""
+    the most recent `hours` window, or None when history is too thin.
+    Snapshots older than the view-count change are dropped when the latest
+    one is newer than it."""
+    if rows and _utc(rows[-1][0]) >= VIEW_COUNT_CHANGE_AT:
+        rows = [r for r in rows if _utc(r[0]) >= VIEW_COUNT_CHANGE_AT]
     if not rows or len(rows) < 2:
         return None
     latest_t, latest_v = rows[-1]

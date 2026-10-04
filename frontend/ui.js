@@ -312,8 +312,13 @@ function table(cols, rows) {
   </table></div>`;
 }
 
-/* Линейный график с перекрестием — одна серия, поэтому без легенды. */
-function lineChart(points, { height = 180, valueLabel = 'значение' } = {}) {
+/* С 24.08.2026 YouTube засчитывает просмотр с первого кадра (план 18): снимки
+   по обе стороны этой даты считались по разным правилам. */
+const VIEW_COUNT_CHANGE = { t: '2026-08-24T00:00:00Z', label: 'YouTube изменил подсчёт просмотров' };
+
+/* Линейный график с перекрестием — одна серия, поэтому без легенды.
+   marks: [{t, label}] — вертикальные отметки дат, рисуются только внутри оси X. */
+function lineChart(points, { height = 180, valueLabel = 'значение', marks = [] } = {}) {
   if (!points || points.length < 2) return empty('нужно минимум две точки истории');
   const W = 720, H = height, m = { t: 12, r: 14, b: 22, l: 48 };
   const xs = points.map((p) => new Date(p.t).getTime());
@@ -333,6 +338,10 @@ function lineChart(points, { height = 180, valueLabel = 'значение' } = {
     <line class="axis" x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}"/>
     <path class="area" d="${area}"/>
     <path class="line" d="${d}"/>
+    ${marks.map((mk) => ({ ...mk, x: new Date(mk.t).getTime() }))
+      .filter((mk) => mk.x > x0 && mk.x < x1)
+      .map((mk) => `<line class="mark" x1="${px(mk.x).toFixed(1)}" x2="${px(mk.x).toFixed(1)}" y1="${m.t}" y2="${H - m.b}"
+        data-tip="${esc(new Date(mk.x).toLocaleDateString('ru-RU'))}&lt;br&gt;${esc(mk.label)}"/>`).join('')}
     ${points.map((p, i) => `<circle class="dot" cx="${px(xs[i]).toFixed(1)}" cy="${py(p.v).toFixed(1)}" r="4"
       data-tip="${esc(new Date(p.t).toLocaleString('ru-RU'))}&lt;br&gt;&lt;b&gt;${num(p.v)}&lt;/b&gt; ${esc(valueLabel)}"/>`).join('')}
     <text x="${m.l}" y="${H - 6}">${esc(new Date(x0).toLocaleDateString('ru-RU'))}</text>
@@ -553,5 +562,5 @@ function yppSelect(id, cur) {
 
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
-         lineChart, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
+         lineChart, VIEW_COUNT_CHANGE, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
          nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock, yppLine, yppSelect };

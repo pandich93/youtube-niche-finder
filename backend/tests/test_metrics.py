@@ -95,3 +95,43 @@ if __name__ == "__main__":
             traceback.print_exc()
     print(f"\n{len(fns) - failed}/{len(fns)} passed")
     sys.exit(1 if failed else 0)
+
+
+# ------------------------------------------- plan 18: view counting changed
+# YouTube counts a public view from the first frame since 2026-08-24, so a
+# snapshot pair across that date mixes two counting rules.
+
+def _at(day, hour=0):
+    from datetime import datetime, timezone
+    return datetime(2026, 8, day, hour, tzinfo=timezone.utc)
+
+
+def test_vph_ignores_snapshots_from_before_the_view_count_change():
+    rows = [(_at(23, 0), 1000), (_at(24, 12), 50000), (_at(25, 12), 52400)]
+    # without the epoch cut the 24h window would reach back to the 23rd;
+    # only the two snapshots after the change are paired: 2400 views / 24h
+    assert M.vph_from_history(rows, 48) == 100.0
+
+
+def test_vph_needs_two_snapshots_after_the_change():
+    rows = [(_at(22), 1000), (_at(23), 2000), (_at(25), 9000)]
+    assert M.vph_from_history(rows, 24) is None
+
+
+def test_vph_of_a_history_entirely_before_the_change_is_unchanged():
+    rows = [(_at(20), 1000), (_at(21), 2200), (_at(22), 4600)]
+    assert M.vph_from_history(rows, 24) == 100.0
+
+
+def test_vph_accepts_naive_timestamps_as_utc():
+    from datetime import datetime
+    rows = [(datetime(2026, 8, 23), 1000), (datetime(2026, 8, 25), 2000),
+            (datetime(2026, 8, 26), 4400)]
+    assert M.vph_from_history(rows, 24) == 100.0
+
+
+def test_crosses_view_count_change():
+    assert M.crosses_view_count_change([_at(20), _at(25)]) is True
+    assert M.crosses_view_count_change([_at(20), _at(23)]) is False
+    assert M.crosses_view_count_change([_at(24), _at(28)]) is False
+    assert M.crosses_view_count_change([]) is False

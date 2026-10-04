@@ -355,6 +355,8 @@ td.wrap { white-space: normal; max-width: 380px; }
                stroke-linejoin: round; stroke-linecap: round; }
 .chart .area { fill: var(--series-soft); }
 .chart .dot  { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
+/* отметка даты на оси X (план 18): пунктир, наводится как точка */
+.chart .mark { stroke: var(--muted); stroke-width: 2; stroke-dasharray: 4 4; pointer-events: stroke; }
 .chart text  { fill: var(--muted); font-size: 11px; }
 .chart .crosshair { stroke: var(--axis); stroke-width: 1; stroke-dasharray: 3 3; }
 

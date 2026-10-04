@@ -730,6 +730,16 @@ Median instead of mean is deliberate: NexLev's baseline is the channel's
 lifetime mean, and a single viral video wrecks it (the observed
 mean-to-median ratio runs as high as 27x).
 
+**The 2026-08-24 view-count change.** Since then YouTube counts a public view
+the moment a video starts playing (Data API revision history, 2026-08-27).
+Snapshots on either side of that date were counted by different rules, so
+`vph24h` and `acceleration` never pair a snapshot from before it with one
+from after it, `calibrate_maturity_curve` leaves out videos whose history
+straddles it, and the channel chart marks the date. The outlier baseline
+still compares videos published before and after the change: whether that
+skews it is not measured yet -- a database with snapshots from before
+2026-08-24 is needed to check.
+
 ---
 
 ## Structure

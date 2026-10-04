@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, aiLabelsBadge, sponsorBlock, state, rpmRange, templateRiskBlock, yppLine } from '../ui.js';
+import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, VIEW_COUNT_CHANGE, aiLabelsBadge, sponsorBlock, state, rpmRange, templateRiskBlock, yppLine } from '../ui.js';
 import { view, nicheOverviewBlock } from '../shared.js';
 
 /* ----------------------------------------------------------------- Канал */
@@ -44,7 +44,7 @@ async function viewChannel(id) {
     <div class="card">
       ${sectionHead('Просмотры во времени', 'по снимкам, которые пишет воркер')}
       ${hist.count > 1
-        ? lineChart(hist.points.map((p) => ({ t: p.t, v: p.views })), { valueLabel: 'просмотров' })
+        ? lineChart(hist.points.map((p) => ({ t: p.t, v: p.views })), { valueLabel: 'просмотров', marks: [VIEW_COUNT_CHANGE] })
         : empty(hist.hint)}
     </div>
 

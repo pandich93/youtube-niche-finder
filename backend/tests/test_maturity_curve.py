@@ -49,9 +49,10 @@ def _clean(monkeypatch):
     MC.reset_cache()
 
 
-def _seed(n_videos, curve=SLOW, first_age=0.5, last_age=31):
-    """n videos published 40 days ago, snapshotted daily from `first_age`."""
-    published = datetime.now(timezone.utc) - timedelta(days=40)
+def _seed(n_videos, curve=SLOW, first_age=0.5, last_age=31, published=None, prefix="vcurve"):
+    """n videos published 40 days ago (or at `published`), snapshotted daily
+    from `first_age`."""
+    published = published or datetime.now(timezone.utc) - timedelta(days=40)
     conn = db.get_conn()
     db.upsert_channel(conn, {
         "channel_id": "UCcurve", "title": "c", "custom_url": None, "country": None,
@@ -62,7 +63,7 @@ def _seed(n_videos, curve=SLOW, first_age=0.5, last_age=31):
     })
     ages = [first_age] + [a for a in range(1, last_age + 1) if a > first_age]
     for i in range(n_videos):
-        vid = f"vcurve{i}"
+        vid = f"{prefix}{i}"
         db.upsert_video(conn, {
             "video_id": vid, "channel_id": "UCcurve", "title": vid, "description": "",
             "published_at": published.isoformat(), "duration_seconds": 600,
@@ -81,6 +82,13 @@ def _seed(n_videos, curve=SLOW, first_age=0.5, last_age=31):
 
 def _conn():
     return db.get_conn()
+
+
+def test_videos_watched_across_the_view_count_change_are_left_out():
+    # plan 18: a history that straddles 2026-08-24 mixes two counting rules
+    _seed(35)
+    _seed(5, published=datetime(2026, 8, 10, tzinfo=timezone.utc), prefix="vcross")
+    assert MC.calibrate()["videosUsed"] == 35
 
 
 # ------------------------------------------------------------ apply + load

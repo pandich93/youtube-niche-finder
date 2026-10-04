@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Velocity across the 2026-08-24 view-count change** (plan 18) — YouTube
+  now counts a public view from the first frame, so `vph24h` and
+  `acceleration` no longer pair a snapshot from before 2026-08-24 with one
+  from after it, `calibrate_maturity_curve` leaves out videos whose history
+  straddles the date, and the channel's views chart marks it. Histories that
+  start after the change (most installations) are not affected.
 - README screenshots retaken for the 0.2.0 dashboard (21-item sidebar) and
   four new ones added: find a niche, alerts, repackaging, idea checker.
 

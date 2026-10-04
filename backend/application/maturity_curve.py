@@ -45,18 +45,22 @@ def _ts(iso):
 
 
 def _histories(conn) -> dict:
-    """{video_id: [(age_days, views), ...]} from every stats snapshot."""
+    """{video_id: [(age_days, views), ...]} from every stats snapshot. A video
+    whose snapshots straddle the 2026-08-24 view-count change is left out:
+    its curve mixes two counting rules (plan 18)."""
     rows = conn.execute(
         "SELECT h.video_id, h.captured_at, h.view_count, v.published_at "
         "FROM video_stats_history h JOIN videos v ON v.video_id = h.video_id"
     ).fetchall()
-    out = {}
+    out, captured = {}, {}
     for r in rows:
         pub, cap = _ts(r["published_at"]), _ts(r["captured_at"])
         if pub and cap:
             out.setdefault(r["video_id"], []).append(
                 ((cap - pub).total_seconds() / 86400, r["view_count"] or 0))
-    return out
+            captured.setdefault(r["video_id"], []).append(cap)
+    return {vid: points for vid, points in out.items()
+            if not M.crosses_view_count_change(captured[vid])}
 
 
 def calibrate(min_videos: int = MIN_VIDEOS) -> dict:
