@@ -1213,7 +1213,7 @@ def daily_digest(period: str = "24h", top_n: int = 5) -> dict:
 def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100) -> list:
     """List alert events, optionally filtered to unseen ones or one kind
     ('outlier'/'acceleration'/'title_change'/'silence_break'/'channel_gone'/
-    'video_gone'/'milestone')."""
+    'video_gone'/'milestone'/'topic_match')."""
     from application import alerts as alerts_mod
     return alerts_mod.list_events(unseen_only=unseen_only, kind=kind, limit=limit, user_id=_uid())
 
@@ -1226,6 +1226,41 @@ def mark_events_seen(ids: list = None, all_unseen: bool = False) -> dict:
     as seen."""
     from application import alerts as alerts_mod
     return alerts_mod.mark_seen(ids=ids, all_unseen=all_unseen, user_id=_uid())
+
+
+# ------------------------------------------------------ topic alerts (plan 19)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=False, open_world_hint=False))
+def watch_topic(text: str, threshold: float = 0.6) -> dict:
+    """Watch a topic in plain words ("ai agents for small business"): every
+    video the database collects from now on -- tracked channels' RSS, niche
+    collections, trending -- whose title+description embedding has cosine
+    similarity >= threshold raises a personal `topic_match` alert (dashboard,
+    extension, Telegram/webhook). Zero quota. Not all of YouTube: only what
+    gets collected. 0.6 is a reasonable start; raise it if matches are loose."""
+    from application import topic_watch as tw
+    return tw.add_topic(text, threshold=threshold, user_id=_uid())
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def list_watched_topics() -> list:
+    """Your watched topics: id, text, threshold, paused. Their matches are
+    list_events(kind='topic_match')."""
+    from application import topic_watch as tw
+    return tw.list_topics(user_id=_uid())
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=True,
+    idempotent_hint=True, open_world_hint=False))
+def unwatch_topic(topic_id: int) -> dict:
+    """Stop watching a topic (its past matches stay in the alert feed)."""
+    from application import topic_watch as tw
+    return tw.remove_topic(topic_id, user_id=_uid())
 
 
 # --------------------------------------------------------- thumbnails (plan 13)

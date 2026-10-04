@@ -32,17 +32,19 @@ def _already_emitted(conn, kind, ref_id) -> bool:
     return row is not None
 
 
-def _emit(conn, kind, ref_id, payload) -> bool:
+def _emit(conn, kind, ref_id, payload, user_id=None) -> bool:
     """Insert one event unless (kind, ref_id) already exists. Returns whether
     a new row was written -- the caller uses this to report counts, not to
     make decisions, so a race between two workers double-inserting the same
-    (kind, ref_id) is a harmless duplicate row, not a correctness bug."""
+    (kind, ref_id) is a harmless duplicate row, not a correctness bug.
+    `user_id` makes the event personal (plan 19): only that user sees it."""
     if _already_emitted(conn, kind, ref_id):
         return False
     conn.execute(
-        "INSERT INTO events (kind, ref_id, payload, created_at, channel_id) VALUES (?,?,?,?,?)",
+        "INSERT INTO events (kind, ref_id, payload, created_at, channel_id, user_id) "
+        "VALUES (?,?,?,?,?,?)",
         (kind, ref_id, json.dumps(payload, ensure_ascii=False), db.now_iso(),
-         (payload or {}).get("channelId")),
+         (payload or {}).get("channelId"), user_id),
     )
     return True
 
@@ -161,13 +163,16 @@ def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
 # plan 15 (5.4): an event is a shared fact; a user sees it when its channel
 # (events.channel_id, set when it is emitted) is on their watchlist. "Seen" is
 # personal (event_reads), not events.seen_at.
-VISIBLE_TO_USER = ("EXISTS (SELECT 1 FROM tracked_channels t WHERE t.user_id = ? "
-                   "AND t.channel_id = e.channel_id)")
+# plan 19: a personal event (events.user_id set, a topic match) is seen by its
+# owner only, whatever the watchlist. Both conditions take the user id TWICE.
+VISIBLE_TO_USER = ("(e.user_id = ? OR (e.user_id IS NULL AND EXISTS (SELECT 1 FROM "
+                   "tracked_channels t WHERE t.user_id = ? AND t.channel_id = e.channel_id)))")
 # What is SENT (Telegram/webhook, digest) needs the channel to still be on the
 # watchlist: untracking a channel stops its alerts, while the feed keeps its
 # history.
-DELIVERABLE_TO_USER = ("EXISTS (SELECT 1 FROM tracked_channels t WHERE t.user_id = ? "
-                       "AND t.channel_id = e.channel_id AND t.active = 1)")
+DELIVERABLE_TO_USER = ("(e.user_id = ? OR (e.user_id IS NULL AND EXISTS (SELECT 1 FROM "
+                       "tracked_channels t WHERE t.user_id = ? AND t.channel_id = e.channel_id "
+                       "AND t.active = 1)))")
 
 
 def _shape_event(r) -> dict:
@@ -181,7 +186,7 @@ def _shape_event(r) -> dict:
 
 def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100,
                 user_id: int = LOCAL_USER_ID) -> list:
-    where, params = [VISIBLE_TO_USER], [user_id, user_id]
+    where, params = [VISIBLE_TO_USER], [user_id, user_id, user_id]
     if unseen_only:
         where.append("r.seen_at IS NULL")
     if kind:
@@ -202,7 +207,7 @@ def unseen_count(user_id: int = LOCAL_USER_ID) -> int:
     row = conn.execute(
         "SELECT COUNT(*) AS n FROM events e WHERE " + VISIBLE_TO_USER + " AND NOT EXISTS "
         "(SELECT 1 FROM event_reads r WHERE r.event_id = e.id AND r.user_id = ?)",
-        (user_id, user_id)).fetchone()
+        (user_id, user_id, user_id)).fetchone()
     conn.close()
     return (row["n"] if row else 0) or 0
 
@@ -213,7 +218,7 @@ def mark_seen(ids: list = None, all_unseen: bool = False, user_id: int = LOCAL_U
     now = db.now_iso()
     sql = ("INSERT INTO event_reads (user_id, event_id, seen_at) SELECT ?, e.id, ? FROM events e "
            "WHERE " + VISIBLE_TO_USER)
-    params = [user_id, now, user_id]
+    params = [user_id, now, user_id, user_id]
     if not all_unseen:
         ids = [int(i) for i in (ids or [])]
         if not ids:
@@ -256,6 +261,10 @@ def _format_message(ev: dict) -> str:
     elif kind == "milestone":
         text = (f"\U0001F3C1 <b>Рубеж</b>: {_html_escape(p.get('title'))}\n"
                f"{p.get('milestone')} подписчиков (сейчас {p.get('subscribers')})")
+    elif kind == "topic_match":
+        text = (f"\U0001F3AF <b>Тема «{_html_escape(p.get('topic'))}»</b>: "
+               f"{_html_escape(p.get('title'))}\n"
+               f"{_html_escape(p.get('channelTitle') or '')} · похожесть {p.get('similarity')}")
     elif kind == "video_gone":
         text = (f"\U0001F6AB <b>Видео больше не доступно</b>: {_html_escape(p.get('title'))}\n"
                f"было outlier ×{p.get('outlierScore')} · {p.get('views')} просмотров")
@@ -300,7 +309,7 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, user_id: int = LOCAL_USER
         # this user's channels only, to this user's own Telegram/webhook (plan 15, 5.9)
         rows = conn.execute(
             "SELECT e.id, e.kind, e.ref_id, e.payload, e.created_at, NULL AS seen_at FROM events e "
-            "WHERE " + DELIVERABLE_TO_USER + " ORDER BY e.created_at ASC", (user_id,)
+            "WHERE " + DELIVERABLE_TO_USER + " ORDER BY e.created_at ASC", (user_id, user_id)
         ).fetchall()
         events = [_shape_event(r) for r in rows]
         keys = [str(e["id"]) for e in events]

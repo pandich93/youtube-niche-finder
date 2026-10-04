@@ -171,6 +171,18 @@ CREATE TABLE IF NOT EXISTS events (
     seen_at TEXT
 );
 
+-- plan 19: topics a user watches; a new video close to one raises a personal
+-- topic_match event (events.user_id)
+CREATE TABLE IF NOT EXISTS user_topics (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL DEFAULT 1,
+    text TEXT NOT NULL,
+    embedding BYTEA,
+    threshold REAL NOT NULL DEFAULT 0.6,
+    created_at TEXT,
+    paused INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_saved_items_kind_ref ON saved_items(kind, ref_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_video ON drafts(video_id);
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
@@ -469,7 +481,10 @@ MIGRATIONS = {
     "llm_usage": {"user_id": _USER_ID},
     # plan 15 (5.4): which channel an event is about, so a user sees the events
     # of their own watchlist (filled from payload.channelId for older rows)
-    "events": {"channel_id": "TEXT"},
+    "events": {"channel_id": "TEXT",
+               # plan 19: set for a personal event (a topic match) -- only this
+               # user sees it; NULL keeps the watchlist rule above
+               "user_id": "BIGINT"},
     # plan 14 fix: the exact redirect the consent used (the token exchange must repeat it)
     "own_oauth_pending": {"redirect_uri": "TEXT"},
     "videos": {
@@ -633,6 +648,8 @@ def migrate(conn):
             if channel:
                 conn.execute("UPDATE events SET channel_id = ? WHERE id = ?", (channel, r["id"]))
         conn.execute("CREATE INDEX IF NOT EXISTS idx_events_channel ON events(channel_id)")
+    if "user_id" in _existing_columns(conn, "events"):
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id)")
     if _existing_columns(conn, "event_reads") and "seen_at" in _existing_columns(conn, "events"):
         # the local user's read marks from before event_reads existed
         conn.execute("INSERT INTO event_reads (user_id, event_id, seen_at) "

@@ -50,7 +50,7 @@ async function checkHealth() {
 const ALERT_KIND_LABEL = {
   outlier: 'новый выброс', acceleration: 'ускоряется', title_change: 'сменил заголовок',
   silence_break: 'вернулся после паузы', channel_gone: 'канал пропал',
-  video_gone: 'видео пропало', milestone: 'рубеж подписчиков',
+  video_gone: 'видео пропало', milestone: 'рубеж подписчиков', topic_match: 'ваша тема',
 };
 
 function alertLine(ev) {
@@ -61,6 +61,7 @@ function alertLine(ev) {
   else if (ev.kind === 'title_change') text = `«${p.oldTitle}» → «${p.newTitle}»`;
   else if (ev.kind === 'silence_break') text = `«${p.title || p.videoId}» -- пауза ${p.gapDays} дн.`;
   else if (ev.kind === 'channel_gone') text = `«${p.title || p.channelId}» -- был ${compact(p.subscribers)} подписчиков`;
+  else if (ev.kind === 'topic_match') text = `«${p.topic}»: «${p.title || p.videoId}»`;
   else if (ev.kind === 'milestone') text = `«${p.title || p.channelId}» -- ${compact(p.milestone)} подписчиков`;
   else if (ev.kind === 'video_gone') text = `«${p.title || p.videoId}» -- был outlier ×${p.outlierScore}`;
   else text = JSON.stringify(p);

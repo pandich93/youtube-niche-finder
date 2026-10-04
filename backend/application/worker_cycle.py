@@ -41,6 +41,7 @@ from application import own_channels as own_mod
 from application import packaging as packaging_mod
 from application import sponsors as sponsors_mod
 from application import thumbnail_search as thumbsearch_mod
+from application import topic_watch as topic_mod
 from domain import periods as P
 from infrastructure.llm import factory as llm_factory
 from infrastructure.llm.null import NullProvider
@@ -187,6 +188,7 @@ def cycle():
 
     if _due("alerts", ALERTS_INTERVAL_MIN):
         _safe("alerts scan", lambda: alerts_mod.scan())
+        _safe("topic matches", lambda: topic_mod.match_new())
         _safe("alerts deliver", lambda: alerts_mod.deliver_all())
         _mark("alerts")
 

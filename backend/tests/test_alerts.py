@@ -44,7 +44,7 @@ CREATE TABLE video_changes (
 );
 CREATE TABLE events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT, ref_id TEXT, payload TEXT,
-  created_at TEXT, seen_at TEXT, channel_id TEXT
+  created_at TEXT, seen_at TEXT, channel_id TEXT, user_id INTEGER
 );
 CREATE TABLE event_reads (
   user_id INTEGER NOT NULL DEFAULT 1, event_id INTEGER NOT NULL, seen_at TEXT NOT NULL,

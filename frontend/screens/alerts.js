@@ -13,6 +13,7 @@ const KINDS = {
   channel_gone: ['Канал исчез', (p) => `было ${compact(p.subscribers)} подп. · ${compact(p.views)} просмотров · ${num(p.videoCount)} видео`],
   video_gone: ['Видео исчезло', (p) => `было outlier ×${p.outlierScore} · ${compact(p.views)} просмотров`],
   milestone: ['Рубеж', (p) => `${num(p.milestone)} подписчиков · сейчас ${num(p.subscribers)}`],
+  topic_match: ['Тема', (p) => `«${p.topic}» · похожесть ${p.similarity}${p.channelTitle ? ` · ${p.channelTitle}` : ''}`],
 };
 const GONE = new Set(['channel_gone', 'video_gone']);
 
@@ -32,15 +33,60 @@ function eventRow(e) {
   </div>`;
 }
 
+/* План 19: свои темы. Новое видео, близкое к теме по эмбеддингу, даёт личный
+   алерт «Тема» — только автору темы. Квота не тратится. */
+function topicsCard(t) {
+  const row = (x) => `<div class="row">
+    <div class="row-main">
+      <div class="row-title">${x.paused ? '<span class="chip">пауза</span> ' : ''}${esc(x.text)}</div>
+      <div class="row-sub">порог похожести ${x.threshold} · с ${new Date(x.createdAt).toLocaleDateString('ru-RU')}</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" data-pause="${x.id}" data-paused="${x.paused ? 1 : 0}" type="button">${x.paused ? 'Возобновить' : 'Пауза'}</button>
+    <button class="btn btn-ghost btn-sm" data-del="${x.id}" type="button">Убрать</button>
+  </div>`;
+  return `<div class="card">
+    ${sectionHead('Мои темы', 'алерт, когда в базу попадает видео на вашу тему — из RSS трекера, собранных ниш и трендов, не со всего YouTube')}
+    <div class="form-row">
+      <label class="field" style="flex:1"><span class="field-label">Тема своими словами</span>
+        <input id="tpText" placeholder="например, ИИ-агенты для малого бизнеса" maxlength="300"></label>
+      <label class="field"><span class="field-label">Порог</span>
+        <input id="tpThr" type="number" min="0.3" max="0.95" step="0.05" value="0.6" style="width:90px"></label>
+      <button class="btn" id="tpAdd" type="button">Следить</button>
+    </div>
+    ${t.topics.length ? `<div class="rows" style="margin-top:10px">${t.topics.map(row).join('')}</div>`
+                      : '<div class="section-sub" style="margin-top:10px">тем пока нет</div>'}
+  </div>`;
+}
+
+function wireTopics() {
+  $('#tpAdd')?.addEventListener('click', async () => {
+    try {
+      await api('/api/topics', { method: 'POST', body: { text: $('#tpText').value, threshold: Number($('#tpThr').value) } });
+      toast('Тема добавлена — совпадения появятся здесь', 'ok');
+      render();
+    } catch (err) { toast(err.message, 'err'); }
+  });
+  document.querySelectorAll('[data-pause]').forEach((b) => b.addEventListener('click', async () => {
+    await api(`/api/topics/${b.dataset.pause}/pause`, { method: 'POST', body: { paused: b.dataset.paused !== '1' } });
+    render();
+  }));
+  document.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
+    await api(`/api/topics/${b.dataset.del}`, { method: 'DELETE' });
+    render();
+  }));
+}
+
 async function viewAlerts() {
   const p = { kind: '', unseen_only: false };
   try { Object.assign(p, JSON.parse(localStorage.getItem('nf.alerts') || '{}')); } catch (e) { /* пусто */ }
-  const d = await api(`/api/events${q({ kind: p.kind, unseen_only: p.unseen_only || '', limit: 200 })}`);
+  const [d, topics] = await Promise.all([
+    api(`/api/events${q({ kind: p.kind, unseen_only: p.unseen_only || '', limit: 200 })}`),
+    api('/api/topics')]);
   const opt = (v, l) => `<option value="${esc(v)}"${p.kind === v ? ' selected' : ''}>${esc(l)}</option>`;
 
   view.innerHTML = `
     <div class="card">
-      ${sectionHead('Алерты', 'события по каналам из трекера — то же, что уходит в Telegram или webhook',
+      ${sectionHead('Алерты', 'события по каналам из трекера и по вашим темам — то же, что уходит в Telegram или webhook',
         '<button class="btn btn-ghost btn-sm" id="alSeen" type="button">Отметить всё прочитанным</button>')}
       <div class="form-row">
         <label class="field"><span class="field-label">Тип</span>
@@ -55,8 +101,10 @@ async function viewAlerts() {
     </div>
     <div class="card">
       ${d.events.length ? `<div class="rows">${d.events.map(eventRow).join('')}</div>`
-                        : empty('событий нет — добавьте каналы в трекер, воркер проверяет их по расписанию')}
-    </div>`;
+                        : empty('событий нет — добавьте каналы в трекер или тему ниже, воркер проверяет их по расписанию')}
+    </div>
+    ${topicsCard(topics)}`;
+  wireTopics();
 
   $('#alApply').addEventListener('click', () => {
     localStorage.setItem('nf.alerts', JSON.stringify({

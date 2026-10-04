@@ -333,6 +333,8 @@ const HANDLERS = {
   } }),
   'metadataReview': (m) => reviewMetadata(m.payload),
   'saveDraft': (m) => saveDraft(m.payload),
+  // план 19: следить за темой -- алерт, когда в базу попадёт похожее видео
+  'watchTopic': (m) => api('/api/topics', { method: 'POST', body: { text: m.text } }),
   'events': (m) => listEvents(m.unseenOnly),
   'eventsSeen': (m) => markEventsSeen(m.ids, m.all),
   'eventsScan': () => api('/api/events/scan', { method: 'POST' }).then((r) => { refreshActionBadge(); return r; }),

@@ -130,8 +130,11 @@ has classified the channels.
 
 The alert events of your watchlist (`/api/events`) — the same ones Telegram
 or a webhook gets: outliers, acceleration, title changes, a channel breaking
-its silence, and a channel or video that disappeared. Filter by type or "only
-new", and mark everything read. Zero quota.
+its silence, a channel or video that disappeared, a subscriber milestone, and
+a match on one of your topics. Filter by type or "only new", and mark
+everything read. Below, "Мои темы" (`/api/topics`): name a topic in plain
+words with a similarity threshold, pause or remove it; a new video close to it
+raises a "Тема" alert that only you see. Zero quota.
 
 ### Idea checker (`#/ideas`)
 

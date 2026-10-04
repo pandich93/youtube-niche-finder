@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Topic alerts** (plan 19) — name a topic in plain words on the "Алерты"
+  screen, with `watch_topic` (MCP), `POST /api/topics` or the extension's
+  "Следить за темой" button. Every hour the worker compares the topics with
+  videos first seen in the last 48 hours from any source (RSS of tracked
+  channels, niche collections, trending) and raises a `topic_match` alert for
+  each one whose title+description embedding is close enough (cosine >= 0.6
+  by default). The alert is personal: `events.user_id` makes it visible and
+  deliverable to the topic's owner only, in multi-user mode too. Videos seen
+  before a topic existed never match it. Zero quota. New MCP tools
+  `watch_topic`, `list_watched_topics`, `unwatch_topic` (83 in all).
+
 - **YPP rules from 2027-02-01 and subscriber milestones** (plan 17) — YouTube
   raises the Partner Program bar for new creators on 2027-02-01 (1,000
   subscribers and 8,000 watch hours in 365 days or 20M Shorts views in 90

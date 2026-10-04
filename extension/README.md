@@ -27,7 +27,8 @@ The extension never talks to the outside world — only to `127.0.0.1`.
 * "Why did it take off?" — an LLM explanation of why the video beat its
   channel (`/api/video/{id}/why`, cached). The button only appears when an
   LLM provider is configured on the backend;
-* buttons: "collect channel", "track", "save" (to the swipe file, see
+* buttons: "collect channel", "track", "watch this topic" (a topic alert from
+  the video's title, see the dashboard's "Алерты" screen), "save" (to the swipe file, see
   below), and a link to the dashboard.
 
 **Channel page** (under the header): subscribers, average views per video,

@@ -223,6 +223,8 @@
           <button class="nf-btn nf-collect">${c.videosStored ? 'Обновить канал в базе' : 'Собрать канал (100 видео)'}</button>
           <button class="nf-btn nf-track">${c.tracked ? 'Не отслеживать' : 'Отслеживать'}</button>
           <button class="nf-btn nf-ghost nf-save">В избранное</button>
+          <button class="nf-btn nf-ghost nf-topic"
+             title="Алерт, когда в базу попадёт видео на эту тему (по названию ролика; поправить — на экране «Алерты»)">Следить за темой</button>
           <a class="nf-btn nf-ghost nf-brief" target="_blank" rel="noopener"
              title="Собрать бриф для своего видео из этого ролика">Бриф</a>
           <a class="nf-btn nf-ghost nf-dash" target="_blank" rel="noopener">Дашборд</a>
@@ -332,6 +334,14 @@
       const r = await send({ type: 'save', kind: 'video', refId: d.videoId, payload: d });
       save.textContent = r.ok ? 'Сохранено' : 'Ошибка';
       setTimeout(() => { save.disabled = false; save.textContent = 'В избранное'; }, 1500);
+    });
+
+    const topic = root.querySelector('.nf-topic');
+    if (topic) topic.addEventListener('click', async () => {
+      topic.disabled = true;
+      const r = await send({ type: 'watchTopic', text: (d.video?.title || '').slice(0, 300) });
+      topic.textContent = r.ok ? 'Тема добавлена' : 'Ошибка';
+      setTimeout(() => { topic.disabled = false; topic.textContent = 'Следить за темой'; }, 1500);
     });
 
     const commentsBtn = root.querySelector('.nf-comments-btn');

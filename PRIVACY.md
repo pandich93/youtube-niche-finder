@@ -193,6 +193,14 @@ is always 0. The one exception is the model file itself: the first `ollama
 pull <model>` downloads it from Ollama's own registry, same one-time
 category as the `fastembed` download mentioned above.
 
+## Watched topics
+
+A topic you name on the "Алерты" screen, through `watch_topic` or the
+extension's "Следить за темой" button is stored as its text and a local
+embedding of it (`user_topics`, personal: `user_id`). Matching runs inside
+your database; the text goes nowhere. Removing a topic deletes its row; the
+alerts it raised stay in your feed.
+
 ## Alert delivery (Telegram / webhook)
 
 Off by default -- the worker only writes detected events (outlier, acceleration,

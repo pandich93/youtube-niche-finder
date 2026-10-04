@@ -29,6 +29,7 @@ from application import own_channels as own_mod  # noqa: E402
 from application import packaging as packaging_mod  # noqa: E402
 from application import sponsors as sponsors_mod  # noqa: E402
 from application import thumbnail_search as thumbsearch_mod  # noqa: E402
+from application import topic_watch as topic_mod  # noqa: E402
 from application import worker_cycle as worker  # noqa: E402
 from domain import periods as P  # noqa: E402
 
@@ -87,6 +88,7 @@ def calls(monkeypatch):
                         lambda api_key, query, **kw: seen.append(f"collect:{query}") or {})
     monkeypatch.setattr(collector, "backfill_embeddings", rec("embed"))
     monkeypatch.setattr(alerts_mod, "scan", rec("alerts_scan"))
+    monkeypatch.setattr(topic_mod, "match_new", rec("topic_match"))
     monkeypatch.setattr(alerts_mod, "deliver_all", rec("alerts_deliver"))
     monkeypatch.setattr(digest_mod, "send_all_digests", rec("digest", {"1": {"sent": False}}))
     monkeypatch.setattr(enrich_mod, "classify_channels", rec("enrich_channels"))
@@ -105,7 +107,7 @@ def calls(monkeypatch):
 ALL_STEPS = [
     "rss",
     f"refresh_stats:{worker.HOT_PERIOD}",
-    "alerts_scan", "alerts_deliver",
+    "alerts_scan", "topic_match", "alerts_deliver",
     "digest",
     "embed",
     "enrich_channels", "enrich_videos",

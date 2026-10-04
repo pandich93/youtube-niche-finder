@@ -56,6 +56,7 @@ from application import sponsors as SP
 from application import tags as TG
 from application import template_risk as TRK
 from application import thumbnail_search as TS
+from application import topic_watch as TW
 from application import transcripts as TR
 from domain.users import LOCAL_USER_ID, multi_user_enabled
 from infrastructure import quota_owner
@@ -721,6 +722,40 @@ def scan_events():
     """Manual trigger -- the worker already runs this on WORKER_ALERTS_INTERVAL_MIN,
     this is for "check right now" from the dashboard/popup without waiting."""
     return AL.scan()
+
+
+# ------------------------------------------------------ topic alerts (plan 19)
+
+@app.get("/api/topics")
+def get_topics(request: Request):
+    return {"topics": TW.list_topics(user_id=_uid(request)), "note": TW.NOTE}
+
+
+@app.post("/api/topics")
+def add_topic(request: Request, payload: dict = Body(default={})):
+    """Watch a topic: a new video whose embedding is close enough raises a
+    personal topic_match alert. Zero quota."""
+    try:
+        return TW.add_topic(payload.get("text"), threshold=float(
+            payload.get("threshold") or TW.DEFAULT_THRESHOLD), user_id=_uid(request))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/topics/{topic_id}/pause")
+def pause_topic(request: Request, topic_id: int, payload: dict = Body(default={})):
+    try:
+        return TW.set_paused(topic_id, bool(payload.get("paused", True)), user_id=_uid(request))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="topic not found")
+
+
+@app.delete("/api/topics/{topic_id}")
+def delete_topic(request: Request, topic_id: int):
+    out = TW.remove_topic(topic_id, user_id=_uid(request))
+    if not out["removed"]:
+        raise HTTPException(status_code=404, detail="topic not found")
+    return out
 
 
 @app.get("/api/title-changes")

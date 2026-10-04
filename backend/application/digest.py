@@ -57,7 +57,7 @@ def _events(conn, kinds, start, user_id=LOCAL_USER_ID) -> list:
     from application.alerts import DELIVERABLE_TO_USER
     q = ("SELECT id, kind, ref_id, payload, created_at FROM events e WHERE kind IN (%s) AND "
          % ",".join("?" * len(kinds))) + DELIVERABLE_TO_USER
-    params = list(kinds) + [user_id]
+    params = list(kinds) + [user_id, user_id]
     if start:
         q += " AND created_at >= ?"
         params.append(start)
