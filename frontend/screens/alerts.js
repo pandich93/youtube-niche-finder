@@ -39,18 +39,24 @@ function topicsCard(t) {
   const row = (x) => `<div class="row">
     <div class="row-main">
       <div class="row-title">${x.paused ? '<span class="chip">пауза</span> ' : ''}${esc(x.text)}</div>
-      <div class="row-sub">порог похожести ${x.threshold} · с ${new Date(x.createdAt).toLocaleDateString('ru-RU')}</div>
+      <div class="row-sub">порог похожести ${x.threshold} · с ${new Date(x.createdAt).toLocaleDateString('ru-RU')}${
+        x.searchYoutube ? ` · ищется на YouTube${x.lastSearchedAt ? `, последний раз ${new Date(x.lastSearchedAt).toLocaleString('ru-RU')}` : ''}` : ''}</div>
     </div>
+    <button class="btn btn-ghost btn-sm" data-search="${x.id}" data-on="${x.searchYoutube ? 1 : 0}" type="button"
+      data-tip="Раз в сутки искать новые видео по теме на всём YouTube: один поиск из 100 в день на всю установку, не больше 5 тем в день">${
+        x.searchYoutube ? 'Не искать на YouTube' : 'Искать на YouTube'}</button>
     <button class="btn btn-ghost btn-sm" data-pause="${x.id}" data-paused="${x.paused ? 1 : 0}" type="button">${x.paused ? 'Возобновить' : 'Пауза'}</button>
     <button class="btn btn-ghost btn-sm" data-del="${x.id}" type="button">Убрать</button>
   </div>`;
   return `<div class="card">
-    ${sectionHead('Мои темы', 'алерт, когда в базу попадает видео на вашу тему — из RSS трекера, собранных ниш и трендов, не со всего YouTube')}
+    ${sectionHead('Мои темы', 'алерт, когда в базу попадает видео на вашу тему — из RSS трекера, собранных ниш и трендов; с галочкой «На YouTube» — ещё и из поиска раз в сутки')}
     <div class="form-row">
       <label class="field" style="flex:1"><span class="field-label">Тема своими словами</span>
         <input id="tpText" placeholder="например, ИИ-агенты для малого бизнеса" maxlength="300"></label>
       <label class="field"><span class="field-label">Порог</span>
         <input id="tpThr" type="number" min="0.3" max="0.95" step="0.05" value="0.6" style="width:90px"></label>
+      <label class="field" data-tip="Раз в сутки искать новые видео по теме на всём YouTube — один поиск из 100 в день">
+        <span class="field-label">На YouTube</span><input type="checkbox" id="tpSearch"></label>
       <button class="btn" id="tpAdd" type="button">Следить</button>
     </div>
     ${t.topics.length ? `<div class="rows" style="margin-top:10px">${t.topics.map(row).join('')}</div>`
@@ -61,13 +67,18 @@ function topicsCard(t) {
 function wireTopics() {
   $('#tpAdd')?.addEventListener('click', async () => {
     try {
-      await api('/api/topics', { method: 'POST', body: { text: $('#tpText').value, threshold: Number($('#tpThr').value) } });
+      await api('/api/topics', { method: 'POST', body: {
+        text: $('#tpText').value, threshold: Number($('#tpThr').value), searchYoutube: $('#tpSearch').checked } });
       toast('Тема добавлена — совпадения появятся здесь', 'ok');
       render();
     } catch (err) { toast(err.message, 'err'); }
   });
   document.querySelectorAll('[data-pause]').forEach((b) => b.addEventListener('click', async () => {
     await api(`/api/topics/${b.dataset.pause}/pause`, { method: 'POST', body: { paused: b.dataset.paused !== '1' } });
+    render();
+  }));
+  document.querySelectorAll('[data-search]').forEach((b) => b.addEventListener('click', async () => {
+    await api(`/api/topics/${b.dataset.search}/search`, { method: 'POST', body: { on: b.dataset.on !== '1' } });
     render();
   }));
   document.querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {

@@ -15,6 +15,7 @@ Default daily budget (well inside the free tier):
   sponsors     every 1h   new/changed video descriptions    0 units (local DB only)
   thumb_embed  every 1h   thumbnail CLIP vectors, opt-in     0 units (i.ytimg.com)
   own_sync     once a day your connected channels            Analytics API quota only
+  topic_search every 6h   opted-in topics, each once a day   1 search call per topic (max 5/day)
   freshness    once a day rows not refreshed for 25 days      ~1 unit / 50 rows, capped
                           (titles, descriptions, counters; nothing is ever deleted)
 
@@ -105,6 +106,9 @@ DIGEST_CHECK_INTERVAL_MIN = int(os.environ.get("WORKER_DIGEST_CHECK_INTERVAL_MIN
 # Plan 16: re-read stored rows not refreshed for REFRESH_STALE_DAYS (YouTube's
 # 30-day rule); caps and age live in application/freshness.py
 DO_FRESHNESS = os.environ.get("WORKER_FRESHNESS", "1") not in ("0", "false", "no")
+# plan 19 follow-up: topics that opted into a daily YouTube search
+DO_TOPIC_SEARCH = os.environ.get("WORKER_TOPIC_SEARCH", "1") not in ("0", "false", "no")
+TOPIC_SEARCH_INTERVAL_MIN = int(os.environ.get("WORKER_TOPIC_SEARCH_INTERVAL_MIN", "360"))
 FRESHNESS_INTERVAL_MIN = int(os.environ.get("WORKER_FRESHNESS_INTERVAL_MIN", "1440"))
 
 _stop = False
@@ -254,6 +258,15 @@ def cycle():
     if DO_THUMB_EMBED and _due("thumb_embed", THUMB_EMBED_INTERVAL_MIN):
         _safe("thumbnail vectors", lambda: thumbsearch_mod.embed_thumbnails(limit=THUMB_EMBED_LIMIT))
         _mark("thumb_embed")
+
+    if DO_TOPIC_SEARCH and _due("topic_search", TOPIC_SEARCH_INTERVAL_MIN):
+        # each topic is searched once a day at most (topic_watch.SEARCH_EVERY_HOURS);
+        # running every few hours just picks up topics as they fall due
+        if _search_quota_blocked_today():
+            log("topic search: skipped, search.list quota already exhausted today")
+        else:
+            _safe("topic search", lambda: topic_mod.search_topics(API_KEY))
+        _mark("topic_search")
 
     if DO_FRESHNESS and _due("freshness", FRESHNESS_INTERVAL_MIN):
         _safe("refresh stale rows", lambda: freshness_mod.refresh_stale(API_KEY))

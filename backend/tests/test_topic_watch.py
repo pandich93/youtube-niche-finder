@@ -26,7 +26,7 @@ from application import topic_watch as TW  # noqa: E402
 NOW = datetime.now(timezone.utc)
 CH = "UC" + "topics".ljust(22, "0")
 # three orthogonal "meanings" and a mix that is close to the first
-AI, COOKING, HISTORY = np.eye(3, 8, dtype=np.float32)
+AI, COOKING, HISTORY = np.eye(3, db.EMBEDDING_DIM, dtype=np.float32)
 NEAR_AI = (AI * 0.9 + COOKING * 0.3) / np.linalg.norm(AI * 0.9 + COOKING * 0.3)
 TEXTS = {"ai tools": AI, "cooking": COOKING}
 
@@ -147,3 +147,71 @@ def test_mcp_tools_watch_list_and_unwatch():
     t = srv.watch_topic("cooking", threshold=0.75)
     assert [x["text"] for x in srv.list_watched_topics()] == ["cooking"]
     assert srv.unwatch_topic(t["id"]) == {"removed": True}
+
+
+# ------------------------------------------- opt-in YouTube search per topic
+
+class _FakeEmb:
+    @staticmethod
+    def embed(text):
+        return NEAR_AI if "agent" in text.lower() else HISTORY
+
+    @staticmethod
+    def to_blob(v):
+        return np.asarray(v, dtype=np.float32).tobytes()
+
+
+@pytest.fixture
+def yt_api(monkeypatch):
+    import infrastructure.youtube.client as yt
+    from application import collecting as collector
+    calls = {"search": [], "videos": []}
+
+    def search_videos(key, query, **kw):
+        calls["search"].append((query, kw.get("published_after"), kw.get("order")))
+        return {"items": [{"id": {"videoId": "vs1"}}, {"id": {"videoId": "vs2"}}]}
+
+    def videos_list(key, ids, parts=None):
+        calls["videos"].append(list(ids))
+        titles = {"vs1": "My AI agent does my taxes", "vs2": "Medieval castles"}
+        return [{"id": i, "snippet": {"channelId": CH, "title": titles[i], "description": "",
+                                      "publishedAt": NOW.isoformat(), "thumbnails": {}},
+                 "statistics": {"viewCount": "10"}, "contentDetails": {"duration": "PT5M"}}
+                for i in ids]
+
+    monkeypatch.setattr(yt, "search_videos", search_videos)
+    monkeypatch.setattr(yt, "videos_list", videos_list)
+    monkeypatch.setattr(yt, "channels_list", lambda key, ids, *a, **k: [])
+    monkeypatch.setattr(collector, "_embeddings", lambda: _FakeEmb)
+    conn = db.get_conn()
+    conn.execute("DELETE FROM meta WHERE key LIKE 'search_calls%'")
+    conn.commit()
+    conn.close()
+    return calls
+
+
+def test_only_opted_in_topics_search_youtube_and_new_videos_then_match(yt_api):
+    on = TW.add_topic("ai tools", threshold=0.8, search_youtube=True)
+    TW.add_topic("cooking", threshold=0.8)                        # not opted in
+    _backdate_topic(on["id"], 24)
+    res = TW.search_topics("key")
+    assert res["topicsSearched"] == 1 and res["videosStored"] == 2
+    query, after, order = yt_api["search"][0]
+    assert query == "ai tools" and after and order == "date"
+    assert TW.match_new()["matched"] == 1                         # vs1 is close, vs2 is not
+    assert TW.search_topics("key")["topicsSearched"] == 0         # once a day per topic
+
+
+def test_known_videos_are_not_fetched_again(yt_api):
+    TW.add_topic("ai tools", search_youtube=True)
+    _video("vs1", NEAR_AI)
+    TW.search_topics("key")
+    assert yt_api["videos"] == [["vs2"]]
+
+
+def test_the_search_toggle_and_the_daily_cap(yt_api, monkeypatch):
+    t = TW.add_topic("ai tools")
+    assert t["searchYoutube"] is False
+    assert TW.set_search(t["id"], True)["searchYoutube"] is True
+    monkeypatch.setattr(TW, "SEARCH_MAX_PER_DAY", 0)
+    assert TW.search_topics("key")["topicsSearched"] == 0 and yt_api["search"] == []

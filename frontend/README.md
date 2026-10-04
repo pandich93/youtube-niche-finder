@@ -134,7 +134,9 @@ its silence, a channel or video that disappeared, a subscriber milestone, and
 a match on one of your topics. Filter by type or "only new", and mark
 everything read. Below, "Мои темы" (`/api/topics`): name a topic in plain
 words with a similarity threshold, pause or remove it; a new video close to it
-raises a "Тема" alert that only you see. Zero quota.
+raises a "Тема" alert that only you see. Zero quota; ticking "На YouTube"
+(or "Искать на YouTube" on a topic) also searches all of YouTube for it once
+a day -- one of the installation's 100 search calls a day, at most 5 topics.
 
 ### Idea checker (`#/ideas`)
 

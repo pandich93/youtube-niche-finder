@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Topic alerts can search all of YouTube** — a topic with "На YouTube"
+  ticked (`search_youtube` in `watch_topic`, `POST /api/topics/{id}/search`)
+  is searched once a day for videos of the last 24 hours, newest first; new
+  ones are stored with embeddings and no niche, and the hourly match raises
+  the usual personal alert. One of the installation's 100 search.list calls
+  a day per topic, at most 5 topics a day, the owner's share in multi-user
+  mode; skipped when the day's searches are spent. Off by default.
+
 ### Fixed
 
 Found in a code review of v0.2.0..v0.3.0 and the plan-25 work:

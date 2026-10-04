@@ -127,6 +127,7 @@ SUMMARY = {
     "GET /api/topics": ("alerts", "Your watched topics (plan 19)."),
     "POST /api/topics": ("alerts", "Watch a topic: `text`, optional `threshold` (0.6); a close new video raises a personal `topic_match` alert."),
     "POST /api/topics/{topic_id}/pause": ("alerts", "Pause or resume a topic: `paused`."),
+    "POST /api/topics/{topic_id}/search": ("alerts", "Turn a topic's daily YouTube search on or off: `on` (one search.list call a day)."),
     "DELETE /api/topics/{topic_id}": ("alerts", "Stop watching a topic; its past alerts stay."),
     "POST /api/events/scan": ("alerts", "Run the alert scan now instead of waiting for the worker."),
     "GET /api/digest": ("alerts", "What the daily digest would contain right now (read-only)."),

@@ -34,7 +34,8 @@ from application import worker_cycle as worker  # noqa: E402
 from domain import periods as P  # noqa: E402
 
 SCHEDULE_KEYS = ("rss", "hot", "alerts", "embed", "enrich", "daily", "clusters",
-                 "calibrate", "thumbs", "sponsors", "thumb_embed", "freshness", "own_sync", "digest")
+                 "calibrate", "thumbs", "sponsors", "thumb_embed", "topic_search", "freshness", "own_sync",
+                 "digest")
 
 
 def setup_module(_=None):
@@ -89,6 +90,8 @@ def calls(monkeypatch):
     monkeypatch.setattr(collector, "backfill_embeddings", rec("embed"))
     monkeypatch.setattr(alerts_mod, "scan", rec("alerts_scan"))
     monkeypatch.setattr(topic_mod, "match_new", rec("topic_match"))
+    monkeypatch.setattr(worker, "DO_TOPIC_SEARCH", True)
+    monkeypatch.setattr(topic_mod, "search_topics", rec("topic_search"))
     monkeypatch.setattr(alerts_mod, "deliver_all", rec("alerts_deliver"))
     monkeypatch.setattr(digest_mod, "send_all_digests", rec("digest", {"1": {"sent": False}}))
     monkeypatch.setattr(enrich_mod, "classify_channels", rec("enrich_channels"))
@@ -119,6 +122,7 @@ ALL_STEPS = [
     "thumbs",
     "sponsors",
     "thumb_embed",
+    "topic_search",
     "freshness",
     "own_sync",
 ]

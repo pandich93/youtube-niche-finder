@@ -1313,15 +1313,17 @@ def format_repeatability(video_id: str, min_similarity: float = 0.6, niche: str 
 @mcp.tool(annotations=ToolAnnotations(
     read_only_hint=False, destructive_hint=False,
     idempotent_hint=False, open_world_hint=False))
-def watch_topic(text: str, threshold: float = 0.6) -> dict:
+def watch_topic(text: str, threshold: float = 0.6, search_youtube: bool = False) -> dict:
     """Watch a topic in plain words ("ai agents for small business"): every
     video the database collects from now on -- tracked channels' RSS, niche
     collections, trending -- whose title+description embedding has cosine
     similarity >= threshold raises a personal `topic_match` alert (dashboard,
     extension, Telegram/webhook). Zero quota. Not all of YouTube: only what
-    gets collected. 0.6 is a reasonable start; raise it if matches are loose."""
+    gets collected. 0.6 is a reasonable start; raise it if matches are loose.
+    search_youtube=True also searches all of YouTube for it once a day (one of
+    the installation's 100 search.list calls a day; at most 5 topics a day)."""
     from application import topic_watch as tw
-    return tw.add_topic(text, threshold=threshold, user_id=_uid())
+    return tw.add_topic(text, threshold=threshold, user_id=_uid(), search_youtube=search_youtube)
 
 
 @mcp.tool(annotations=ToolAnnotations(

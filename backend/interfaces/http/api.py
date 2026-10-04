@@ -739,7 +739,8 @@ def add_topic(request: Request, payload: dict = Body(default={})):
     personal topic_match alert. Zero quota."""
     try:
         return TW.add_topic(payload.get("text"), threshold=float(
-            payload.get("threshold") or TW.DEFAULT_THRESHOLD), user_id=_uid(request))
+            payload.get("threshold") or TW.DEFAULT_THRESHOLD), user_id=_uid(request),
+            search_youtube=bool(payload.get("searchYoutube")))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -748,6 +749,15 @@ def add_topic(request: Request, payload: dict = Body(default={})):
 def pause_topic(request: Request, topic_id: int, payload: dict = Body(default={})):
     try:
         return TW.set_paused(topic_id, bool(payload.get("paused", True)), user_id=_uid(request))
+    except ValueError:
+        raise HTTPException(status_code=404, detail="topic not found")
+
+
+@app.post("/api/topics/{topic_id}/search")
+def topic_search_toggle(request: Request, topic_id: int, payload: dict = Body(default={})):
+    """Turn a topic's daily YouTube search (one search.list call a day) on or off."""
+    try:
+        return TW.set_search(topic_id, bool(payload.get("on", True)), user_id=_uid(request))
     except ValueError:
         raise HTTPException(status_code=404, detail="topic not found")
 

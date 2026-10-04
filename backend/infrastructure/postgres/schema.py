@@ -494,6 +494,8 @@ MIGRATIONS = {
     "llm_usage": {"user_id": _USER_ID},
     # plan 15 (5.4): which channel an event is about, so a user sees the events
     # of their own watchlist (filled from payload.channelId for older rows)
+    # plan 19 follow-up: a topic may also search all of YouTube once a day
+    "user_topics": {"search_youtube": "INTEGER NOT NULL DEFAULT 0", "last_searched_at": "TEXT"},
     "events": {"channel_id": "TEXT",
                # plan 19: set for a personal event (a topic match) -- only this
                # user sees it; NULL keeps the watchlist rule above

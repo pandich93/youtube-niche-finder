@@ -11,7 +11,12 @@ never repeat. Videos seen before the topic was created never match it, so a
 new topic does not flood the feed with the backlog.
 
 What "new" covers is what the database collects: the tracked channels' RSS,
-WORKER_QUERIES and anything collected by hand -- not all of YouTube.
+WORKER_QUERIES and anything collected by hand -- not all of YouTube. A topic
+can opt into search_youtube: once a day the worker runs one search.list call
+for it (the last 24 hours, newest first) and stores what it finds, so the
+next match_new sees it. search.list is 100 calls a day for the whole
+installation, hence SEARCH_MAX_PER_DAY topics a day at most; in multi-user
+mode the call counts against the topic owner's share.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -22,6 +27,9 @@ from application import alerts as AL
 from domain.users import LOCAL_USER_ID
 
 WINDOW_HOURS = 48
+SEARCH_MAX_PER_DAY = 5         # topics searched on YouTube per day, all users
+SEARCH_EVERY_HOURS = 20        # one search a day per topic, with slack for the worker's timing
+SEARCH_RESULTS = 25
 DEFAULT_THRESHOLD = 0.6
 MAX_TOPICS_PER_USER = 50
 NOTE = ("Matches videos the database collects (tracked channels' RSS, niche collections, "
@@ -37,13 +45,17 @@ def _vec(blob) -> np.ndarray:
     return np.frombuffer(bytes(blob), dtype=np.float32)
 
 
+_COLS = "id, text, threshold, created_at, paused, search_youtube, last_searched_at"
+
+
 def _shape(r) -> dict:
     return {"id": r["id"], "text": r["text"], "threshold": r["threshold"],
-            "createdAt": r["created_at"], "paused": bool(r["paused"])}
+            "createdAt": r["created_at"], "paused": bool(r["paused"]),
+            "searchYoutube": bool(r["search_youtube"]), "lastSearchedAt": r["last_searched_at"]}
 
 
 def add_topic(text: str, threshold: float = DEFAULT_THRESHOLD,
-              user_id: int = LOCAL_USER_ID) -> dict:
+              user_id: int = LOCAL_USER_ID, search_youtube: bool = False) -> dict:
     text = (text or "").strip()
     if not text:
         raise ValueError("topic text is empty")
@@ -59,9 +71,10 @@ def add_topic(text: str, threshold: float = DEFAULT_THRESHOLD,
         if n >= MAX_TOPICS_PER_USER:
             raise ValueError(f"at most {MAX_TOPICS_PER_USER} topics per user")
         row = conn.execute(
-            "INSERT INTO user_topics (user_id, text, embedding, threshold, created_at, paused) "
-            "VALUES (?,?,?,?,?,0) RETURNING id, text, threshold, created_at, paused",
-            (user_id, text, vec.tobytes(), float(threshold), db.now_iso())).fetchone()
+            "INSERT INTO user_topics (user_id, text, embedding, threshold, created_at, paused, "
+            f"search_youtube) VALUES (?,?,?,?,?,0,?) RETURNING {_COLS}",
+            (user_id, text, vec.tobytes(), float(threshold), db.now_iso(),
+             1 if search_youtube else 0)).fetchone()
         conn.commit()
         return _shape(row)
     finally:
@@ -71,7 +84,7 @@ def add_topic(text: str, threshold: float = DEFAULT_THRESHOLD,
 def list_topics(user_id: int = LOCAL_USER_ID) -> list:
     conn = db.get_conn()
     try:
-        rows = conn.execute("SELECT id, text, threshold, created_at, paused FROM user_topics "
+        rows = conn.execute(f"SELECT {_COLS} FROM user_topics "
                             "WHERE user_id = ? ORDER BY id", (user_id,)).fetchall()
         return [_shape(r) for r in rows]
     finally:
@@ -82,7 +95,7 @@ def set_paused(topic_id: int, paused: bool, user_id: int = LOCAL_USER_ID) -> dic
     conn = db.get_conn()
     try:
         row = conn.execute("UPDATE user_topics SET paused = ? WHERE id = ? AND user_id = ? "
-                           "RETURNING id, text, threshold, created_at, paused",
+                           f"RETURNING {_COLS}",
                            (1 if paused else 0, int(topic_id), user_id)).fetchone()
         conn.commit()
         if not row:
@@ -90,6 +103,82 @@ def set_paused(topic_id: int, paused: bool, user_id: int = LOCAL_USER_ID) -> dic
         return _shape(row)
     finally:
         conn.close()
+
+
+def set_search(topic_id: int, on: bool, user_id: int = LOCAL_USER_ID) -> dict:
+    """Turn the daily YouTube search of a topic on or off."""
+    conn = db.get_conn()
+    try:
+        row = conn.execute("UPDATE user_topics SET search_youtube = ? WHERE id = ? AND user_id = ? "
+                           f"RETURNING {_COLS}", (1 if on else 0, int(topic_id), user_id)).fetchone()
+        conn.commit()
+        if not row:
+            raise ValueError("no such topic")
+        return _shape(row)
+    finally:
+        conn.close()
+
+
+def search_topics(api_key: str) -> dict:
+    """The worker's daily step: one search.list call per opted-in topic not
+    searched for SEARCH_EVERY_HOURS, oldest first, at most SEARCH_MAX_PER_DAY.
+    New videos are stored with embeddings and no niche; match_new does the
+    rest. Stops quietly when the day's search calls run out."""
+    import infrastructure.youtube.client as yt
+    from application import collecting as C
+    from domain import periods as PD
+    from domain.users import multi_user_enabled
+    from infrastructure import quota_owner
+
+    out = {"topicsSearched": 0, "videosStored": 0, "searchCalls": 0, "stoppedBy": None}
+    if SEARCH_MAX_PER_DAY <= 0:
+        return out
+    since = (datetime.now(timezone.utc) - timedelta(hours=SEARCH_EVERY_HOURS)).isoformat()
+    conn = db.get_conn()
+    try:
+        topics = conn.execute(
+            "SELECT id, user_id, text FROM user_topics WHERE search_youtube = 1 AND paused = 0 "
+            "AND (last_searched_at IS NULL OR last_searched_at < ?) "
+            "ORDER BY last_searched_at ASC NULLS FIRST, id LIMIT ?",
+            (since, SEARCH_MAX_PER_DAY)).fetchall()
+        published_after = PD.to_rfc3339(datetime.now(timezone.utc) - timedelta(hours=24))
+        for t in topics:
+            if C.search_calls_today(conn) >= yt.SEARCH_DAILY_CALL_LIMIT:
+                out["stoppedBy"] = "search-quota"
+                break
+            owner = quota_owner.set_owner(t["user_id"]) if multi_user_enabled() else None
+            try:
+                resp = yt.search_videos(api_key, t["text"], published_after=published_after,
+                                        order="date", max_results=SEARCH_RESULTS)
+                C._record_search_calls(conn, 1)
+                out["searchCalls"] += 1
+                ids = list(dict.fromkeys((i.get("id") or {}).get("videoId")
+                                         for i in resp.get("items", [])))
+                ids = [i for i in ids if i]
+                known = {r["video_id"] for r in conn.execute(
+                    "SELECT video_id FROM videos WHERE video_id IN (%s)" % ",".join("?" * len(ids)),
+                    ids).fetchall()} if ids else set()
+                new = [i for i in ids if i not in known]
+                if new:
+                    items = yt.videos_list(api_key, new)
+                    chans = list({(v.get("snippet") or {}).get("channelId") for v in items} - {None})
+                    now = db.now_iso()
+                    C.store_channels(conn, yt.channels_list(api_key, chans) if chans else [], now)
+                    out["videosStored"] += C.store_videos(conn, items, embed=True, now=now)
+            except yt.QuotaExceeded:
+                out["stoppedBy"] = "quota"
+                conn.commit()
+                break
+            finally:
+                if owner is not None:
+                    quota_owner.reset(owner)
+            conn.execute("UPDATE user_topics SET last_searched_at = ? WHERE id = ?",
+                         (db.now_iso(), t["id"]))
+            conn.commit()
+            out["topicsSearched"] += 1
+    finally:
+        conn.close()
+    return out
 
 
 def remove_topic(topic_id: int, user_id: int = LOCAL_USER_ID) -> dict:
