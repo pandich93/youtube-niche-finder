@@ -181,6 +181,10 @@ by the server. An LLM is optional and off by default.
 <td width="50%"><img src="assets/compare.jpg" alt="Compare trajectories"><br><sub><b>Compare</b> — views by age for up to five videos, side by side</sub></td>
 <td width="50%"><img src="assets/policy.jpg" alt="Monetization-policy signals"><br><sub><b>Policy signals</b> — YouTube's three inauthentic-content categories, no risk percentage</sub></td>
 </tr>
+<tr>
+<td width="50%"><img src="assets/enter.jpg" alt="Where to enter"><br><sub><b>Where to enter</b> — every niche scored 0–100, each term visible, sortable</sub></td>
+<td width="50%"><img src="assets/language.jpg" alt="Language gaps"><br><sub><b>Another language</b> — outliers in English and whether Russian has anything like them</sub></td>
+</tr>
 </table>
 
 The dashboard has 24 sections in the sidebar plus niche, channel and brief

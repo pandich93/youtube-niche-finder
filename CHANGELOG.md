@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-04
+
+The third round of plans (26-33, without 28 and 32, which wait for a
+connected channel): answers to "what should I make, where, and does it pay?"
+from the data already collected, with zero quota and no LLM. 100 MCP tools,
+128 HTTP routes. Highlights:
+
+- **Where to enter:** a 0-100 score for every niche from six visible terms
+  and a side-by-side comparison; what the outliers of a niche have in common
+  against its ordinary videos.
+- **Another language:** outliers in one language and whether anything like
+  them is made in another.
+- **Does it pay:** net profit from your own cost profiles, as a range, with
+  the views a video needs to pay for itself.
+- **Work with others and on schedule:** collaboration partners of your size,
+  and a content calendar with reminders the day before and when a draft is due.
+- **Hosted installations:** customers connect their own channels with the
+  service's OAuth client; public privacy and terms pages.
+- **Fixes:** the daily sync of connected channels, policy signals reading
+  parts of words, descriptions re-read within 30 days, a lighter `/api/health`.
+
 ### Added
 
 - **Content calendar** (plan 33). Drafts get a release time (`drafts.planned_at`,
@@ -86,6 +107,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   a day per topic, at most 5 topics a day, the owner's share in multi-user
   mode; skipped when the day's searches are spent. Off by default.
 
+- **Customers can connect their own channels to a hosted installation**
+  (plan 25) — `OWN_OAUTH_MODE=web` uses one OAuth client of the service, of
+  type Web application, on an https redirect the status checks; customers
+  only press "Подключить канал", and in multi-user mode only an admin sees
+  which settings are missing. Revenue access is asked for separately — a
+  "показывать доход" box when connecting and "Добавить доход" later — so the
+  base consent is read-only YouTube + Analytics (`OA.BASE_SCOPES`). Public
+  `/privacy` and `/terms` pages carry what Google's app verification and
+  YouTube's API terms ask for (Limited Use, YouTube Terms of Service, Google
+  Privacy Policy, revoking access, deletion), named from `NF_SERVICE_NAME`,
+  `NF_OPERATOR_NAME`, `NF_CONTACT_EMAIL`. One's own installation behaves as
+  before.
+
 ### Fixed
 
 Found in a code review of v0.2.0..v0.3.0 and the plan-25 work:
@@ -113,21 +147,6 @@ Found in a code review of v0.2.0..v0.3.0 and the plan-25 work:
   trajectories and format repeatability load only the videos they score
   (`load_window(video_ids=...)`, the channel baseline unchanged) -- on a
   real database the repeatability check went from 0.14 s to 0.03 s.
-
-### Added
-
-- **Customers can connect their own channels to a hosted installation**
-  (plan 25) — `OWN_OAUTH_MODE=web` uses one OAuth client of the service, of
-  type Web application, on an https redirect the status checks; customers
-  only press "Подключить канал", and in multi-user mode only an admin sees
-  which settings are missing. Revenue access is asked for separately — a
-  "показывать доход" box when connecting and "Добавить доход" later — so the
-  base consent is read-only YouTube + Analytics (`OA.BASE_SCOPES`). Public
-  `/privacy` and `/terms` pages carry what Google's app verification and
-  YouTube's API terms ask for (Limited Use, YouTube Terms of Service, Google
-  Privacy Policy, revoking access, deletion), named from `NF_SERVICE_NAME`,
-  `NF_OPERATOR_NAME`, `NF_CONTACT_EMAIL`. One's own installation behaves as
-  before.
 
 ## [0.3.0] - 2026-10-04
 
@@ -1077,7 +1096,8 @@ Initial public release.
   coverage badge.
 - MIT license.
 
-[Unreleased]: https://github.com/pandich93/youtube-niche-finder/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/pandich93/youtube-niche-finder/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/pandich93/youtube-niche-finder/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/pandich93/youtube-niche-finder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/pandich93/youtube-niche-finder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/pandich93/youtube-niche-finder/releases/tag/v0.1.0

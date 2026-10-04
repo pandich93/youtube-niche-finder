@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "niche-finder — аналитика YouTube",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Оутлаеры, скорость просмотров, теги и аналитика канала поверх YouTube. Данные берутся из локального niche-finder, наружу ничего не уходит.",
   "permissions": ["storage", "alarms"],
   "host_permissions": [
