@@ -56,6 +56,8 @@ SUMMARY = {
     "GET /api/title-patterns": ("discover", "Title phrases that correlate with outliers in a niche or channel (lift, examples)."),
     "GET /api/niches": ("niches", "Every niche label with its query, video count and last collection time."),
     "GET /api/niches/saturation": ("niches", "Trend of every niche in one pass: growing / stable / cooling / saturated / insufficient-data."),
+    "GET /api/niches/ranking": ("niches", "Every niche with a 0-100 score and the six-term breakdown behind it, best first; cached for an hour (`refresh`) (plan 27)."),
+    "GET /api/niches/compare": ("niches", "2-3 comma-separated niches side by side: score breakdown plus overview numbers (plan 27)."),
     "GET /api/niches/{slug}": ("niches", "Niche density (channel sizes, viral skew, Shorts share), top videos by multiplier and the niche trend."),
     "GET /api/niches/{slug}/videos": ("niches", "Flat per-video list for the niche scatter chart, filterable by channel and Shorts."),
     "GET /api/niches/{slug}/sponsors": ("niches", "Sponsor map of a niche: brands named in descriptions, promo codes, affiliate links kept apart."),

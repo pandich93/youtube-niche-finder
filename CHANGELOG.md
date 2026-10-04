@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Where to enter — a score and a comparison for every niche** (plan 27).
+  `rank_niches` scores each niche 0–100 from six terms it already computes
+  (demand trend 25, supply growth 20, newcomers breaking out 20, RPM of the
+  dominant category 15, templated channels 10, policy signals 10), every term
+  with its points and raw value; unknown terms are left out and the rest
+  re-weighted, and a niche whose trend is "insufficient-data" (or with under
+  60% of the weight known) gets no score instead of a low one. Cached for an
+  hour. `compare_niches` shows 2–3 niches side by side with the overview
+  numbers. MCP (92 tools), `GET /api/niches/ranking`,
+  `GET /api/niches/compare`, the "Где заходить" screen (sortable by any
+  column) and a `nicheRank` entry in `explain_scores`. Zero quota, no LLM.
 - **Language gaps — "formats that took off in one language, is it made in
   another?"** (plan 26). For a pair of languages, the outliers of the source
   language (at most 5 per channel, 100 in all) each get a verdict from their

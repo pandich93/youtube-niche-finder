@@ -48,6 +48,7 @@ from application import maturity_curve
 from application import metadata_review as MR
 from application import niche_clusters as NCL
 from application import niche_export as NE
+from application import niche_ranking as NRK
 from application import notify_settings as NS
 from application import own_channels as OWN
 from application import packaging as PKG
@@ -494,6 +495,23 @@ def niches_saturation():
     insufficient-data) in one pass, for the niche list. Zero quota. Declared
     before /api/niches/{slug} so "saturation" is not taken for a slug."""
     return SAT.all_niches_saturation()
+
+
+@app.get("/api/niches/ranking")
+def niches_ranking(refresh: bool = False):
+    """Plan 27: every niche with a 0-100 score and the breakdown behind it,
+    best first (cached an hour). Zero quota. Declared before
+    /api/niches/{slug} so "ranking" is not taken for a slug."""
+    return NRK.rank_niches(refresh=refresh)
+
+
+@app.get("/api/niches/compare")
+def niches_compare(slugs: str):
+    """Plan 27: 2-3 comma-separated niches side by side."""
+    try:
+        return NRK.compare_niches([x.strip() for x in slugs.split(",") if x.strip()])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/niches/{slug}")

@@ -1308,6 +1308,37 @@ def format_repeatability(video_id: str, min_similarity: float = 0.6, niche: str 
     return rp.format_repeatability(video_id, min_similarity=min_similarity, niche=niche)
 
 
+# ------------------------------------------------ where to enter (plan 27)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def rank_niches(refresh: bool = False) -> dict:
+    """Which niche to enter: every niche with a 0-100 score and the six terms
+    behind it (demand trend, supply growth, newcomers breaking out, RPM of the
+    dominant category, share of templated channels, policy signals), each with
+    its weight and points. A niche too small to judge (trend "insufficient-
+    data") gets no score -- it is not ranked low, it is not ranked. The weights
+    are a judgement and the RPM a guess: show the breakdown, never the score
+    alone. Cached for an hour (refresh recomputes). Zero quota."""
+    from application import niche_ranking as nr
+    return nr.rank_niches(refresh=refresh)
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def compare_niches(niches: list) -> dict:
+    """2-3 niches side by side: the score breakdown of rank_niches plus the
+    overview numbers it does not use (videos, channels, median outlier score,
+    median subscribers, Shorts share, small-channel breakouts). Zero quota."""
+    from application import niche_ranking as nr
+    try:
+        return nr.compare_niches(niches)
+    except ValueError as e:
+        return {"error": str(e)}
+
+
 # ------------------------------------------------ language gaps (plan 26)
 
 @mcp.tool(annotations=ToolAnnotations(

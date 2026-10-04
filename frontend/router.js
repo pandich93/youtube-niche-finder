@@ -10,6 +10,7 @@ import { viewKeywords } from './screens/keywords.js';
 import { viewTopTags } from './screens/tags.js';
 import { viewTracker } from './screens/tracker.js';
 import { viewAlerts } from './screens/alerts.js';
+import { viewEnter } from './screens/enter.js';
 import { viewIdeas } from './screens/ideas.js';
 import { viewLanguage } from './screens/language.js';
 import { viewTranscripts } from './screens/transcripts.js';
@@ -61,6 +62,7 @@ const ROUTES = {
   packaging: { title: 'Перепаковки', run: viewPackaging },
   metadata: { title: 'Разбор метаданных', run: viewMetadata },
   niches: { title: 'Ниши', run: viewNiches },
+  enter: { title: 'Где заходить', run: viewEnter },
   own: { title: 'Мои каналы', run: viewOwn },
   data: { title: 'Данные', run: viewData },
   help: { title: 'Справка и FAQ', run: viewHelp },

@@ -14,6 +14,7 @@ from domain import language_gaps as LG
 from domain import metrics as M
 from domain import milestones as MS
 from domain import monetization as MZ
+from domain import niche_ranking as NRK
 from domain import policy_signals as PS
 from domain import repeatability as RP
 from domain import saturation as SAT
@@ -128,6 +129,16 @@ CATALOG = {
                     "inputs": ["эмбеддинги", "множители", "язык видео"],
                     "minSample": f"{LG.THIN_CORPUS_VIDEOS}+ видео на целевом языке, иначе «не снято» "
                                  "может значить «не собрано»"},
+    "nicheRank": {"name": "Где заходить", "source": ESTIMATE,
+                  "formula": "0–100 из шести слагаемых с весами: " + ", ".join(
+                      f"{NRK.LABELS[k].lower()} {w}" for k, w in NRK.WEIGHTS.items()) +
+                             ". Каждое слагаемое — 0–100 баллов по линейной шкале, итог — взвешенное "
+                             "среднее известных; веса — суждение, RPM — оценка. Без балла, если тренд "
+                             "ниши «мало данных»",
+                  "inputs": ["тренд ниши", "новички", "RPM категории", "шаблонность каналов",
+                             "сигналы по правилам"],
+                  "minSample": f"тренд: {SAT.MIN_VIDEOS}+ видео в каждом окне; известно "
+                               f"{round(NRK.MIN_COVERAGE * 100)}%+ веса"},
     "expectedCurve": {"name": "Ожидаемая траектория", "source": ESTIMATE,
                       "formula": "медиана просмотров канала × кривая взросления(возраст)",
                       "inputs": ["медиана канала", "кривая взросления"],

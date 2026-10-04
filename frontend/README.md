@@ -146,6 +146,16 @@ One idea per line → a verdict for each against your own corpus
 are adjustable; every idea expands to the matching videos, and the result
 can be exported to CSV client-side.
 
+### Where to enter (`#/enter`)
+
+Every niche in one table (`GET /api/niches/ranking`, cached for an hour,
+"Пересчитать" forces it): a 0-100 score, the trend chip and the six terms it
+is made of -- each cell shows the points and the raw value, a click on a column
+header sorts by it. A niche too small to judge (trend "мало данных") shows
+"без балла" instead of a low number. Tick 2-3 niches and "Сравнить выбранные"
+(`GET /api/niches/compare`) puts all their numbers side by side. Weights are
+a judgement and RPM a guess; the screen says so.
+
 ### Other language (`#/language`)
 
 Pick a pair of languages (source -> target; the list shows how many videos each
