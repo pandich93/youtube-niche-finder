@@ -17,6 +17,11 @@
   --border:       rgba(255,255,255,.10);
   --series-1:     #3987e5;
   --series-soft:  rgba(57,135,229,.18);
+  /* план 20: ещё четыре серии для сравнения видео */
+  --series-2:     #f0913f;
+  --series-3:     #45b97a;
+  --series-4:     #a682e6;
+  --series-5:     #e46b8c;
   --good:         #0ca30c;
   --warning:      #fab219;
   --critical:     #d03b3b;
@@ -39,6 +44,10 @@
   --border:       rgba(11,11,11,.10);
   --series-1:     #2a78d6;
   --series-soft:  rgba(42,120,214,.14);
+  --series-2:     #d2701c;
+  --series-3:     #1f8a50;
+  --series-4:     #7b55c7;
+  --series-5:     #c4456a;
   --good:         #006300;
 }
 
@@ -357,6 +366,12 @@ td.wrap { white-space: normal; max-width: 380px; }
 .chart .dot  { fill: var(--series-1); stroke: var(--surface); stroke-width: 2; }
 /* отметка даты на оси X (план 18): пунктир, наводится как точка */
 .chart .mark { stroke: var(--muted); stroke-width: 2; stroke-dasharray: 4 4; pointer-events: stroke; }
+/* план 20: траектории — своя линия у каждого видео, ожидаемая пунктиром */
+.chart .tline { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.chart .tline.expected { stroke-dasharray: 5 4; stroke-width: 1.5; opacity: .8; }
+.chart .tdot { stroke: var(--surface); stroke-width: 1.5; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+.chart-legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 .chart text  { fill: var(--muted); font-size: 11px; }
 .chart .crosshair { stroke: var(--axis); stroke-width: 1; stroke-dasharray: 3 3; }
 

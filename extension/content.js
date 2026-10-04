@@ -407,6 +407,13 @@
       if (body) body.innerHTML = whyViralHtml(r.data);
     });
 
+    // план 20: мини-график просмотров по снимкам вместо одной строки «история: N»
+    const tj = await send({ type: 'trajectory', videoId });
+    if (!root.isConnected || getVideoId() !== videoId) return;
+    const foot = root.querySelector('.nf-foot');
+    const tv = tj.ok && tj.data?.videos?.[0];
+    if (foot && tv && tv.points.length >= 2) foot.innerHTML = sparkline(tv);
+
     const pk = await send({ type: 'packaging', videoId });
     if (!root.isConnected || getVideoId() !== videoId) return;
     const pkBox = root.querySelector('.nf-pk');
@@ -486,6 +493,24 @@
       <b>$${decimal(nm.monthly_usd_low, 0)}–$${decimal(nm.monthly_usd_high, 0)}</b> в месяц
       <span class="nf-hint" title="${esc(r.basis || '')}">RPM $${decimal(r.low, 1)}–$${decimal(r.high, 1)} ·
         грубая вилка: оценки RPM одной ниши расходятся до 7 раз</span></div>`;
+  }
+
+  // План 20: мини-график -- просмотры по возрасту из снимков, пунктир -- обычное
+  // видео этого канала к тому же возрасту (оценка). Без библиотек, свой SVG.
+  function sparkline(v) {
+    const W = 300, H = 56, pad = 3;
+    const x1 = Math.max(...v.points.map((p) => p.ageHours), 1);
+    const inX = (pts) => pts.filter((p) => p.ageHours <= x1);
+    const y1 = Math.max(...[...v.points, ...inX(v.expected)].map((p) => p.views), 1);
+    const px = (h) => pad + (h / x1) * (W - 2 * pad);
+    const py = (val) => H - pad - (val / y1) * (H - 2 * pad);
+    const d = (pts) => inX(pts).map((p, i) => `${i ? 'L' : 'M'}${px(p.ageHours).toFixed(1)},${py(p.views).toFixed(1)}`).join('');
+    const age = (h) => (h < 48 ? `${Math.round(h)} ч` : `${Math.round(h / 24)} дн`);
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" aria-label="просмотры по возрасту">
+        ${v.expected.length ? `<path d="${d(v.expected)}" fill="none" stroke="#898781" stroke-width="1.5" stroke-dasharray="4 3"/>` : ''}
+        <path d="${d(v.points)}" fill="none" stroke="#3987e5" stroke-width="2"/></svg>
+      <div class="nf-hint">${v.points.length} ${plural(v.points.length, 'снимок', 'снимка', 'снимков')} · ${
+        v.observedFromHours > 24 ? `наблюдаем с ${age(v.observedFromHours)} · ` : ''}до ${age(x1)} · пунктир — обычное видео канала (оценка)</div>`;
   }
 
   // Пороги YPP (план 12) -- что видно по открытым данным, не статус монетизации.

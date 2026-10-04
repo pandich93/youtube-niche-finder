@@ -58,6 +58,7 @@ from application import tags as TG
 from application import template_risk as TRK
 from application import thumbnail_search as TS
 from application import topic_watch as TW
+from application import trajectory as TJ
 from application import transcripts as TR
 from domain.users import LOCAL_USER_ID, multi_user_enabled
 from infrastructure import quota_owner
@@ -757,6 +758,16 @@ def delete_topic(request: Request, topic_id: int):
     if not out["removed"]:
         raise HTTPException(status_code=404, detail="topic not found")
     return out
+
+
+@app.get("/api/videos/trajectory")
+def videos_trajectory(ids: str):
+    """Plan 20: views by age for up to 5 comma-separated video ids, each with
+    its channel's expected curve. Zero quota."""
+    try:
+        return TJ.video_trajectory(ids.split(","))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/videos/{video_id}/repeatability")

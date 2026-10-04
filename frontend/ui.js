@@ -183,6 +183,14 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseleave', hideTip);
 document.addEventListener('scroll', hideTip, true);
 
+/* План 20: «сравнить» на карточке видео — в корзину сравнения и на её экран. */
+document.addEventListener('click', (e) => {
+  const el = e.target.closest?.('[data-compare]');
+  if (!el) return;
+  e.preventDefault();
+  location.hash = compareHref(el.dataset.compare);
+});
+
 /* ---------------------------------------------------------------- тосты */
 
 function toast(msg, kind = '') {
@@ -269,7 +277,8 @@ function videoCard(v) {
     </a>
     <div class="vcard-title">${esc(v.title)}</div>
     <div class="vcard-meta">${compact(v.views)} просмотров · ${ago(v.publishedAt)}
-      · <a href="#/brief/${esc(v.videoId)}" data-tip="Собрать бриф для своего видео из этого outlier">бриф</a></div>
+      · <a href="#/brief/${esc(v.videoId)}" data-tip="Собрать бриф для своего видео из этого outlier">бриф</a>
+      · <a href="#" data-compare="${esc(v.videoId)}" data-tip="Сравнить траекторию просмотров с другими видео (до 5)">сравнить</a></div>
     <div class="vcard-meta"><a href="#/channel/${esc(v.channelId)}">${esc(v.channelTitle || '')}</a>
       · ${compact(v.channelSubscribers)} подп.</div>
     <div class="vcard-chips">
@@ -347,6 +356,64 @@ function lineChart(points, { height = 180, valueLabel = 'значение', mark
     <text x="${m.l}" y="${H - 6}">${esc(new Date(x0).toLocaleDateString('ru-RU'))}</text>
     <text x="${W - m.r}" y="${H - 6}" text-anchor="end">${esc(new Date(x1).toLocaleDateString('ru-RU'))}</text>
   </svg>`;
+}
+
+/* План 20: траектории видео — просмотры по возрасту (часы с публикации) из снимков
+   воркера. У каждого видео свой цвет; пунктир того же цвета — ожидаемая кривая канала
+   (медиана канала × кривая взросления). Ось X — возраст, а не дата: так видео разных
+   дней сравниваются в одном возрасте. Отметки — смена заголовка/обложки. */
+const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)'];
+const MARK_LABEL = { title: 'сменили заголовок', thumbnail: 'сменили обложку',
+  thumbnail_image: 'сменили обложку', view_count_change: 'YouTube изменил подсчёт просмотров' };
+
+function ageLabel(h) {
+  return h < 48 ? `${Math.round(h)} ч` : `${Math.round(h / 24)} дн`;
+}
+
+function trajectoryChart(videos, { height = 260 } = {}) {
+  const withPts = (videos || []).filter((v) => v.points.length >= 2);
+  if (!withPts.length) return empty('нужно минимум два снимка — воркер снимает видео каждые 3 часа первую неделю');
+  const W = 720, H = height, m = { t: 12, r: 14, b: 26, l: 52 };
+  const all = withPts.flatMap((v) => [...v.points, ...v.expected]);
+  const x1 = Math.max(...withPts.flatMap((v) => v.points.map((p) => p.ageHours)), 1);
+  const y1 = Math.max(...all.filter((p) => p.ageHours <= x1 * 1.05).map((p) => p.views), 1) * 1.08;
+  const px = (h) => m.l + (Math.min(h, x1) / x1) * (W - m.l - m.r);
+  const py = (v) => m.t + (1 - v / y1) * (H - m.t - m.b);
+  const path = (pts) => pts.filter((p) => p.ageHours <= x1).map((p, i) =>
+    `${i ? 'L' : 'M'}${px(p.ageHours).toFixed(1)},${py(p.views).toFixed(1)}`).join('');
+  const ticks = [0, y1 / 2, y1];
+  const xticks = [0, x1 / 2, x1];
+  const series = withPts.map((v, i) => {
+    const c = SERIES[i % SERIES.length];
+    return `${v.expected.length ? `<path class="tline expected" d="${path(v.expected)}" style="stroke:${c}"/>` : ''}
+      <path class="tline" d="${path(v.points)}" style="stroke:${c}"/>
+      ${v.points.map((p) => `<circle class="tdot" cx="${px(p.ageHours).toFixed(1)}" cy="${py(p.views).toFixed(1)}" r="3"
+        style="fill:${c}" data-tip="${esc(v.title || v.videoId)}&lt;br&gt;${esc(ageLabel(p.ageHours))}: &lt;b&gt;${num(p.views)}&lt;/b&gt; просмотров"/>`).join('')}
+      ${v.marks.filter((mk) => mk.ageHours >= 0 && mk.ageHours <= x1).map((mk) => `<line class="mark" x1="${px(mk.ageHours).toFixed(1)}"
+        x2="${px(mk.ageHours).toFixed(1)}" y1="${m.t}" y2="${H - m.b}" style="stroke:${c}"
+        data-tip="${esc(v.title || v.videoId)}&lt;br&gt;${esc(ageLabel(mk.ageHours))}: ${esc(MARK_LABEL[mk.kind] || mk.kind)}"/>`).join('')}`;
+  }).join('');
+  const legend = withPts.map((v, i) => `<span><i style="background:${SERIES[i % SERIES.length]}"></i>${esc(v.title || v.videoId)}${
+    v.observedFromHours > 24 ? ` · наблюдаем с ${esc(ageLabel(v.observedFromHours))}` : ''}</span>`).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="просмотры по возрасту видео">
+    ${ticks.map((t) => `<line class="gridline" x1="${m.l}" x2="${W - m.r}" y1="${py(t).toFixed(1)}" y2="${py(t).toFixed(1)}"/>
+      <text x="${m.l - 8}" y="${(py(t) + 4).toFixed(1)}" text-anchor="end">${compact(t)}</text>`).join('')}
+    <line class="axis" x1="${m.l}" x2="${W - m.r}" y1="${H - m.b}" y2="${H - m.b}"/>
+    ${xticks.map((h, i) => `<text x="${px(h).toFixed(1)}" y="${H - 8}" text-anchor="${['start', 'middle', 'end'][i]}">${esc(ageLabel(h))}</text>`).join('')}
+    ${series}
+  </svg>
+  <div class="chart-legend">${legend}${withPts.some((v) => v.expected.length)
+    ? '<span><i style="background:var(--muted)"></i>пунктир — ожидание по каналу (оценка)</span>'
+    : '<span>ожидания по каналу нет: у канала собрано меньше 4 видео</span>'}</div>`;
+}
+
+/* Корзина сравнения (план 20): до 5 видео в localStorage; ссылка «сравнить»
+   открывает #/compare с этим видео и теми, что уже в корзине. */
+function compareHref(videoId) {
+  let ids = [];
+  try { ids = JSON.parse(localStorage.getItem('nf.compare') || '[]'); } catch { ids = []; }
+  ids = [...ids.filter((x) => x !== videoId), videoId].slice(-5);
+  return `#/compare/${ids.map(encodeURIComponent).join(',')}`;
 }
 
 /* Стабильный цвет на channelId -- один и тот же канал везде одного цвета
@@ -597,5 +664,5 @@ function yppSelect(id, cur) {
 
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
-         lineChart, VIEW_COUNT_CHANGE, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
+         lineChart, VIEW_COUNT_CHANGE, trajectoryChart, compareHref, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
          nicheTemplateRiskBlock, sponsorBlock, saturationChip, saturationBlock, yppLine, milestonesLine, yppSelect };

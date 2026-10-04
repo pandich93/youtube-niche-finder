@@ -220,6 +220,17 @@ adds the angle and title candidates, "Сохранить в черновики" 
 draft linked to the source and queues a missing transcript. Parts that could
 not be built are listed with the reason instead of being faked.
 
+### Compare trajectories (`#/compare/<id,id>`)
+
+Opened from the "сравнить" link on any video card or the brief's "Сравнить с
+другими". Up to five videos on one chart of views by age (hours since
+publishing, not dates), from the worker's snapshots
+(`/api/videos/trajectory`); a dashed line of the same colour is what a usual
+video of that channel would have at that age (median views x maturity curve,
+an estimate). Title and thumbnail swaps are marked on the curve. The basket
+is kept in the browser; remove a video with "Убрать". The brief shows the
+source video's own curve the same way. Zero quota.
+
 ### Metadata review (`#/metadata`)
 
 Checks a draft title/description/tags against your own corpus (`POST

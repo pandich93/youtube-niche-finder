@@ -304,6 +304,8 @@ const HANDLERS = {
   'why': (m) => explainOutlier(m.videoId, m.refresh),
   // план 21: сработал ли формат у других каналов (по собранной базе, квота 0)
   'repeatability': (m) => api(`/api/videos/${encodeURIComponent(m.videoId)}/repeatability`),
+  // план 20: просмотры по возрасту из снимков воркера, для мини-графика
+  'trajectory': (m) => api(`/api/videos/trajectory?ids=${encodeURIComponent(m.videoId)}`),
   'video': (m) => inspectVideo(m.videoId, m.refresh),
   'channel': (m) => inspectChannel(m.ref, m.refresh),
   'deep': (m) => channelDeep(m.channelId),

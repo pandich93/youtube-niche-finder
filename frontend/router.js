@@ -21,6 +21,7 @@ import { viewNiches } from './screens/niches.js';
 import { viewNiche } from './screens/niche.js';
 import { viewChannel } from './screens/channel.js';
 import { viewBrief } from './screens/brief.js';
+import { viewCompare } from './screens/compare.js';
 import { viewData } from './screens/data.js';
 import { viewHelp } from './screens/help.js';
 import { viewMcp } from './screens/mcp.js';
@@ -84,6 +85,10 @@ async function render() {
     // #/brief/<videoId>?gap=<вопрос зрителей> -- бриф под пробел (план 03).
     const gap = new URLSearchParams(query || '').get('gap');
     return guard(() => viewBrief(decodeURIComponent(arg), gap));
+  }
+  if (name === 'compare') {
+    $('#crumbSection').textContent = 'Сравнение'; setActive(null);
+    return guard(() => viewCompare(arg || ''));
   }
   if (name === 'niche' && arg) {
     $('#crumbSection').textContent = 'Ниша'; setActive('#/niches');

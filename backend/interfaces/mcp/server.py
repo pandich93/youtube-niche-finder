@@ -1228,6 +1228,22 @@ def mark_events_seen(ids: list = None, all_unseen: bool = False) -> dict:
     return alerts_mod.mark_seen(ids=ids, all_unseen=all_unseen, user_id=_uid())
 
 
+# ------------------------------------------------- video trajectory (plan 20)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def video_trajectory(video_ids: list) -> dict:
+    """Views by age (hours since publishing) for 1-5 videos from the worker's
+    snapshots, each next to the curve its channel would make (median views x
+    maturity curve), with marks for title/thumbnail swaps. Shows whether a
+    video took off on day one or grew slowly, and how yours compares with an
+    outlier at the same age. A video found late has no start of its curve
+    (observedFromHours). Zero quota."""
+    from application import trajectory as tj
+    return tj.video_trajectory(video_ids)
+
+
 # --------------------------------------------- format repeatability (plan 21)
 
 @mcp.tool(annotations=ToolAnnotations(

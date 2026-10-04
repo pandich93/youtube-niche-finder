@@ -24,6 +24,8 @@ The extension never talks to the outside world — only to `127.0.0.1`.
 * "Бриф" — opens the dashboard's brief for your own video built from this one;
 * "Show comments" — a live fetch of up to 50 comments (1 quota unit) with how
   many arrived in the first 24 hours; raw text, no sentiment analysis;
+* a small chart of the video's views by age from the worker's snapshots,
+  with the channel's usual curve dashed (`/api/videos/trajectory`);
 * "Формат повторяем?" — whether similar videos of other channels in your
   database became outliers too (`/api/videos/{id}/repeatability`, zero quota);
 * "Why did it take off?" — an LLM explanation of why the video beat its

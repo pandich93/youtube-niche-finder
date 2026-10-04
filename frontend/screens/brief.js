@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty } from '../ui.js';
+import { $, api, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, trajectoryChart, compareHref } from '../ui.js';
 import { view } from '../shared.js';
 
 /* ------------------------------------------------------- Бриф из outlier */
@@ -79,6 +79,7 @@ function briefHtml(b, llm) {
         <div class="vcard-meta">${compact(r.views)} просмотров · сходство ${Math.round((r.similarity || 0) * 100)}%</div>
       </article>`).join('')}</div></div>` : ''}
 
+    <div id="briefTraj"></div>
     <div id="briefRepeat"></div>
     <div id="briefThumbs"></div>
 
@@ -141,6 +142,21 @@ async function fillRepeatability(videoId) {
   } catch { /* не критично: бриф и без этого блока полный */ }
 }
 
+/* Траектория исходного видео (план 20): как оно набирало просмотры по сравнению
+   с обычным видео своего канала. Без снимков блок не показывается. */
+async function fillTrajectory(videoId) {
+  const box = $('#briefTraj');
+  if (!box) return;
+  try {
+    const d = await api(`/api/videos/trajectory?ids=${encodeURIComponent(videoId)}`);
+    const v = d.videos[0];
+    if (!v || v.points.length < 2) return;
+    box.innerHTML = `<div class="card">${sectionHead('Как набирало просмотры', 'по снимкам воркера; пунктир — обычное видео этого канала',
+        `<a class="btn btn-ghost btn-sm" href="${compareHref(videoId)}">Сравнить с другими</a>`)}
+      ${trajectoryChart(d.videos)}</div>`;
+  } catch { /* не критично: бриф и без этого блока полный */ }
+}
+
 async function viewBrief(videoId, gapTopic = null) {
   let useLlm = false;
   const load = async (save) => api('/api/briefs', { method: 'POST', body: { videoId, save, useLlm, gapTopic } });
@@ -148,6 +164,7 @@ async function viewBrief(videoId, gapTopic = null) {
     view.innerHTML = briefHtml(b, useLlm);
     fillSimilarThumbs(videoId);
     fillRepeatability(videoId);
+    fillTrajectory(videoId);
     const saveBtn = $('#saveBrief');
     if (saveBtn) saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = true;

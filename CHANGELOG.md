@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Video trajectories and comparison** (plan 20) — how a video gathered
+  views, by age (hours since publishing) rather than by date, from the
+  worker's snapshots, next to the curve a usual video of its channel would
+  make (median views x maturity curve, an estimate) and with title/thumbnail
+  swaps marked. `video_trajectory` (MCP, 85 tools) and
+  `GET /api/videos/trajectory` take up to five videos; the brief shows the
+  source video's curve; a "сравнить" link on every video card fills a
+  comparison of up to five on `#/compare/<id,id>`; the extension's video
+  panel shows a small chart instead of a snapshot count. Zero quota.
+
 - **"Формат повторяем?"** (plan 21) — before copying an outlier, see whether
   its format worked for other channels too. `format_repeatability` (MCP),
   `GET /api/videos/{id}/repeatability`, a card in the brief and a button in
