@@ -66,6 +66,7 @@ def _near_duplicates(title, description, niche=None, channel_id=None,
             joins = " JOIN video_niches vn ON vn.video_id = v.video_id"
         checked = conn.execute(
             f"SELECT COUNT(*) AS n FROM videos v{joins} WHERE {where}", params).fetchone()["n"]
+        db.filtered_ann(conn)
         sql = (f"SELECT v.video_id, v.title, v.view_count, "
               f"(1 - (v.embedding_v <=> ?::vector)) AS similarity "
               f"FROM videos v{joins} WHERE {where} "

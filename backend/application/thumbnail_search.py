@@ -120,6 +120,7 @@ def _nearest(conn, vec, niche=None, limit=12, exclude_video=None, exclude_channe
            f"WHERE {' AND '.join(where)}"
     if db.pgvector_available():
         lit = IP.to_pgvector_literal(vec)
+        db.filtered_ann(conn)
         rows = conn.execute(
             f"SELECT {cols}, (1 - (v.thumb_embedding_v <=> ?::vector)) AS similarity {base} "
             f"AND v.thumb_embedding_v IS NOT NULL ORDER BY v.thumb_embedding_v <=> ?::vector LIMIT ?",

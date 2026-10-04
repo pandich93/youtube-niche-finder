@@ -213,7 +213,9 @@ button). Builds a brief for your own video from one outlier
 (`POST /api/briefs`): the source's numbers, its hook from a pasted transcript,
 niche title patterns and best time, whether the topic is already covered
 (without the source itself), title candidates and similar videos as thumbnail
-references. It opens as a free preview without an LLM; "Добавить LLM-разбор"
+references, and a "Формат повторяем?" card (`/api/videos/{id}/repeatability`):
+whether similar videos of other channels became outliers too, or this looks
+like one channel's luck. It opens as a free preview without an LLM; "Добавить LLM-разбор"
 adds the angle and title candidates, "Сохранить в черновики" stores it as a
 draft linked to the source and queues a missing transcript. Parts that could
 not be built are listed with the reason instead of being faked.

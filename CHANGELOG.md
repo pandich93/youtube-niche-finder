@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **"Формат повторяем?"** (plan 21) — before copying an outlier, see whether
+  its format worked for other channels too. `format_repeatability` (MCP),
+  `GET /api/videos/{id}/repeatability`, a card in the brief and a button in
+  the extension's video panel take the video's embedding neighbours on other
+  channels, score each with the usual outlier baseline, count every channel
+  once by its best video and answer `repeatable` (3+ channels got >= 2x),
+  `mixed`, `one_off` or `unknown` (too few similar videos collected), with
+  examples and how many other channels start their titles the same way. The
+  "Outlier → своё видео" scenario asks for it. Zero quota (84 MCP tools).
+
 - **Topic alerts** (plan 19) — name a topic in plain words on the "Алерты"
   screen, with `watch_topic` (MCP), `POST /api/topics` or the extension's
   "Следить за темой" button. Every hour the worker compares the topics with
@@ -32,6 +42,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   change -- an estimate, not YouTube data. A tracked channel passing a
   milestone between its two latest snapshots raises a new `milestone` alert
   (dashboard, extension, Telegram/webhook).
+
+### Fixed
+
+- **Similar videos and thumbnails no longer come back empty behind a crowded
+  channel** — the pgvector HNSW index hands back about 40 nearest rows and the
+  WHERE filter runs after it, so "similar videos of other channels" returned
+  nothing whenever a channel's own near-identical uploads filled those 40
+  (seen live on a channel with 476 uploads). `similar_videos`,
+  `similar_thumbnails` / thumbnail search and the near-duplicate check of the
+  metadata review now turn on pgvector 0.8's iterative scan
+  (`hnsw.iterative_scan = strict_order`) for their query; older pgvector
+  ignores it safely.
 
 ### Changed
 

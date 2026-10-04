@@ -244,6 +244,11 @@
 
         <div class="nf-pk"></div>
 
+        <div class="nf-sec nf-rep-sec">
+          <button class="nf-btn nf-ghost nf-rep-btn" title="Похожие по смыслу видео других каналов: у кого ещё это сработало. Квота не тратится">Формат повторяем?</button>
+          <div class="nf-rep-body"></div>
+        </div>
+
         ${llmOn ? `<div class="nf-sec nf-why-sec">
           <button class="nf-btn nf-ghost nf-why-btn">Почему выстрелило?</button>
           <div class="nf-why-body"></div>
@@ -359,6 +364,29 @@
       }
       commentsBtn.remove();
       if (body) body.innerHTML = commentsHtml(r.data, d.video.publishedAt);
+    });
+
+    // план 21: повторялся ли формат у других каналов, или это разовая удача
+    const repBtn = root.querySelector('.nf-rep-btn');
+    if (repBtn) repBtn.addEventListener('click', async () => {
+      repBtn.disabled = true;
+      repBtn.textContent = 'Считаю…';
+      const r = await send({ type: 'repeatability', videoId });
+      if (!root.isConnected) return;
+      const body = root.querySelector('.nf-rep-body');
+      if (!r.ok) {
+        repBtn.disabled = false;
+        repBtn.textContent = 'Не получилось, повторить';
+        if (body) body.innerHTML = `<div class="nf-hint">${esc(r.error || '')}</div>`;
+        return;
+      }
+      const d = r.data;
+      const label = { repeatable: 'повторяем', mixed: 'сработал не у всех',
+        one_off: 'похоже на разовую удачу', unknown: 'мало данных' }[d.verdict] || d.verdict;
+      repBtn.remove();
+      if (body) body.innerHTML = `<div class="nf-row"><span class="nf-muted">Формат:</span> <b>${esc(label)}</b>
+        <span class="nf-hint">${d.verdict === 'unknown' ? (d.reason === 'no-embedding' ? 'нет эмбеддинга' : 'мало похожих видео')
+          : `outlier у ${d.channelsHit} из ${d.channels} каналов`} · оценка по собранной базе</span></div>`;
     });
 
     const whyBtn = root.querySelector('.nf-why-btn');

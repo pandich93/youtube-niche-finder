@@ -214,3 +214,31 @@ def test_backfill_migrates_existing_blob_only_rows_into_embedding_v():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q", "-rs", "-p", "no:cacheprovider"]))
+
+
+def test_a_crowded_channel_does_not_hide_other_channels_from_the_index():
+    """HNSW returns ~ef_search (40) nearest rows and only then applies WHERE:
+    when the 40 nearest all belong to the video's own channel,
+    exclude_same_channel used to come back empty. pgvector >= 0.8's iterative
+    scan keeps walking the graph until LIMIT rows pass the filter."""
+    _require_pgvector()
+    base = _rand_vec(500)
+
+    def near(seed, spread):
+        v = base + spread * _rand_vec(seed)
+        return emb.to_blob((v / np.linalg.norm(v)).astype(np.float32))
+
+    conn = db.get_conn()
+    db.upsert_channel(conn, _channel("UCcrowded"))
+    db.upsert_channel(conn, _channel("UCother"))
+    for i in range(80):          # one channel, 80 near-identical videos
+        db.upsert_video(conn, {**_video(f"vcrowd{i}", "UCcrowded", f"crowd {i}", 0),
+                               "embedding": near(600 + i, 0.01)})
+    for i in range(5):           # another channel, a little further away
+        db.upsert_video(conn, {**_video(f"vother{i}", "UCother", f"other {i}", 0),
+                               "embedding": near(700 + i, 0.3)})
+    conn.commit()
+    conn.close()
+    out = Q.similar_videos("vcrowd0", limit=5, exclude_same_channel=True)
+    assert {s["channelId"] for s in out["similar"]} == {"UCother"}
+    assert len(out["similar"]) == 5

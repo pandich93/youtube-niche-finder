@@ -1228,6 +1228,24 @@ def mark_events_seen(ids: list = None, all_unseen: bool = False) -> dict:
     return alerts_mod.mark_seen(ids=ids, all_unseen=all_unseen, user_id=_uid())
 
 
+# --------------------------------------------- format repeatability (plan 21)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def format_repeatability(video_id: str, min_similarity: float = 0.6, niche: str = None) -> dict:
+    """Did this video's format work for OTHER channels too, or was it one
+    channel's luck? Takes the video's embedding neighbours on other channels
+    (cosine >= min_similarity), scores each with the usual outlier baseline,
+    and counts each channel once by its best one: 'repeatable' (3+ channels
+    got >= 2x), 'mixed', 'one_off' (nobody else did), or 'unknown' (too few
+    similar videos collected -- not "it never worked"). Also says how many
+    other channels start their titles the same way. Run it before copying an
+    outlier. Zero quota."""
+    from application import repeatability as rp
+    return rp.format_repeatability(video_id, min_similarity=min_similarity, niche=niche)
+
+
 # ------------------------------------------------------ topic alerts (plan 19)
 
 @mcp.tool(annotations=ToolAnnotations(

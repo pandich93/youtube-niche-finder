@@ -49,6 +49,7 @@ from infrastructure.postgres.schema import (  # noqa: F401
     SCHEMA,
     SCHEMA_VERSION,
     _existing_columns,
+    filtered_ann,
     init_db,
     migrate,
     now_iso,

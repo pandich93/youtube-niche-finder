@@ -50,6 +50,7 @@ from application import niche_export as NE
 from application import notify_settings as NS
 from application import own_channels as OWN
 from application import packaging as PKG
+from application import repeatability as RP
 from application import saturation as SAT
 from application import search as Q
 from application import sponsors as SP
@@ -756,6 +757,13 @@ def delete_topic(request: Request, topic_id: int):
     if not out["removed"]:
         raise HTTPException(status_code=404, detail="topic not found")
     return out
+
+
+@app.get("/api/videos/{video_id}/repeatability")
+def video_repeatability(video_id: str, min_similarity: float = RP.DEFAULT_MIN_SIMILARITY,
+                        niche: str = None):
+    """Plan 21: did this video's format work for other channels too? Zero quota."""
+    return RP.format_repeatability(video_id, min_similarity=min_similarity, niche=niche)
 
 
 @app.get("/api/title-changes")

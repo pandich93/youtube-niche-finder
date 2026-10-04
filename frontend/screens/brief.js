@@ -79,6 +79,7 @@ function briefHtml(b, llm) {
         <div class="vcard-meta">${compact(r.views)} просмотров · сходство ${Math.round((r.similarity || 0) * 100)}%</div>
       </article>`).join('')}</div></div>` : ''}
 
+    <div id="briefRepeat"></div>
     <div id="briefThumbs"></div>
 
     ${skippedBlock(b.skipped)}
@@ -112,12 +113,41 @@ async function fillSimilarThumbs(videoId) {
   } catch { /* не критично: бриф и без этого блока полный */ }
 }
 
+/* «Формат повторяем?» (план 21): сработал ли такой ролик у других каналов, или это
+   разовая удача одного. Оценка по собранной базе, не данные YouTube. */
+const REPEAT_TEXT = {
+  repeatable: ['chip-good', 'формат повторяем'],
+  mixed: ['', 'сработал не у всех'],
+  one_off: ['chip-bad', 'похоже на разовую удачу'],
+  unknown: ['', 'мало данных'],
+};
+
+async function fillRepeatability(videoId) {
+  const box = $('#briefRepeat');
+  if (!box) return;
+  try {
+    const d = await api(`/api/videos/${encodeURIComponent(videoId)}/repeatability`);
+    const [cls, label] = REPEAT_TEXT[d.verdict] || ['', d.verdict];
+    const why = d.reason === 'no-embedding' ? 'у видео ещё нет эмбеддинга — воркер посчитает его в течение часа'
+      : d.verdict === 'unknown' ? `похожих видео у других каналов собрано мало (${num(d.similarVideos)})`
+      : `outlier ≥ ×${d.hitScore} у ${num(d.channelsHit)} из ${num(d.channels)} каналов с похожими видео; медиана лучшего видео канала ×${d.medianChannelBest}`;
+    box.innerHTML = `<div class="card">${sectionHead('Формат повторяем?', 'похожие по смыслу видео других каналов — у кого ещё это сработало')}
+      <div><span class="chip ${cls}">${esc(label)}</span> ${esc(why)}</div>
+      ${d.examples?.length ? `<ul class="digest-list">${d.examples.slice(0, 6).map((m) =>
+        `<li style="white-space:normal"><a href="https://www.youtube.com/watch?v=${esc(m.videoId)}" target="_blank" rel="noopener">${esc(m.title)}</a>
+          · ${esc(m.channelTitle || '')} · ×${esc(m.outlierScore)} · сходство ${Math.round((m.similarity || 0) * 100)}%</li>`).join('')}</ul>` : ''}
+      ${d.titleOpening?.opening ? `<div class="section-sub">Так же («${esc(d.titleOpening.opening)}…») начинают заголовки ещё ${num(d.titleOpening.otherChannels)} каналов.</div>` : ''}
+      <div class="section-sub">Оценка по собранной базе: «разовая удача» может значить, что каналы, повторившие формат, просто не собраны.</div></div>`;
+  } catch { /* не критично: бриф и без этого блока полный */ }
+}
+
 async function viewBrief(videoId, gapTopic = null) {
   let useLlm = false;
   const load = async (save) => api('/api/briefs', { method: 'POST', body: { videoId, save, useLlm, gapTopic } });
   const draw = (b) => {
     view.innerHTML = briefHtml(b, useLlm);
     fillSimilarThumbs(videoId);
+    fillRepeatability(videoId);
     const saveBtn = $('#saveBrief');
     if (saveBtn) saveBtn.addEventListener('click', async () => {
       saveBtn.disabled = true;

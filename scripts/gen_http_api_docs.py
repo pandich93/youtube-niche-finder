@@ -80,6 +80,7 @@ SUMMARY = {
     "GET /api/channels/{channel_id}/template-risk": ("channels", "How much the channel's recent uploads look like one template, with the reasons (a heuristic)."),
     "GET /api/videos/{video_id}/similar": ("videos", "Videos similar by embedding, optionally excluding the same channel."),
     "GET /api/videos/{video_id}/similar-thumbnails": ("videos", "Videos whose thumbnail looks like this one (CLIP vectors)."),
+    "GET /api/videos/{video_id}/repeatability": ("videos", "Did this video's format work for other channels too: repeatable / mixed / one_off / unknown (plan 21)."),
     "GET /api/videos/{video_id}/packaging": ("videos", "Title and thumbnail history of one video."),
     "GET /api/videos/{video_id}/hook": ("videos", "Hook score of the video's first ~30 seconds from its transcript; `llm=true` adds an LLM read."),
     "GET /api/video/{video_id}/why": ("videos", "\"Why did it take off\" -- an LLM explanation of an outlier; 204 when no LLM is configured."),

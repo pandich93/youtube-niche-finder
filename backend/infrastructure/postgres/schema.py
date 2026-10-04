@@ -549,6 +549,27 @@ def pgvector_available() -> bool:
     return bool(_pgvector_available)
 
 
+def filtered_ann(conn) -> None:
+    """Before an HNSW query with a WHERE filter (other channel, niche, a
+    similarity floor): HNSW hands back ~hnsw.ef_search (40) nearest rows and
+    the filter runs after, so when those all fail it -- e.g. a channel's own
+    40 near-identical uploads -- the query returns nothing. pgvector >= 0.8
+    keeps walking the graph until LIMIT rows pass (iterative scan;
+    strict_order keeps exact distance order). SET LOCAL lasts until the
+    transaction ends. Older pgvector rejects the setting: the savepoint keeps
+    that from aborting the caller's transaction, and the query then behaves
+    as before."""
+    try:
+        conn.execute("SAVEPOINT nf_filtered_ann")
+        try:
+            conn.execute("SET LOCAL hnsw.iterative_scan = strict_order")
+            conn.execute("RELEASE SAVEPOINT nf_filtered_ann")
+        except Exception:
+            conn.execute("ROLLBACK TO SAVEPOINT nf_filtered_ann")
+    except Exception:
+        pass
+
+
 def _ensure_pgvector(conn) -> bool:
     """Best-effort, never raises: enable the extension, add embedding_v +
     its HNSW index if they're not there yet. Only succeeds on an image that

@@ -302,6 +302,8 @@ const HANDLERS = {
   'health': () => health(),
   'stats': () => stats(),
   'why': (m) => explainOutlier(m.videoId, m.refresh),
+  // план 21: сработал ли формат у других каналов (по собранной базе, квота 0)
+  'repeatability': (m) => api(`/api/videos/${encodeURIComponent(m.videoId)}/repeatability`),
   'video': (m) => inspectVideo(m.videoId, m.refresh),
   'channel': (m) => inspectChannel(m.ref, m.refresh),
   'deep': (m) => channelDeep(m.channelId),

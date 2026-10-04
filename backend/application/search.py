@@ -451,6 +451,7 @@ def similar_videos(video_id: str, niche: str = None, limit: int = 10,
         candidates = conn.execute(
             f"SELECT COUNT(*) AS n FROM videos v{joins} WHERE {where_sql}", params
         ).fetchone()["n"]
+        db.filtered_ann(conn)
         sql = (f"SELECT v.video_id, v.title, v.view_count, v.published_at, v.channel_id, "
               f"(1 - (v.embedding_v <=> ?::vector)) AS similarity "
               f"FROM videos v{joins} WHERE {where_sql} "
