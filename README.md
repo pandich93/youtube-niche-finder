@@ -25,7 +25,7 @@ No subscription and no paid LLM key: semantic judgement ("is this channel
 faceless?", "is this on topic?") is done by the model calling the tools, not
 by the server. An LLM is optional and off by default.
 
-![niche-finder dashboard: overview — channels, videos, outlier channels, trending categories and keywords](assets/dashboard.jpg)
+![niche-finder dashboard: overview — corpus totals, the last 24 hours (new outliers, accelerating videos, growing channels), recent outlier channels and future competition](assets/dashboard.jpg)
 
 ## Contents
 
@@ -147,6 +147,14 @@ by the server. An LLM is optional and off by default.
 <tr>
 <td width="50%"><img src="assets/niches.jpg" alt="Niches"><br><sub><b>Niches</b> — everything collected under your own labels</sub></td>
 <td width="50%"><img src="assets/data.jpg" alt="Data"><br><sub><b>Data</b> — database state and manual collection</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="assets/find.jpg" alt="Find a niche"><br><sub><b>Find a niche</b> — semantic search over the collected corpus, no quota</sub></td>
+<td width="50%"><img src="assets/alerts.jpg" alt="Alerts"><br><sub><b>Alerts</b> — new outliers and accelerating videos on tracked channels</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="assets/packaging.jpg" alt="Repackaging history"><br><sub><b>Repackaging</b> — title and thumbnail changes, before / after</sub></td>
+<td width="50%"><img src="assets/ideas.jpg" alt="Idea checker"><br><sub><b>Idea checker</b> — free, recently covered, proven demand or flop</sub></td>
 </tr>
 </table>
 

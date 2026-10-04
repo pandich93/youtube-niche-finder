@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- README screenshots retaken for the 0.2.0 dashboard (21-item sidebar) and
+  four new ones added: find a niche, alerts, repackaging, idea checker.
+
 ## [0.2.0] - 2026-10-04
 
 Everything since the first public release: the tool count grew from 24 to 80
