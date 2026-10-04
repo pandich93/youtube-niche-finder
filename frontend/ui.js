@@ -752,6 +752,69 @@ function yppSelect(id, cur) {
       opt('shorts-path-met', 'порог пройден по Shorts')}</select></label>`;
 }
 
+/* Чистая прибыль (план 30): вилка выручки минус расходы выбранного профиля.
+   target: { channel_id } или { niche }. Профили редактируются на экране «Данные». */
+const PROFIT_VERDICT = { profitable: ['chip-good', 'в плюсе'], loss: ['chip-bad', 'в минусе'],
+  uncertain: ['chip-warn', 'не ясно: зависит от RPM'] };
+
+const UPLOADS_BASIS = (b) => (b === 'set by you' ? 'заданы вами'
+  : b.startsWith('long videos') ? 'длинные видео за 30 дней' : 'по умолчанию');
+
+function money(v) {
+  if (v == null) return '—';
+  const s = `$${Math.abs(Number(v)).toLocaleString('ru-RU', { maximumFractionDigits: 2 })}`;
+  return v < 0 ? `−${s}` : s;
+}
+function moneyRange(r) { return `${money(r.low)} … ${money(r.high)}`; }
+
+function profitResult(d) {
+  if (!d.found) return empty(d.hint || 'нет данных');
+  const part = d.month || d.video;
+  const [cls, label] = PROFIT_VERDICT[part.verdict] || ['', part.verdict];
+  const per = d.month ? 'в месяц' : 'за видео';
+  const be = d.video?.breakEvenViews;
+  return `
+    ${d.yppWarning ? notice('Канал не проходит полный уровень YPP (1000 подписчиков): доход с рекламы начинается с него, до того реальная выручка может быть нулевой.', 'warn') : ''}
+    ${d.hint ? notice('Профиля расходов нет — расходы считаются нулевыми. Добавьте профиль на экране «Данные».') : ''}
+    <div class="tiles">
+      ${tile(`Выручка ${per}`, moneyRange(part.revenue), `середина ${money(part.revenue.mid)}`)}
+      ${tile(`Расходы ${per}`, money(part.cost), d.month ? `${num(d.month.uploads)} видео × ${money(d.month.costPerVideo)} + ${money(d.month.overhead)}` : '')}
+      ${tile(`Прибыль ${per}`, moneyRange(part.profit), `середина ${money(part.profit.mid)}`)}
+      ${tile('Итог', `<span class="chip ${cls}">${esc(label)}</span>`)}
+      ${be ? tile('Окупается с', `${num(be.mid)} просм.`, `от ${num(be.high)} до ${num(be.low)} — по RPM`) : ''}
+    </div>
+    <div class="section-sub" style="margin-top:8px">RPM: ${money(d.rpm.low)} … ${money(d.rpm.high)} (${d.rpmBasis.includes('real') ? 'ваш реальный RPM' : 'оценка по категории'})${
+      d.uploadsBasis ? ` · видео в месяц: ${num(d.month?.uploads)} (${esc(UPLOADS_BASIS(d.uploadsBasis))})` : ''}${
+      d.typicalVideo ? ' · типичное видео ниши: медиана просмотров и длины' : ''}. Только AdSense, без спонсоров.</div>`;
+}
+
+async function mountProfit(box, target) {
+  if (!box) return;
+  let profiles = [];
+  try { profiles = (await api('/api/cost-profiles')).profiles; } catch { /* без профилей тоже считаем */ }
+  const opts = profiles.length
+    ? profiles.map((p) => `<option value="${p.id}">${esc(p.name)}</option>`).join('')
+    : '<option value="">без расходов</option>';
+  box.innerHTML = `<div class="card">${sectionHead('Чистая прибыль', 'выручка минус расходы на производство', `
+      <select class="js-profit-profile">${opts}</select>
+      <input type="number" min="0" class="js-profit-vpm" placeholder="видео/мес" style="width:90px">
+      ${qmark('profit')}`)}
+    <div class="js-profit-body"><div class="section-sub">Считаю…</div></div>
+    <div class="section-sub" style="margin-top:6px">Профили расходов — на экране <a href="#/data">«Данные»</a>.</div></div>`;
+  const load = async () => {
+    const body = box.querySelector('.js-profit-body');
+    const vpm = box.querySelector('.js-profit-vpm').value;
+    try {
+      const d = await api('/api/profit' + q({ ...target, profile: box.querySelector('.js-profit-profile').value,
+        videos_per_month: vpm === '' ? undefined : vpm }));
+      body.innerHTML = profitResult(d);
+    } catch (e) { body.innerHTML = empty(e.message); }
+  };
+  box.querySelector('.js-profit-profile').addEventListener('change', load);
+  box.querySelector('.js-profit-vpm').addEventListener('change', load);
+  load();
+}
+
 /* «Что общего у выстреливших» (план 29): признаки, по которым outlier'ы ниши заметно
    отличаются от обычных видео. Корреляция, не причина. only: 'long' | 'short' | null. */
 function traitValue(t, v) {
@@ -800,4 +863,4 @@ function outlierTraitsBlock(d, only = null) {
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
          lineChart, VIEW_COUNT_CHANGE, trajectoryChart, compareHref, loadScores, scoreTip, qmark, policyBlock, nichePolicyBlock, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
-         nicheTemplateRiskBlock, outlierTraitsBlock, sponsorBlock, saturationChip, saturationBlock, yppLine, milestonesLine, yppSelect };
+         nicheTemplateRiskBlock, outlierTraitsBlock, mountProfit, sponsorBlock, saturationChip, saturationBlock, yppLine, milestonesLine, yppSelect };

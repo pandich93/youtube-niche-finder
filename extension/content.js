@@ -604,6 +604,7 @@
           <b>$${decimal(m.revenue.low_usd, 0)}–$${decimal(m.revenue.high_usd, 0)}</b>
           <span class="nf-hint">диапазон Social Blade · ${AD_ONLY}</span></div>
         ${nicheRpmRow(a?.revenue?.nicheModel)}
+        <div class="nf-profit"></div>
 
         ${a ? `<div class="nf-row"><span class="nf-muted">Ритм:</span>
           ${decimal(a.cadence.uploadsPerWeekLifetime, 1)} видео/нед. ·
@@ -694,6 +695,18 @@
 
     root.innerHTML = channelHtml(d, deep, risk);
     wireCommon(root, () => renderChannel(ref, { refresh: true }));
+
+    // план 30: чистая прибыль в месяц по первому профилю расходов
+    send({ type: 'profit', channelId: d.channelId }).then((pr) => {
+      const box = root.querySelector('.nf-profit');
+      const mo = pr.ok && pr.data?.found ? pr.data.month : null;
+      if (!box || !mo) return;
+      const label = { profitable: 'в плюсе', loss: 'в минусе', uncertain: 'не ясно' }[mo.verdict] || mo.verdict;
+      const prof = pr.data.profile?.name ? `профиль «${pr.data.profile.name}»` : 'без расходов — добавьте профиль в дашборде';
+      box.innerHTML = `<div class="nf-row"><span class="nf-muted">Прибыль в месяц:</span>
+        <b>$${decimal(mo.profit.low, 0)}–$${decimal(mo.profit.high, 0)}</b> (${esc(label)})
+        <span class="nf-hint">${esc(prof)} · расходы $${decimal(mo.cost, 0)}${pr.data.yppWarning ? ' · ниже полного YPP: реклама может не платить' : ''}</span></div>`;
+    });
 
     // план 22: сигналы по правилам монетизации -- одной строкой, без процента риска
     if (d.hasDeepAnalytics) {

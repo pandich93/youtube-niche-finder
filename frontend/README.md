@@ -146,6 +146,17 @@ One idea per line → a verdict for each against your own corpus
 are adjustable; every idea expands to the matching videos, and the result
 can be exported to CSV client-side.
 
+### Net profit (channel and niche screens, cost profiles on "Данные")
+
+A "Чистая прибыль" card on the channel screen (a month) and the niche screen
+(its typical video and a month of them; `GET /api/profit`): revenue, costs and
+profit as low ... high ranges, a verdict chip (в плюсе / в минусе / не ясно) and,
+for a niche, the views a video needs to pay for itself. Pick a cost profile
+and, optionally, the videos per month. A channel below the full YPP tier gets
+a warning that ad revenue may still be zero. Cost profiles are edited on the
+"Данные" screen (`/api/cost-profiles`): price per video, per minute of video,
+monthly overhead; they are personal.
+
 ### What outliers share (niche screen, brief)
 
 A card on the niche screen (`GET /api/niches/{slug}/outlier-traits`, loaded

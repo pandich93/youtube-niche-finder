@@ -53,6 +53,7 @@ from application import notify_settings as NS
 from application import outlier_traits as OT
 from application import own_channels as OWN
 from application import packaging as PKG
+from application import profit as PF
 from application import repeatability as RP
 from application import saturation as SAT
 from application import search as Q
@@ -797,6 +798,45 @@ def delete_topic(request: Request, topic_id: int):
     if not out["removed"]:
         raise HTTPException(status_code=404, detail="topic not found")
     return out
+
+
+@app.get("/api/cost-profiles")
+def cost_profiles(request: Request):
+    """Plan 30: your cost profiles (what a video costs to make)."""
+    return {"profiles": PF.list_profiles(user_id=_uid(request))}
+
+
+@app.post("/api/cost-profiles")
+def save_cost_profile(request: Request, payload: dict = Body(default={})):
+    """Plan 30: create a cost profile, or change one (`id`, or the same `name`)."""
+    try:
+        return PF.save_profile(payload.get("name"), per_video_usd=payload.get("perVideoUsd"),
+                               per_minute_usd=payload.get("perMinuteUsd"),
+                               monthly_usd=payload.get("monthlyUsd"), profile_id=payload.get("id"),
+                               user_id=_uid(request))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.delete("/api/cost-profiles/{profile_id}")
+def delete_cost_profile(request: Request, profile_id: int):
+    out = PF.delete_profile(profile_id, user_id=_uid(request))
+    if not out["removed"]:
+        raise HTTPException(status_code=404, detail="profile not found")
+    return out
+
+
+@app.get("/api/profit")
+def profit(request: Request, channel_id: str = None, video_id: str = None, niche: str = None,
+           profile: str = None, videos_per_month: int = None):
+    """Plan 30: revenue range minus a cost profile's costs, for a channel (a
+    month), a video or a niche's typical video. Zero quota."""
+    try:
+        return PF.profit_estimate(channel_id=channel_id, video_id=video_id, niche=niche,
+                                  profile=profile, videos_per_month=videos_per_month,
+                                  user_id=_uid(request))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/channels/{channel_id}/policy-signals")

@@ -304,6 +304,8 @@ const HANDLERS = {
   'why': (m) => explainOutlier(m.videoId, m.refresh),
   // план 21: сработал ли формат у других каналов (по собранной базе, квота 0)
   'repeatability': (m) => api(`/api/videos/${encodeURIComponent(m.videoId)}/repeatability`),
+  // план 30: чистая прибыль канала в месяц по первому профилю расходов
+  'profit': (m) => api(`/api/profit?channel_id=${encodeURIComponent(m.channelId)}`),
   // план 26: есть ли похожее видео на другом языке (по собранной базе, квота 0)
   'languageGap': (m) => api(`/api/videos/${encodeURIComponent(m.videoId)}/language-gap`),
   // план 20: просмотры по возрасту из снимков воркера, для мини-графика

@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, sponsorBlock, state, nicheTemplateRiskBlock, nichePolicyBlock, outlierTraitsBlock } from '../ui.js';
+import { $, api, q, num, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, sponsorBlock, state, nicheTemplateRiskBlock, nichePolicyBlock, outlierTraitsBlock, mountProfit } from '../ui.js';
 import { view, plabel, nicheOverviewBlock, render } from '../shared.js';
 
 /* Доля хитов по тегам одной группы -- barList из tag_stats. Группа вводится
@@ -396,6 +396,7 @@ async function viewNiche(slug) {
     + nicheTemplateRiskBlock(risk)
     + '<div id="nichePolicy"></div>'
     + '<div id="nicheTraits"></div>'
+    + '<div id="nicheProfit"></div>'
     + scatterSection(scatter.videos || [], scatterFilters)
     + sponsorBlock(sponsors, 'Спонсоры ниши', plabel(state.period))
     + gapsBlock(gaps, slug)
@@ -414,6 +415,8 @@ async function viewNiche(slug) {
   api(`/api/niches/${encodeURIComponent(slug)}/policy-signals`)
     .then((r) => { const box = $('#nichePolicy'); if (box) box.innerHTML = nichePolicyBlock(r); })
     .catch(() => {});
+  // план 30: прибыль типичного видео ниши и месяца таких видео
+  mountProfit($('#nicheProfit'), { niche: slug });
   // план 29: что общего у выстреливших -- по числам, отдельным запросом
   api(`/api/niches/${encodeURIComponent(slug)}/outlier-traits`)
     .then((r) => { const box = $('#nicheTraits'); if (box) box.innerHTML = outlierTraitsBlock(r); })

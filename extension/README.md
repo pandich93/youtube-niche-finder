@@ -40,7 +40,8 @@ The extension never talks to the outside world — only to `127.0.0.1`.
   below), and a link to the dashboard.
 
 **Channel page** (under the header): subscribers, average views per video,
-growth estimate and momentum, revenue forecast, a template-risk line (how much the
+growth estimate and momentum, revenue forecast, a net-profit line (the month's revenue range minus
+the first cost profile's costs, `/api/profit`; warns below the full YPP tier), a template-risk line (how much the
 recent uploads look like one template; a heuristic, not YouTube's verdict), a YPP-threshold
 line (which Partner Program thresholds it visibly meets — not a monetization status; until
 2027-02-01 it says the bar rises then), the next subscriber milestone with its estimated date, a line with the

@@ -25,6 +25,7 @@ async function viewData() {
       </div>
     </div>
     ${freshnessCard(fresh)}
+    <div id="costProfiles"></div>
     ${collectForm()}
     <div class="card">
       ${sectionHead('Обновить статистику', 'перечитывает счётчики и дописывает снимок — из этого берутся скорости')}
@@ -32,6 +33,7 @@ async function viewData() {
     </div>`;
   wireCollect(render);
   loadNotifySettings();
+  loadCostProfiles();
   $('#refreshBtn')?.addEventListener('click', async (e) => {
     e.target.disabled = true;
     try {
@@ -39,6 +41,52 @@ async function viewData() {
       toast(`Обновлено ${r.videos.refreshed} видео и ${r.channels.refreshed} каналов`, 'ok');
       render();
     } catch (err) { toast(err.message, 'err'); } finally { e.target.disabled = false; }
+  });
+}
+
+/* План 30: профили расходов -- сколько стоит сделать одно видео (озвучка, монтаж,
+   ИИ-генерация, стоки) и постоянные расходы в месяц. Личные: у каждого свои. */
+async function loadCostProfiles() {
+  const box = $('#costProfiles');
+  if (!box) return;
+  let profiles = [];
+  try { profiles = (await api('/api/cost-profiles')).profiles; } catch { return; }
+  const field = (id, label, value = '') => `<label class="field-label">${label}<br>
+    <input type="number" min="0" step="0.01" id="${id}" value="${esc(value)}" style="width:110px"></label>`;
+  box.innerHTML = `<div class="card">
+    ${sectionHead('Профили расходов', 'для калькулятора чистой прибыли на экранах канала и ниши, в долларах')}
+    ${profiles.length ? `<div class="table-wrap"><table><thead><tr><th>Профиль</th><th class="num">За видео</th>
+      <th class="num">За минуту</th><th class="num">В месяц</th><th></th></tr></thead><tbody>${profiles.map((p) => `<tr>
+        <td>${esc(p.name)}</td><td class="num">$${p.per_video_usd}</td><td class="num">$${p.per_minute_usd}</td>
+        <td class="num">$${p.monthly_usd}</td>
+        <td class="num"><button class="btn btn-ghost btn-sm js-cp-edit" data-id="${p.id}">изменить</button>
+          <button class="btn btn-ghost btn-sm js-cp-del" data-id="${p.id}">удалить</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="section-sub">Профилей пока нет: прибыль считается без расходов.</div>'}
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-top:12px">
+      <label class="field-label">Название<br><input type="text" id="cpName" placeholder="озвучка + монтаж" style="width:200px"></label>
+      ${field('cpVideo', 'За видео, $')}${field('cpMinute', 'За минуту видео, $')}${field('cpMonth', 'В месяц, $')}
+      <button class="btn" id="cpSave">Сохранить</button>
+    </div>
+    <div class="section-sub" style="margin-top:6px">Пример: озвучка $0,3 за минуту, монтаж $15 за видео, подписки $40 в месяц.
+      Профиль с тем же названием перезаписывается.</div></div>`;
+  let editing = null;
+  box.querySelectorAll('.js-cp-edit').forEach((b) => b.addEventListener('click', () => {
+    const p = profiles.find((x) => String(x.id) === b.dataset.id);
+    editing = p.id;
+    $('#cpName').value = p.name; $('#cpVideo').value = p.per_video_usd;
+    $('#cpMinute').value = p.per_minute_usd; $('#cpMonth').value = p.monthly_usd;
+  }));
+  box.querySelectorAll('.js-cp-del').forEach((b) => b.addEventListener('click', async () => {
+    try { await api(`/api/cost-profiles/${b.dataset.id}`, { method: 'DELETE' }); loadCostProfiles(); }
+    catch (e) { toast(e.message, 'err'); }
+  }));
+  $('#cpSave').addEventListener('click', async () => {
+    try {
+      await api('/api/cost-profiles', { method: 'POST', body: { id: editing, name: $('#cpName').value,
+        perVideoUsd: $('#cpVideo').value, perMinuteUsd: $('#cpMinute').value, monthlyUsd: $('#cpMonth').value } });
+      toast('Профиль сохранён', 'ok');
+      loadCostProfiles();
+    } catch (e) { toast(e.message, 'err'); }
   });
 }
 

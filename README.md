@@ -9,7 +9,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white)](backend/README.md#running-without-docker)
 [![PostgreSQL 16 + pgvector](https://img.shields.io/badge/postgres-16%20%2B%20pgvector-336791?style=flat-square&logo=postgresql&logoColor=white)](docker-compose.yml)
 [![Docker Compose](https://img.shields.io/badge/docker-compose-2496ED?style=flat-square&logo=docker&logoColor=white)](docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-93%20tools-8A2BE2?style=flat-square)](backend/README.md#tools)
+[![MCP](https://img.shields.io/badge/MCP-97%20tools-8A2BE2?style=flat-square)](backend/README.md#tools)
 [![Stars](https://img.shields.io/github/stars/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/stargazers)
 
 Find niches, viral videos from small channels, outlier channels, trending
@@ -17,7 +17,7 @@ categories and keywords over any period (24 hours to 90 days and beyond);
 track channels and watch their growth; check a title, hook or idea against
 what actually worked in a niche — and get the same numbers in three places:
 
-- **Claude Desktop** (or any MCP client) — 93 tools and 7 ready-made scenarios;
+- **Claude Desktop** (or any MCP client) — 97 tools and 7 ready-made scenarios;
 - **a web dashboard** on `localhost:8080`;
 - **a Chrome extension** that puts the metrics on top of YouTube itself.
 
@@ -75,6 +75,9 @@ by the server. An LLM is optional and off by default.
   channels and videos via pgvector.
 - Idea checker: is a topic free, recently covered, proven or a flop in this
   niche?
+- Net profit: revenue range minus your cost profiles (per video, per minute of
+  video, monthly overhead) for a channel's month, a video or a niche's typical
+  video, with break-even views; your real RPM on a connected channel.
 - What outliers share: for a niche, what its outliers have in common against
   ordinary videos -- number or "?" in the title, video and title length, tags,
   weekday and time -- by the numbers, no LLM, Shorts and long-form apart.
@@ -265,7 +268,7 @@ alerts and the optional background jobs. The backend follows DDD layers —
 
 | Document | What's inside |
 |---|---|
-| [backend/README.md](backend/README.md) | YouTube quota, running with and without Docker, the CLI, all 93 MCP tools and 7 scenarios, configuration, formulas, code structure |
+| [backend/README.md](backend/README.md) | YouTube quota, running with and without Docker, the CLI, all 97 MCP tools and 7 scenarios, configuration, formulas, code structure |
 | [frontend/README.md](frontend/README.md) | every dashboard screen, where its data comes from, what costs quota |
 | [extension/README.md](extension/README.md) | what the extension shows on each YouTube page, installation, quota cost |
 | [docs/http-api.md](docs/http-api.md) | all 115 HTTP routes with parameters, costs and MCP twins (generated from the code) |

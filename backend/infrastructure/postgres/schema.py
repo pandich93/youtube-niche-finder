@@ -196,6 +196,20 @@ CREATE TABLE IF NOT EXISTS user_topics (
     paused INTEGER NOT NULL DEFAULT 0
 );
 
+-- plan 30: what a video costs to make (voice, editing, AI generation, stock),
+-- personal: one user's named profiles. per_video + per_minute * length + the
+-- monthly overhead are in US dollars.
+CREATE TABLE IF NOT EXISTS cost_profiles (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL DEFAULT 1,
+    name TEXT NOT NULL,
+    per_video_usd REAL NOT NULL DEFAULT 0,
+    per_minute_usd REAL NOT NULL DEFAULT 0,
+    monthly_usd REAL NOT NULL DEFAULT 0,
+    created_at TEXT,
+    UNIQUE (user_id, name)
+);
+
 CREATE INDEX IF NOT EXISTS idx_saved_items_kind_ref ON saved_items(kind, ref_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_video ON drafts(video_id);
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);

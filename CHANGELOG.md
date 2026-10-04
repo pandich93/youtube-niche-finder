@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Net profit calculator** (plan 30). Personal cost profiles (a price per
+  video, per minute of video and a monthly overhead, in USD; new table
+  `cost_profiles`) and `profit_estimate` for a channel's month, a video or a
+  niche's typical video: revenue at the low / mid / high RPM minus the costs,
+  a verdict (profitable only when even the low end is above zero, loss only
+  when even the high end is below it, otherwise uncertain) and the views a
+  video needs to pay for itself. A connected channel uses its real RPM; a
+  channel below the full YPP tier is warned that ad revenue may still be
+  zero. MCP `list_cost_profiles`, `save_cost_profile`, `delete_cost_profile`,
+  `profit_estimate` (97 tools), `/api/cost-profiles`, `GET /api/profit`, a
+  card on the channel and niche screens, a profile editor on "Данные", a line
+  in the extension's channel panel and a `profit` entry in `explain_scores`.
+  AdSense only. Zero quota.
 - **What outliers of a niche have in common — by the numbers, no LLM** (plan
   29). `outlier_traits` compares a niche's outliers (age-adjusted ×3 and up)
   with its ordinary videos (up to ×1.5), Shorts and long-form apart: number,

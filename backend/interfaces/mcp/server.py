@@ -1308,6 +1308,67 @@ def format_repeatability(video_id: str, min_similarity: float = 0.6, niche: str 
     return rp.format_repeatability(video_id, min_similarity=min_similarity, niche=niche)
 
 
+# ------------------------------------------------------- net profit (plan 30)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def list_cost_profiles() -> dict:
+    """Your cost profiles: what one video costs to make (a fixed price per
+    video, a price per minute of video) plus a monthly overhead, in USD."""
+    from application import profit as pf
+    return {"profiles": pf.list_profiles(user_id=_uid())}
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def save_cost_profile(name: str, per_video_usd: float = 0, per_minute_usd: float = 0,
+                      monthly_usd: float = 0, profile_id: int = None) -> dict:
+    """Create a cost profile ("ElevenLabs voice + editor", "all AI"), or change
+    one by profile_id or by the same name. per_video_usd: fixed cost of one
+    video; per_minute_usd: cost per minute of video (voice-over, editing);
+    monthly_usd: subscriptions and other overhead."""
+    from application import profit as pf
+    try:
+        return pf.save_profile(name, per_video_usd=per_video_usd, per_minute_usd=per_minute_usd,
+                               monthly_usd=monthly_usd, profile_id=profile_id, user_id=_uid())
+    except ValueError as e:
+        return {"error": str(e)}
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=False, destructive_hint=True,
+    idempotent_hint=True, open_world_hint=False))
+def delete_cost_profile(profile_id: int) -> dict:
+    """Remove one of your cost profiles."""
+    from application import profit as pf
+    return pf.delete_profile(profile_id, user_id=_uid())
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def profit_estimate(channel_id: str = None, video_id: str = None, niche: str = None,
+                    profile: str = None, videos_per_month: int = None) -> dict:
+    """Net profit: the revenue range minus the costs of a cost profile (id or
+    name; the first one when omitted). Exactly one target: channel_id (a month:
+    its monthly views, its long uploads of the last 30 days or
+    videos_per_month), video_id (its lifetime views) or niche (its typical
+    video and a month of videos_per_month, default 4). Profit is low / mid /
+    high like the RPM it rests on; 'verdict' is profitable / loss / uncertain;
+    breakEvenViews says how many views one video needs to pay for itself. A
+    connected channel uses its real RPM. Warns when a channel does not visibly
+    meet the full YPP tier (ad revenue may still be zero). AdSense only. Zero quota."""
+    from application import profit as pf
+    try:
+        return pf.profit_estimate(channel_id=channel_id, video_id=video_id, niche=niche,
+                                  profile=profile, videos_per_month=videos_per_month,
+                                  user_id=_uid())
+    except ValueError as e:
+        return {"error": str(e)}
+
+
 # --------------------------------------------- what outliers share (plan 29)
 
 @mcp.tool(annotations=ToolAnnotations(
