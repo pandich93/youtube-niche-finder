@@ -249,6 +249,11 @@
           <div class="nf-rep-body"></div>
         </div>
 
+        <div class="nf-sec nf-lg-sec">
+          <button class="nf-btn nf-ghost nf-lg-btn" title="Есть ли похожее видео на другом языке в вашей базе: формат может быть не занят. Квота не тратится">На другом языке?</button>
+          <div class="nf-lg-body"></div>
+        </div>
+
         ${llmOn ? `<div class="nf-sec nf-why-sec">
           <button class="nf-btn nf-ghost nf-why-btn">Почему выстрелило?</button>
           <div class="nf-why-body"></div>
@@ -387,6 +392,30 @@
       if (body) body.innerHTML = `<div class="nf-row"><span class="nf-muted">Формат:</span> <b>${esc(label)}</b>
         <span class="nf-hint">${d.verdict === 'unknown' ? (d.reason === 'no-embedding' ? 'нет эмбеддинга' : 'мало похожих видео')
           : `outlier у ${d.channelsHit} из ${d.channels} каналов`} · оценка по собранной базе</span></div>`;
+    });
+
+    // план 26: снято ли похожее видео на другом языке (язык цели -- крупнейший другой в базе)
+    const lgBtn = root.querySelector('.nf-lg-btn');
+    if (lgBtn) lgBtn.addEventListener('click', async () => {
+      lgBtn.disabled = true;
+      lgBtn.textContent = 'Ищу…';
+      const r = await send({ type: 'languageGap', videoId });
+      if (!root.isConnected) return;
+      const body = root.querySelector('.nf-lg-body');
+      if (!r.ok) {
+        lgBtn.disabled = false;
+        lgBtn.textContent = 'Не получилось, повторить';
+        if (body) body.innerHTML = `<div class="nf-hint">${esc(r.error || '')}</div>`;
+        return;
+      }
+      const d = r.data;
+      lgBtn.remove();
+      if (!body) return;
+      if (!d.verdict) { body.innerHTML = `<div class="nf-hint">${esc(d.hint || 'нечего сравнить')}</div>`; return; }
+      const label = { open: 'похожего нет', thin: 'снимали, но слабо', covered: 'уже есть хит' }[d.verdict] || d.verdict;
+      const top = d.matches && d.matches[0];
+      body.innerHTML = `<div class="nf-row"><span class="nf-muted">На ${esc(d.targetLabel)}:</span> <b>${esc(label)}</b>
+        <span class="nf-hint">${top ? esc(top.title || '') + ' · ' : ''}${d.targetCorpus.thin ? 'в базе мало видео на этом языке · ' : ''}оценка по собранной базе</span></div>`;
     });
 
     const whyBtn = root.querySelector('.nf-why-btn');

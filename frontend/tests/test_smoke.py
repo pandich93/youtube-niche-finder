@@ -29,11 +29,11 @@ ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
 SHOTS = Path(__file__).resolve().parent / "screenshots"
 
-# 21 ключ ROUTES из router.js (до разбивки -- из app.js) + глубокие ссылки
+# 22 ключа ROUTES из router.js (до разбивки -- из app.js) + глубокие ссылки
 # на объекты из seed_demo.py.
 ROUTES = [
     "overview", "find", "viral", "channels", "categories", "keywords", "tags",
-    "tracker", "alerts", "ideas", "transcripts", "clusters", "titles", "saved", "packaging", "metadata",
+    "tracker", "alerts", "ideas", "language", "transcripts", "clusters", "titles", "saved", "packaging", "metadata",
     "niches", "own", "data", "help", "mcp",
     "niche/demo", "channel/UC0000000000000000000a", "channel/UC0000000000000000000f", "brief/avid000",
     "brief/avid000?gap=how%20to%20start%20a%20tiny%20AI%20lab%3F",
@@ -187,6 +187,8 @@ def test_screen_renders_without_errors(browser, base_url, route):
     # Тренд ниши (план 08): блок на экране ниши и колонка в списке ниш.
     ("niche/demo", ["Тренд ниши", "Видео за 30 дней"]),
     ("niches", ["Тренд"]),
+    # Другой язык (план 26): на демо-данных -- либо выбор пары, либо подсказка собрать второй язык.
+    ("language", ["Другой язык"]),
     # Бриф под вопрос зрителей: тема из ?gap= доходит до экрана.
     ("brief/avid000?gap=how%20to%20start%20a%20tiny%20AI%20lab%3F",
      ["Бриф под пробел", "how to start a tiny AI lab?"]),

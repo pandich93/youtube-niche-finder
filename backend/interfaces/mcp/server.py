@@ -1308,6 +1308,30 @@ def format_repeatability(video_id: str, min_similarity: float = 0.6, niche: str 
     return rp.format_repeatability(video_id, min_similarity=min_similarity, niche=niche)
 
 
+# ------------------------------------------------ language gaps (plan 26)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def language_gaps(source_lang: str, target_lang: str, niche: str = None, min_outlier: float = 3.0,
+                  min_similarity: float = 0.62, limit: int = 30) -> dict:
+    """Formats that took off in one language and may be free in another.
+    Takes the outliers in source_lang (two-letter code, 'en'), finds the
+    nearest videos in target_lang ('ru') by meaning and says per outlier:
+    'open' (nothing close in the target language), 'thin' (close videos, none
+    an outlier) or 'covered' (a close one is an outlier). Each card shows how
+    many other source-language channels repeated the format and the closest
+    target-language videos. 'open' means "not in what we collected": the
+    result also gives the target corpus size and a hint to collect more when
+    it is thin. The niche narrows the source outliers only. Zero quota."""
+    from application import language_gaps as lg
+    try:
+        return lg.language_gaps(source_lang, target_lang, niche=niche, min_outlier=min_outlier,
+                                min_similarity=min_similarity, limit=limit)
+    except ValueError as e:
+        return {"error": str(e)}
+
+
 # ------------------------------------------------------ topic alerts (plan 19)
 
 @mcp.tool(annotations=ToolAnnotations(

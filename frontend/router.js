@@ -11,6 +11,7 @@ import { viewTopTags } from './screens/tags.js';
 import { viewTracker } from './screens/tracker.js';
 import { viewAlerts } from './screens/alerts.js';
 import { viewIdeas } from './screens/ideas.js';
+import { viewLanguage } from './screens/language.js';
 import { viewTranscripts } from './screens/transcripts.js';
 import { viewNicheClusters } from './screens/clusters.js';
 import { viewTitleScoring } from './screens/titles.js';
@@ -52,6 +53,7 @@ const ROUTES = {
   tracker: { title: 'Трекер каналов', run: viewTracker },
   alerts: { title: 'Алерты', run: viewAlerts },
   ideas: { title: 'Проверка идей', run: viewIdeas },
+  language: { title: 'Другой язык', run: viewLanguage },
   transcripts: { title: 'Транскрипты', run: viewTranscripts },
   clusters: { title: 'Карта ниш', run: viewNicheClusters },
   titles: { title: 'Проверить заголовки', run: viewTitleScoring },

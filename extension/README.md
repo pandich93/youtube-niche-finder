@@ -28,6 +28,10 @@ The extension never talks to the outside world — only to `127.0.0.1`.
   with the channel's usual curve dashed (`/api/videos/trajectory`);
 * "Формат повторяем?" — whether similar videos of other channels in your
   database became outliers too (`/api/videos/{id}/repeatability`, zero quota);
+* "На другом языке?" — whether a similar video exists in the biggest other
+  language of your database and whether it is an outlier there: "похожего нет"
+  / "снимали, но слабо" / "уже есть хит" (`/api/videos/{id}/language-gap`,
+  zero quota; says so when that language is thinly collected);
 * "Why did it take off?" — an LLM explanation of why the video beat its
   channel (`/api/video/{id}/why`, cached). The button only appears when an
   LLM provider is configured on the backend;

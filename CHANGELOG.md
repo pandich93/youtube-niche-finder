@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Language gaps — "formats that took off in one language, is it made in
+  another?"** (plan 26). For a pair of languages, the outliers of the source
+  language (at most 5 per channel, 100 in all) each get a verdict from their
+  nearest videos in the target language by embedding (cosine >= 0.62; the
+  multilingual model scores unrelated videos up to ~0.6 across languages, so
+  the cut-off is higher than the 0.6 used within one language): `open`
+  (nothing close), `thin` (close, none an outlier >= 2x), `covered` (a close
+  one is an outlier). A card also shows how many other source-language
+  channels repeated the format and the closest target-language videos; the
+  result states the target corpus size and warns when it is under 200 videos
+  ("open" can mean "not collected"). `language_gaps` (MCP, 90 tools),
+  `GET /api/language-gaps`, `GET /api/language-gaps/languages`,
+  `GET /api/videos/{id}/language-gap` (one video, any video; target defaults
+  to the biggest other language), the "Другой язык" dashboard screen, an "На
+  другом языке?" button in the extension's video panel and a `languageGap`
+  entry in `explain_scores`. Zero quota, no LLM; works without pgvector.
+  Reads only: `similar_videos` and `search_outliers` are unchanged.
 - **Topic alerts can search all of YouTube** — a topic with "На YouTube"
   ticked (`search_youtube` in `watch_topic`, `POST /api/topics/{id}/search`)
   is searched once a day for videos of the last 24 hours, newest first; new

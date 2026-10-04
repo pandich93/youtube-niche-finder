@@ -42,6 +42,7 @@ from application import discovery as trends
 from application import enrichment as EN
 from application import hook_score as HK
 from application import inspection as I
+from application import language_gaps as LG
 from application import library as L
 from application import maturity_curve
 from application import metadata_review as MR
@@ -819,6 +820,35 @@ def video_repeatability(video_id: str, min_similarity: float = RP.DEFAULT_MIN_SI
                         niche: str = None):
     """Plan 21: did this video's format work for other channels too? Zero quota."""
     return RP.format_repeatability(video_id, min_similarity=min_similarity, niche=niche)
+
+
+@app.get("/api/language-gaps")
+def language_gaps(source: str, target: str, niche: str = None, min_outlier: float = 3.0,
+                  min_similarity: float = LG.L.MIN_SIMILARITY, limit: int = 30):
+    """Plan 26: outliers in one language and whether anything like them exists
+    in another (open / thin / covered). Zero quota."""
+    try:
+        return LG.language_gaps(source, target, niche=niche, min_outlier=min_outlier,
+                                min_similarity=min_similarity, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/videos/{video_id}/language-gap")
+def video_language_gap(video_id: str, target: str = None,
+                       min_similarity: float = LG.L.MIN_SIMILARITY):
+    """Plan 26: is there something like this video in another language? Without
+    `target` the biggest other language in the database. Zero quota."""
+    try:
+        return LG.video_language_gap(video_id, target_lang=target, min_similarity=min_similarity)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/language-gaps/languages")
+def language_gaps_languages():
+    """Languages we hold videos in (code, videos, channels), biggest first."""
+    return {"languages": LG.languages()}
 
 
 @app.get("/api/title-changes")

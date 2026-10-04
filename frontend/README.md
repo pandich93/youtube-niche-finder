@@ -146,6 +146,19 @@ One idea per line → a verdict for each against your own corpus
 are adjustable; every idea expands to the matching videos, and the result
 can be exported to CSV client-side.
 
+### Other language (`#/language`)
+
+Pick a pair of languages (source -> target; the list shows how many videos each
+has, ⇄ swaps them) and the dashboard shows the source language's outliers with
+a verdict on the target one (`GET /api/language-gaps`): *не снято* (nothing
+similar), *снимали слабо* (similar videos, none an outlier), *уже есть хит*.
+Each row has the multiplier, how many other channels repeated the format at
+home and the closest target-language videos (or how close the nearest one is
+when it is under the threshold). The header says how many videos the target
+language has in the database; under 200 a warning explains that "не снято"
+may mean "не собрано". The niche selector narrows the source side only.
+Zero quota.
+
 ### Transcripts (`#/transcripts`)
 
 A ready transcript has a "Крючок" button: the first ~30 seconds scored 0-100 by text rules

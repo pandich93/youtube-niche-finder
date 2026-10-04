@@ -492,6 +492,7 @@ Delivery to Telegram or a webhook is optional -- see [Configuration](#configurat
 | `explain_scores` | plan 23: what a number is -- YouTube data or an estimate of niche-finder (`source`), its formula, inputs and minimum sample; one key or the whole catalog (`domain/score_catalog.py`, the same text as the dashboard's "?" tips and the help page) |
 | `video_trajectory` | plan 20: views by age (hours since publishing) for 1-5 videos from the worker's snapshots, each with its channel's expected curve (median views x maturity curve) and marks for title/thumbnail swaps; `observedFromHours` says from when a late-found video is watched. Zero quota |
 | `format_repeatability` | plan 21: did this video's format work for OTHER channels too? Its embedding neighbours on other channels (cosine >= `min_similarity`, 0.6), each scored with the usual outlier baseline, one channel counted once by its best video: `repeatable` (3+ channels got >= 2x), `mixed`, `one_off`, or `unknown` (fewer than 5 similar videos or 3 channels collected). Plus how many other channels start their titles the same way. Zero quota |
+| `language_gaps` | plan 26: formats that took off in one language and may be free in another. Outliers in `source_lang` (`min_outlier`, 3x; at most 5 per channel, 100 in all) and, for each, its nearest videos in `target_lang` by embedding (cosine >= `min_similarity`, 0.62 -- cross-language similarity of the multilingual model runs lower than within a language): `open` (nothing close), `thin` (close, none an outlier >= 2x), `covered` (a close one is an outlier). Each card carries the best multiplier, how many OTHER source-language channels repeated the format, and the closest target-language videos; the result gives the target corpus size and a hint to collect more when it is under 200 videos ("open" can mean "not collected"). `niche` narrows the source outliers only. Zero quota |
 | `draft_outcomes` | the review snapshot next to the actual outcome, for linked drafts old enough to have views |
 
 ### Thumbnails (plan 13, zero quota)
@@ -761,6 +762,14 @@ revenue             = monthly views / 1000 * niche RPM * 0.70
 rpm range           = that effective RPM / 2 ... * 2    # published estimates disagree by up to 7x
 ```
 
+Language gaps (plan 26, `domain/language_gaps.py`): for an outlier in the
+source language, its nearest videos in the target language by embedding;
+`open` if none reads closer than 0.62 (cosine, tuned on this database: below
+about 0.6 the multilingual model pairs unrelated videos), `thin` if some do
+but none scored >= 2x, `covered` otherwise. A video's language is the one its
+channel declared or `langdetect` guessed from the title; `und`/`zxx`/empty are
+not counted. An estimate over the collected corpus, not YouTube data.
+
 Median instead of mean is deliberate: NexLev's baseline is the channel's
 lifetime mean, and a single viral video wrecks it (the observed
 mean-to-median ratio runs as high as 27x).
@@ -861,7 +870,7 @@ youtube-niche-finder/
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 89 tools
+    │   ├── mcp/server.py       MCP server, 90 tools
     │   ├── mcp/prompts.py      7 ready-made scenarios (MCP prompts)
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)

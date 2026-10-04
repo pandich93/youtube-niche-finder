@@ -10,6 +10,7 @@ is that line. Thresholds come from the modules that use them, so the text
 cannot drift from the code.
 """
 from domain import hook_scoring as HS
+from domain import language_gaps as LG
 from domain import metrics as M
 from domain import milestones as MS
 from domain import monetization as MZ
@@ -119,6 +120,14 @@ CATALOG = {
                                  f"{RP.MIN_HIT_CHANNELS}+ — повторяем",
                       "inputs": ["эмбеддинги", "множители"],
                       "minSample": f"{RP.MIN_VIDEOS} похожих видео у {RP.MIN_CHANNELS}+ каналов"},
+    "languageGap": {"name": "Другой язык", "source": ESTIMATE,
+                    "formula": "outlier на исходном языке и ближайшие по смыслу видео на целевом "
+                               f"(сходство ≥ {LG.MIN_SIMILARITY}): нет — не снято; есть, но ни одно не "
+                               f"outlier ≥ ×{LG.HIT_SCORE:g} — снимали слабо; есть outlier — уже есть "
+                               "хит. Рядом: сколько других каналов на исходном языке повторили формат",
+                    "inputs": ["эмбеддинги", "множители", "язык видео"],
+                    "minSample": f"{LG.THIN_CORPUS_VIDEOS}+ видео на целевом языке, иначе «не снято» "
+                                 "может значить «не собрано»"},
     "expectedCurve": {"name": "Ожидаемая траектория", "source": ESTIMATE,
                       "formula": "медиана просмотров канала × кривая взросления(возраст)",
                       "inputs": ["медиана канала", "кривая взросления"],
