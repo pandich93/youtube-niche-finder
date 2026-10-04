@@ -1308,6 +1308,29 @@ def format_repeatability(video_id: str, min_similarity: float = 0.6, niche: str 
     return rp.format_repeatability(video_id, min_similarity=min_similarity, niche=niche)
 
 
+# ---------------------------------------------- collaboration partners (plan 31)
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
+def collab_candidates(channel_id: str, min_ratio: float = 0.5, max_ratio: float = 2.0,
+                      active_days: int = 30, niche: str = None, limit: int = 10) -> dict:
+    """Channels worth asking for a joint video or a shout-out: close in topic
+    (embedding centroids, like similar_channels), between min_ratio and
+    max_ratio of this channel's subscribers, with an upload in the last
+    active_days and no high template risk. Each candidate carries similarity,
+    size ratio, days since the last upload, 30-day subscriber growth and
+    template risk; `excluded` counts who was left out and why. Sorted by
+    similarity, then growth. YouTube gives no contacts: these are links. Only
+    channels we collected. Zero quota."""
+    from application import collabs as cb
+    try:
+        return cb.collab_candidates(channel_id, min_ratio=min_ratio, max_ratio=max_ratio,
+                                    active_days=active_days, niche=niche, limit=limit)
+    except ValueError as e:
+        return {"error": str(e)}
+
+
 # ------------------------------------------------------- net profit (plan 30)
 
 @mcp.tool(annotations=ToolAnnotations(

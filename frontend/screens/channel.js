@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, VIEW_COUNT_CHANGE, aiLabelsBadge, sponsorBlock, state, rpmRange, templateRiskBlock, yppLine, milestonesLine, qmark, policyBlock, mountProfit } from '../ui.js';
+import { $, api, q, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, table, commentList, lineChart, VIEW_COUNT_CHANGE, aiLabelsBadge, sponsorBlock, state, rpmRange, templateRiskBlock, yppLine, milestonesLine, qmark, policyBlock, mountProfit, mountCollabs } from '../ui.js';
 import { view, nicheOverviewBlock } from '../shared.js';
 
 /* ----------------------------------------------------------------- Канал */
@@ -100,6 +100,7 @@ async function viewChannel(id) {
     ${templateRiskBlock(risk)}
     <div id="chPolicy"></div>
     <div id="chProfit"></div>
+    <div id="chCollabs"></div>
 
     ${sponsorBlock(sponsors, 'Спонсоры канала', 'бренды из описаний его видео')}
 
@@ -194,6 +195,8 @@ async function viewChannel(id) {
   }));
   // план 30: чистая прибыль по выбранному профилю расходов
   mountProfit($('#chProfit'), { channel_id: id });
+  // план 31: с кем делать совместные видео
+  mountCollabs($('#chCollabs'), id);
   // план 22: сигналы по правилам монетизации -- отдельным запросом, экран не ждёт
   api(`/api/channels/${encodeURIComponent(id)}/policy-signals`)
     .then((r) => { const box = $('#chPolicy'); if (box) box.innerHTML = policyBlock(r); })

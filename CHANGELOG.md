@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Collaboration partners** (plan 31). `collab_candidates` takes the 200
+  most similar channels (embedding centroids) and keeps those at cosine 0.5+,
+  between ×0.5 and ×2 of the channel's subscribers, with an upload in the last
+  30 days and no high template risk; each comes with similarity, size ratio,
+  days since upload and 30-day subscriber growth, and `excluded` says how many
+  were dropped and why. MCP (98 tools), `GET /api/channels/{id}/collabs`, a
+  card on the channel screen and on "Мои каналы" with "В трекер". Only
+  collected channels; YouTube gives no contacts. Zero quota.
 - **Net profit calculator** (plan 30). Personal cost profiles (a price per
   video, per minute of video and a monthly overhead, in USD; new table
   `cost_profiles`) and `profit_estimate` for a channel's month, a video or a

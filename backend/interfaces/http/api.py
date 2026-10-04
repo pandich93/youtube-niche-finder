@@ -35,6 +35,7 @@ from application import alerts as AL
 from application import auth as AUTH
 from application import briefs as BR
 from application import channel_tracking as T
+from application import collabs as CLB
 from application import collecting as collector
 from application import content_gaps as CG
 from application import digest as DG
@@ -798,6 +799,18 @@ def delete_topic(request: Request, topic_id: int):
     if not out["removed"]:
         raise HTTPException(status_code=404, detail="topic not found")
     return out
+
+
+@app.get("/api/channels/{channel_id}/collabs")
+def channel_collabs(channel_id: str, min_ratio: float = 0.5, max_ratio: float = 2.0,
+                    active_days: int = 30, niche: str = None, limit: int = 10):
+    """Plan 31: channels for a collaboration -- similar topic, your size,
+    active, not templated -- each with the numbers that picked it. Zero quota."""
+    try:
+        return CLB.collab_candidates(channel_id, min_ratio=min_ratio, max_ratio=max_ratio,
+                                     active_days=active_days, niche=niche, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.get("/api/cost-profiles")

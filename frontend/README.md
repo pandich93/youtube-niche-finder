@@ -146,6 +146,16 @@ One idea per line → a verdict for each against your own corpus
 are adjustable; every idea expands to the matching videos, and the result
 can be exported to CSV client-side.
 
+### Collaboration partners (channel screen, "Мои каналы")
+
+A "Партнёры для коллабораций" card on the channel screen and on "Мои каналы"
+(pick one of your channels; `GET /api/channels/{id}/collabs`): similar
+channels between ×0.5 and ×2 of its subscribers, with an upload in the last
+30 days and no high template risk -- subscribers and size ratio, similarity,
+last upload, 30-day growth, a link to YouTube and "В трекер". Under the table:
+how many of the 200 most similar channels were dropped and why. Only
+collected channels; YouTube gives no contacts.
+
 ### Net profit (channel and niche screens, cost profiles on "Данные")
 
 A "Чистая прибыль" card on the channel screen (a month) and the niche screen

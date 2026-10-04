@@ -752,6 +752,46 @@ function yppSelect(id, cur) {
       opt('shorts-path-met', 'порог пройден по Shorts')}</select></label>`;
 }
 
+/* Партнёры для коллабораций (план 31): похожие каналы вашего размера, активные и
+   не шаблонные. Контактов YouTube не даёт -- только ссылки на каналы. */
+const COLLAB_EXCLUDED = { 'off-topic': 'не по теме', 'size-unknown': 'размер скрыт', 'too-small': 'меньше',
+  'too-big': 'крупнее', inactive: 'не выпускали', templated: 'шаблонные' };
+
+async function mountCollabs(box, channelId, { bare = false } = {}) {
+  if (!box) return;
+  // bare: без своей карточки и заголовка -- когда их уже рисует экран (Мои каналы)
+  const wrap = (head, body) => (bare ? body : `<div class="card">${head}${body}</div>`);
+  box.innerHTML = wrap(sectionHead('Партнёры для коллабораций', 'похожие каналы вашего размера, активные и не шаблонные'),
+    '<div class="section-sub">Ищу…</div>');
+  let d;
+  try { d = await api(`/api/channels/${encodeURIComponent(channelId)}/collabs`); }
+  catch (e) { box.innerHTML = ''; return; }
+  const ex = Object.entries(d.excluded || {}).map(([k, n]) => `${COLLAB_EXCLUDED[k] || k}: ${n}`).join(' · ');
+  const rows = (d.candidates || []).map((c) => `<tr>
+    <td class="wrap"><a href="#/channel/${esc(c.channelId)}">${esc(c.title || c.channelId)}</a>
+      <a class="section-sub" href="https://www.youtube.com/channel/${esc(c.channelId)}" target="_blank" rel="noopener">YouTube ↗</a></td>
+    <td class="num">${compact(c.subscribers)} <span class="section-sub" style="display:inline">×${c.sizeRatio}</span></td>
+    <td class="num">${Math.round(c.similarity * 100)}%</td>
+    <td class="num">${c.daysSinceUpload == null ? '—' : `${Math.round(c.daysSinceUpload)} дн. назад`}</td>
+    <td class="num">${c.growth30dPct == null ? '—' : `${c.growth30dPct > 0 ? '+' : ''}${c.growth30dPct}%`}</td>
+    <td class="num"><button class="btn btn-ghost btn-sm js-collab-track" data-id="${esc(c.channelId)}">В трекер</button></td>
+  </tr>`).join('');
+  box.innerHTML = wrap(sectionHead('Партнёры для коллабораций',
+      `похожая тема, ×${d.minRatio}–×${d.maxRatio} ваших подписчиков, загрузка за ${d.activeDays} дней, не шаблонные`), `
+    ${rows ? `<div class="table-wrap"><table><thead><tr><th>Канал</th><th class="num">Подписчики</th>
+      <th class="num">Похожесть</th><th class="num">Последнее видео</th><th class="num">Рост за 30 дн.</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`
+      : empty(d.hint || 'подходящих каналов среди собранных нет — соберите нишу шире')}
+    <div class="section-sub" style="margin-top:8px">${ex ? `Отсеяно из ${num(d.poolSize)} похожих: ${esc(ex)}. ` : ''}Только собранные каналы;
+      контактов YouTube не даёт — пишите через ссылки на канале.</div>`);
+  box.querySelectorAll('.js-collab-track').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { await api('/api/channels/track', { method: 'POST', body: { channel_id: b.dataset.id, note: 'коллаборация' } });
+      b.textContent = 'В трекере'; toast('Канал добавлен в трекер', 'ok'); }
+    catch (e) { b.disabled = false; toast(e.message, 'err'); }
+  }));
+}
+
 /* Чистая прибыль (план 30): вилка выручки минус расходы выбранного профиля.
    target: { channel_id } или { niche }. Профили редактируются на экране «Данные». */
 const PROFIT_VERDICT = { profitable: ['chip-good', 'в плюсе'], loss: ['chip-bad', 'в минусе'],
@@ -863,4 +903,4 @@ function outlierTraitsBlock(d, only = null) {
 export { $, api, q, num, compact, mult, ago, esc, delta, plural, pl, toast, tile, sectionHead,
          notice, empty, barList, strengthBar, channelRow, videoCard, table, commentList,
          lineChart, VIEW_COUNT_CHANGE, trajectoryChart, compareHref, loadScores, scoreTip, qmark, policyBlock, nichePolicyBlock, funnelBlock, aiLabelsBadge, scatterChart, state, rpmRange, RPM_TIP, templateRiskBlock,
-         nicheTemplateRiskBlock, outlierTraitsBlock, mountProfit, sponsorBlock, saturationChip, saturationBlock, yppLine, milestonesLine, yppSelect };
+         nicheTemplateRiskBlock, outlierTraitsBlock, mountProfit, mountCollabs, sponsorBlock, saturationChip, saturationBlock, yppLine, milestonesLine, yppSelect };

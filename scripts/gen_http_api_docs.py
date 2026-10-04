@@ -56,6 +56,7 @@ SUMMARY = {
     "GET /api/title-patterns": ("discover", "Title phrases that correlate with outliers in a niche or channel (lift, examples)."),
     "GET /api/niches": ("niches", "Every niche label with its query, video count and last collection time."),
     "GET /api/niches/saturation": ("niches", "Trend of every niche in one pass: growing / stable / cooling / saturated / insufficient-data."),
+    "GET /api/channels/{channel_id}/collabs": ("channels", "Collaboration partners: similar channels of your size, active, not templated, with the numbers that picked them (plan 31)."),
     "GET /api/profit": ("channels", "Net profit: revenue range minus a cost profile's costs, for a channel's month, a video or a niche's typical video (plan 30)."),
     "GET /api/cost-profiles": ("channels", "Your cost profiles: price per video, per minute of video, monthly overhead (plan 30)."),
     "POST /api/cost-profiles": ("channels", "Create a cost profile, or change one by `id` or the same `name` (plan 30)."),

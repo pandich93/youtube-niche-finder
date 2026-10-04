@@ -1,5 +1,5 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
-import { $, api, num, compact, ago, esc, toast, tile, sectionHead, notice, empty, table } from '../ui.js';
+import { $, api, num, compact, ago, esc, toast, tile, sectionHead, notice, empty, table, mountCollabs } from '../ui.js';
 import { view } from '../shared.js';
 
 /* ------------------------------------------------ Мои каналы (план 14)
@@ -107,6 +107,11 @@ function channelsHtml(d, cal) {
       `<select id="ownVsChannel">${d.channels.map((c) => `<option value="${esc(c.channelId)}">${esc(c.title || c.channelId)}</option>`).join('')}</select>
        <select id="ownVsNiche"><option value="">ниша…</option></select>`)}
     <div id="ownVsOut">${empty('выберите нишу')}</div>
+  </div>` : ''}
+  ${d.channels.length ? `<div class="card">
+    ${sectionHead('Партнёры для коллабораций', 'похожие каналы вашего размера среди собранных',
+      `<select id="ownCollabChannel">${d.channels.map((c) => `<option value="${esc(c.channelId)}">${esc(c.title || c.channelId)}</option>`).join('')}</select>`)}
+    <div id="ownCollabOut"></div>
   </div>` : ''}`;
 }
 
@@ -232,6 +237,13 @@ async function viewOwn() {
   wire();
   $('#ownFmtChannel')?.addEventListener('change', loadFormats);
   loadFormats();
+  // план 31: партнёры для выбранного своего канала
+  const collabSel = $('#ownCollabChannel');
+  if (collabSel) {
+    const loadCollabs = () => mountCollabs($('#ownCollabOut'), collabSel.value, { bare: true });
+    collabSel.addEventListener('change', loadCollabs);
+    loadCollabs();
+  }
 }
 
 export { viewOwn };
