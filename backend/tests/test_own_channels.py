@@ -61,6 +61,8 @@ def _world(monkeypatch):
 
 def fake_report(access_token, channel_id, start, end, metrics, **kw):
     assert access_token == "at" and channel_id == CH
+    if "creatorContentType" in (kw.get("dimensions") or ""):
+        return []           # plan 24's day x format query; tests/test_own_formats.py covers it
     rows = [{"video": "own1", "views": 3000, "estimatedMinutesWatched": 9000,
              "averageViewDuration": 180, "averageViewPercentage": 45.0, "subscribersGained": 10,
              "estimatedRevenue": 6.0, "cpm": 5.0, "playbackBasedCpm": 3.0},

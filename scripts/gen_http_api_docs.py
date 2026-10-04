@@ -82,6 +82,7 @@ SUMMARY = {
     "GET /api/videos/{video_id}/similar-thumbnails": ("videos", "Videos whose thumbnail looks like this one (CLIP vectors)."),
     "GET /api/channels/{channel_id}/policy-signals": ("channels", "Signals for YouTube's three inauthentic-content categories: level, reasons, policy text; no risk percentage (plan 22)."),
     "GET /api/niches/{slug}/policy-signals": ("niches", "How many channels of a niche show each inauthentic-content category's signals (plan 22)."),
+    "GET /api/own/channels/{channel_id}/formats": ("own", "Your channel by format: Shorts vs long vs live, weekly link, watch hours toward YPP (plan 24)."),
     "GET /api/scores": ("videos", "What every number is: YouTube data or an estimate of niche-finder, formula, inputs, minimum sample; `key` for one (plan 23)."),
     "GET /api/videos/trajectory": ("videos", "Views by age for up to 5 comma-separated `ids`, each with its channel's expected curve and swap marks (plan 20)."),
     "GET /api/videos/{video_id}/repeatability": ("videos", "Did this video's format work for other channels too: repeatable / mixed / one_off / unknown (plan 21)."),

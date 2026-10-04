@@ -49,7 +49,9 @@ Everything lives in the Postgres database you point the app at (by default the
   `OWN_TOKENS_KEY` from your `.env` (Fernet; the key is never in the database),
   and per-video YouTube Analytics numbers (views, watch time, retention,
   subscribers gained, revenue, CPM) for the last 28 days and lifetime
-  (`own_channels`, `own_video_metrics`). This is private data about you. It
+  (`own_channels`, `own_video_metrics`), plus a year of daily views, watch
+  minutes and subscribers gained by format -- Shorts, long videos, live
+  (`own_channel_daily`, plan 24). This is private data about you. It
   never leaves your database except as the read requests to Google below; the
   token is never logged or returned by the API. **Отключить** on the "Мои
   каналы" screen revokes the token at Google and deletes all of it; you can

@@ -63,6 +63,11 @@ function channelsHtml(d, cal) {
     <div class="section-sub" style="margin-top:10px">${esc(d.note)} RPM = доход на 1000 всех просмотров, как в YouTube Studio;
       без монетизации доход пустой. Удержание — медиана среднего процента просмотра по видео.</div>
   </div>
+  ${d.channels.length ? `<div class="card">
+    ${sectionHead('Форматы', 'Shorts против длинных видео и часы до порога YPP — из YouTube Analytics',
+      `<select id="ownFmtChannel">${d.channels.map((c) => `<option value="${esc(c.channelId)}">${esc(c.title || c.channelId)}</option>`).join('')}</select>`)}
+    <div id="ownFmtOut">${empty('Считаю…')}</div>
+  </div>` : ''}
   ${d.channels.length ? `<div class="card" id="ownVsCard">
     ${sectionHead('Мои видео против ниши', 'пожизненные просмотры и удержание своих видео против собранных видео ниши',
       `<select id="ownVsChannel">${d.channels.map((c) => `<option value="${esc(c.channelId)}">${esc(c.title || c.channelId)}</option>`).join('')}</select>
@@ -136,6 +141,43 @@ function wire() {
   }
 }
 
+/* План 24: форматы своего канала (creatorContentType) и часы просмотра за год. */
+const FORMAT = { SHORTS: 'Shorts', VIDEO_ON_DEMAND: 'Длинные', LIVE_STREAM: 'Трансляции', STORY: 'Истории', UNSPECIFIED: 'Прочее' };
+const READING = {
+  'move-together': 'недели с большим числом просмотров Shorts — это и недели с большим числом просмотров длинных',
+  'move-apart': 'когда растут просмотры Shorts, просмотры длинных проседают',
+  'no-clear-link': 'явной связи между просмотрами Shorts и длинных нет',
+};
+
+function formatsHtml(f) {
+  if (!f.available) return empty(f.hint || 'данных по форматам пока нет — они придут со следующим обновлением');
+  const types = Object.entries(f.last90).sort((a, b) => b[1].views - a[1].views);
+  const h = f.watchHours;
+  const d = (iso) => (iso ? new Date(iso).toLocaleDateString('ru-RU') : null);
+  const bar = (need, reached, eta) => (reached ? `${num(need)} ч — набрано`
+    : eta ? `${num(need)} ч ≈ ${d(eta)} при темпе ${num(h.paceHoursPerDay)} ч/день` : `${num(need)} ч — при текущем темпе не оценить`);
+  const sv = f.shortsVsLong;
+  return `<div class="tiles">${types.map(([k, t]) => tile(FORMAT[k] || k, compact(t.views),
+      `${Math.round((t.viewShare || 0) * 100)}% просмотров · ${t.subscribersPer1000Views ?? '—'} подп. на 1000`)).join('')}</div>
+    <div class="section-sub" style="margin-top:8px">За 90 дней по ${esc(d(f.through))}. «Подп. на 1000» — сколько подписчиков
+      приносит каждая тысяча просмотров этого формата.</div>
+    <div class="section-sub" style="margin-top:8px"><b>Shorts и длинные:</b> ${sv.r == null
+      ? (sv.reason === 'few-weeks' ? 'мало недель для вывода' : 'просмотры почти не менялись — вывода нет')
+      : `${esc(READING[sv.reading] || sv.reading)} (r = ${sv.r} за ${sv.weeks} недель). Это корреляция, а не причина.`}</div>
+    <div class="section-sub" style="margin-top:8px"><b>Часы просмотра за 365 дней:</b> ${num(Math.round(h.hours365))} ч
+      (длинные и трансляции; Shorts за 90 дней — ${compact(h.shortsViews90d)} просмотров).
+      ${bar(4000, h.reached4000, h.eta4000)}; с 01.02.2027 — ${bar(8000, h.reached8000, h.eta8000)}.
+      Приблизительно: это не «qualified watch hours» YouTube.</div>`;
+}
+
+async function loadFormats() {
+  const sel = $('#ownFmtChannel');
+  const out = $('#ownFmtOut');
+  if (!sel || !out) return;
+  try { out.innerHTML = formatsHtml(await api(`/api/own/channels/${encodeURIComponent(sel.value)}/formats`)); }
+  catch (e) { out.innerHTML = notice(esc(e.message)); }
+}
+
 async function viewOwn() {
   const params = new URLSearchParams((location.hash.split('?')[1]) || '');
   const flash = params.get('connected')
@@ -146,6 +188,8 @@ async function viewOwn() {
   const [d, cal] = await Promise.all([api('/api/own/channels'), api('/api/own/rpm-calibration').catch(() => ({}))]);
   view.innerHTML = flash + channelsHtml(d, cal);
   wire();
+  $('#ownFmtChannel')?.addEventListener('change', loadFormats);
+  loadFormats();
 }
 
 export { viewOwn };

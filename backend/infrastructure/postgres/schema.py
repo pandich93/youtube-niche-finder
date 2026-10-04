@@ -171,6 +171,19 @@ CREATE TABLE IF NOT EXISTS events (
     seen_at TEXT
 );
 
+-- plan 24: your own channel by day and format (YouTube Analytics,
+-- creatorContentType) -- Shorts against long videos, watch hours toward YPP
+CREATE TABLE IF NOT EXISTS own_channel_daily (
+    user_id BIGINT NOT NULL DEFAULT 1,
+    channel_id TEXT NOT NULL,
+    day TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    views BIGINT,
+    minutes_watched BIGINT,
+    subscribers_gained BIGINT,
+    PRIMARY KEY (user_id, channel_id, day, content_type)
+);
+
 -- plan 19: topics a user watches; a new video close to one raises a personal
 -- topic_match event (events.user_id)
 CREATE TABLE IF NOT EXISTS user_topics (

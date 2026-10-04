@@ -15,6 +15,7 @@ from datetime import date, timedelta
 
 import infrastructure.postgres as db
 import infrastructure.secrets as SEC
+from application import own_formats as OF
 from domain import metrics as M
 from domain import own_metrics as OM
 from domain import periods as P
@@ -223,6 +224,15 @@ def sync(user_id: int = LOCAL_USER_ID, channel_id: str = None, today: date = Non
                     out["monetary"] = money if out["monetary"] is None else out["monetary"] and money
                     if window == "lifetime":
                         out["videos"] = len(rows)
+                # plan 24: day x format for a year; a query YouTube does not
+                # support for this channel must not cost the rest of the sync
+                try:
+                    out["formatDays"] = OF.sync_daily(conn, token, user_id, ch["channel_id"], end)
+                except YA.QuotaExceeded:
+                    raise
+                except YA.AnalyticsError as e:
+                    out["formatDays"] = None
+                    out["formatsError"] = str(e)[:300]
                 conn.execute("UPDATE own_channels SET last_synced_at = ?, last_error = NULL "
                              "WHERE user_id = ? AND channel_id = ?",
                              (db.now_iso(), user_id, ch["channel_id"]))
@@ -380,6 +390,8 @@ def disconnect(channel_id: str, user_id: int = LOCAL_USER_ID) -> dict:
         except SEC.SecretsNotConfigured:
             revoked = False
         conn.execute("DELETE FROM own_video_metrics WHERE user_id = ? AND channel_id = ?",
+                     (user_id, channel_id))
+        conn.execute("DELETE FROM own_channel_daily WHERE user_id = ? AND channel_id = ?",
                      (user_id, channel_id))
         conn.execute("DELETE FROM own_channels WHERE user_id = ? AND channel_id = ?",
                      (user_id, channel_id))

@@ -296,7 +296,11 @@ through Google OAuth with your own client (read-only scopes). Until
 the screen shows the one-time setup steps (`/api/own/status`). Once connected:
 views, revenue, RPM and median retention for the last 28 days (ending three
 days ago — Analytics lags), your real RPM against niche-finder's estimate for
-the niche (`/api/own/rpm-calibration`), and "my videos against a niche":
+the niche (`/api/own/rpm-calibration`), a "Форматы" card
+(`/api/own/channels/{id}/formats`: Shorts against long videos -- share of
+views, subscribers per 1,000 views, whether their weekly views move together
+-- and long + live watch hours in 365 days toward the YPP bar with an
+estimated date), and "my videos against a niche":
 median views, the ratio and the share of your videos above the niche median
 (`/api/own/channels/{id}/vs-niche`). "Connect a channel" starts the Google
 consent flow (`POST /api/own/connect`), "Refresh numbers" syncs now

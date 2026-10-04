@@ -1427,6 +1427,21 @@ def own_vs_niche(channel_id: str, niche: str) -> dict:
 @mcp.tool(annotations=ToolAnnotations(
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
+def own_channel_formats(channel_id: str) -> dict:
+    """Your connected channel by format (YouTube Analytics creatorContentType):
+    views, watch minutes, new subscribers and subscribers per 1,000 views for
+    Shorts vs long videos vs live over 90 days; weekly series and whether
+    Shorts and long-form views move together (a correlation, not a cause);
+    long + live watch hours in 365 days toward the YPP bar (4,000 now, 8,000
+    from 2027-02-01) with the date the recent pace gets there. Approximate:
+    estimatedMinutesWatched is not YouTube's "qualified watch hours"."""
+    from application import own_formats as of
+    return of.formats(channel_id, user_id=_uid())
+
+
+@mcp.tool(annotations=ToolAnnotations(
+    read_only_hint=True, destructive_hint=False,
+    idempotent_hint=True, open_world_hint=False))
 def rpm_calibration() -> dict:
     """Your real 28-day RPM (revenue per 1,000 views, as in YouTube Studio)
     next to the low / mid / high range niche-finder estimates for the same

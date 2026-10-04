@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Your channel by format** (plan 24) — the daily sync of a connected
+  channel now also reads a year of YouTube Analytics by day and
+  `creatorContentType` (`own_channel_daily`, personal). `own_channel_formats`
+  (MCP, 89 tools), `GET /api/own/channels/{id}/formats` and a "Форматы" card
+  on "Мои каналы" show Shorts, long videos and live apart: share of views and
+  subscribers per 1,000 views over 90 days, whether weekly Shorts and
+  long-form views move together (a correlation, not a cause), and long + live
+  watch hours in 365 days toward the YPP bar -- 4,000 now, 8,000 from
+  2027-02-01 -- with the date the recent pace gets there (approximate, not
+  YouTube's qualified watch hours). A query YouTube does not support for a
+  channel leaves the rest of the sync untouched; disconnecting deletes these
+  rows too. Thumbnail impressions and CTR (the Reporting API's reach reports)
+  are not read yet.
+
 - **Signals for YouTube's monetization policies** (plan 22) — YouTube's
   channel monetization policies describe inauthentic content in three
   categories: generic or repetitive, unsatisfying (shock and emotional

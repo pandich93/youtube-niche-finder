@@ -617,6 +617,7 @@ channel; access can also be removed at https://myaccount.google.com/permissions.
 |---|---|
 | `own_channels` | connection status and your channels with their last-28-day views, revenue, RPM, median retention |
 | `own_vs_niche` | your videos' real lifetime views and retention against a niche's collected videos |
+| `own_channel_formats` | plan 24: your connected channel by format (Analytics `creatorContentType`): views, watch minutes, new subscribers and subscribers per 1,000 views for Shorts / long / live over 90 days, weekly series, whether Shorts and long-form views move together (Pearson r over 8+ weeks, a correlation), and long + live watch hours in 365 days toward the YPP bar (4,000; 8,000 from 2027-02-01) with the date at the recent pace -- approximate, not YouTube's qualified hours |
 | `rpm_calibration` | your real 28-day RPM next to the low / mid / high range niche-finder estimates from public data |
 | `sync_own_channels` | pull fresh Analytics numbers now (the worker does it daily) |
 
@@ -841,7 +842,7 @@ youtube-niche-finder/
     │   └── worker_cycle.py     the background collector's loop (was worker.py)
     │
     ├── interfaces/         thin adapters facing outward
-    │   ├── mcp/server.py       MCP server, 88 tools
+    │   ├── mcp/server.py       MCP server, 89 tools
     │   ├── mcp/prompts.py      7 ready-made scenarios (MCP prompts)
     │   ├── http/api.py         HTTP API for the dashboard and extension (FastAPI)
     │   ├── cli/cli.py          same, from the terminal, plus doctor (diagnostics)

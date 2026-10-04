@@ -1049,6 +1049,13 @@ def own_vs_niche(request: Request, channel_id: str, niche: str):
     return _own_call(OWN.own_vs_niche, channel_id, niche, user_id=_uid(request))
 
 
+@app.get("/api/own/channels/{channel_id}/formats")
+def own_formats(request: Request, channel_id: str):
+    """Plan 24: Shorts against long videos and watch hours toward YPP."""
+    from application import own_formats as OFA
+    return _own_call(OFA.formats, channel_id, user_id=_uid(request))
+
+
 @app.delete("/api/own/channels/{channel_id}")
 def own_disconnect(request: Request, channel_id: str):
     return _own_call(OWN.disconnect, channel_id, user_id=_uid(request))
