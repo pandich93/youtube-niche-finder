@@ -23,6 +23,11 @@ jobs:
           pip install ruff==0.16.9
           ruff check backend
 
+      # docs/http-api.md is generated from backend/interfaces/http/api.py:
+      # a route added or changed without `make api-docs` fails here.
+      - name: Check the HTTP API reference is current
+        run: python3 scripts/gen_http_api_docs.py --check
+
   # Every dashboard screen in headless Chromium against a seeded backend
   # (frontend/tests/test_smoke.py). No button clicks: POSTs spend quota.
   frontend-smoke:

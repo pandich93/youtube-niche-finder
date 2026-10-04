@@ -12,6 +12,10 @@ Open a private security advisory on GitHub
 (Security → Advisories → Report a vulnerability). Do not open a public issue.
 Please include the steps to reproduce and what an attacker gains.
 
+Fixes land on `main` and ship in the next release; only the
+[latest release](https://github.com/pandich93/youtube-niche-finder/releases/latest)
+and `main` are supported.
+
 ## Single-user mode (default)
 
 - **No accounts.** The dashboard, API and MCP work for whoever can reach them,

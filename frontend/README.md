@@ -40,6 +40,7 @@ container read-only, no image rebuild needed.
 | `app.js` | entry point: theme, global filters, footer, first render |
 | `router.js` | hash routing: route table, active menu item, loading/error state |
 | `shared.js` | shared by screens: `#view`, period labels, the collect form, the quota footer, the niche overview block |
+| `hook_view.js` | the hook-score result card shared by the Transcripts and Title check screens |
 | `screens/*.js` | one file per screen (`overview.js`, `find.js`, …, `channel.js`, `niche.js`) |
 | `tests/test_smoke.py` | opens every screen in headless Chromium against a seeded backend (`make frontend-test`) |
 
@@ -263,6 +264,22 @@ when no LLM is configured).
 
 ![Channel](../assets/channel.jpg)
 
+### Your channels (`#/own`)
+
+Your own channels' real numbers from the YouTube Analytics API, connected
+through Google OAuth with your own client (read-only scopes). Until
+`OWN_OAUTH_CLIENT_ID`, `OWN_OAUTH_CLIENT_SECRET` and `OWN_TOKENS_KEY` are set,
+the screen shows the one-time setup steps (`/api/own/status`). Once connected:
+views, revenue, RPM and median retention for the last 28 days (ending three
+days ago — Analytics lags), your real RPM against niche-finder's estimate for
+the niche (`/api/own/rpm-calibration`), and "my videos against a niche":
+median views, the ratio and the share of your videos above the niche median
+(`/api/own/channels/{id}/vs-niche`). "Connect a channel" starts the Google
+consent flow (`POST /api/own/connect`), "Refresh numbers" syncs now
+(`POST /api/own/sync`; the worker also syncs daily), "Disconnect" revokes the
+token and deletes everything stored for the channel. The refresh token is
+stored encrypted and never reaches the browser.
+
 ### Data
 
 Key, database, and history state (how many channels/videos/snapshots have
@@ -315,4 +332,6 @@ tuned to their own background, not an automatic inversion.
 
 ## API
 
-Live schema: `http://localhost:8080/api/docs`.
+Every route the dashboard calls, with parameters and what it costs:
+[docs/http-api.md](../docs/http-api.md). Live schema on a running backend:
+`http://localhost:8080/api/docs`.

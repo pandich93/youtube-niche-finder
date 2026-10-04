@@ -2,7 +2,11 @@
 .DS_Store
 data/
 models/
-docs/
+# docs/ holds internal notes (decision history, market research, iteration
+# plans) that stay out of the repo; only the public pages listed here are tracked.
+docs/*
+!docs/README.md
+!docs/http-api.md
 .idea/
 .gitnexus/
 __pycache__/
@@ -18,3 +22,5 @@ _to_delete/
 backups/
 .claude/worktrees/
 frontend/tests/screenshots/
+# release builds (scripts/package_extension.sh)
+dist/

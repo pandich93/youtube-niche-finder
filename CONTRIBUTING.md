@@ -106,6 +106,24 @@ framework — keep it that way. New screens follow the existing pattern in
 - Prefer a test against the throwaway Postgres schema over a mock of our own
   code; mock only external services.
 
+## Documentation
+
+[docs/README.md](docs/README.md) maps every document. When you change
+behaviour, update the doc that describes it in the same PR:
+
+- a new or changed MCP tool → its table in
+  [backend/README.md#tools](backend/README.md#tools) (and the tool count in
+  the README badges if it changed);
+- a new or changed HTTP route → run `make api-docs` (it rewrites
+  `docs/http-api.md` from the code; add a one-line summary for a new route in
+  `scripts/gen_http_api_docs.py`, the script refuses to run without one) —
+  CI fails when the reference is out of date;
+- a new dashboard screen → [frontend/README.md#screens](frontend/README.md#screens);
+- a new setting → a commented line in `.env.example` and the configuration
+  table in `backend/README.md`;
+- anything user-visible → an entry under `## [Unreleased]` in
+  [CHANGELOG.md](CHANGELOG.md).
+
 ## Submitting a PR
 
 1. Fork the repo and create a branch off `main`.
@@ -113,9 +131,33 @@ framework — keep it that way. New screens follow the existing pattern in
    harder.
 3. Run `make lint` and `make local-test`, and confirm `docker compose build`
    still works if you touched `backend/requirements.txt` or the Dockerfile.
+   If you touched HTTP routes, run `make api-docs`.
 4. Open a PR describing what changed and why. Link the issue it addresses,
    if any.
-5. CI must pass (ruff lint, all backend tests + Docker build) before merge.
+5. CI must pass (ruff lint, the API-reference check, all backend tests, the
+   dashboard smoke test and the Docker build) before merge.
+
+## Releasing (maintainers)
+
+Versions follow [Semantic Versioning](https://semver.org/); the release
+notes are the changelog.
+
+1. In `CHANGELOG.md`, move the `[Unreleased]` entries under
+   `## [X.Y.Z] - YYYY-MM-DD` (a short highlights paragraph on top helps) and
+   update the compare links at the bottom.
+2. Set the same version in `extension/manifest.json`.
+3. Commit, then tag and push:
+
+   ```bash
+   git tag -a vX.Y.Z -m "niche-finder vX.Y.Z"
+   git push origin main --follow-tags
+   ```
+
+4. The tag starts `.github/workflows/release.yml`: it checks that the tag,
+   the manifest and the changelog agree, builds
+   `niche-finder-extension-vX.Y.Z.zip` (`make extension-zip` does the same
+   locally) and publishes the GitHub release with the changelog section as
+   notes.
 
 By contributing, you agree your contribution is licensed under this
 project's [MIT License](LICENSE).

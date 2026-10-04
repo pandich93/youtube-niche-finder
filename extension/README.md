@@ -71,9 +71,17 @@ Besides the settings below, the popup has:
 1. Start the project backend if it isn't running yet:
    `make dev` (without Docker) or `docker compose up -d postgres web`.
    Check: <http://127.0.0.1:8080/api/health>.
-2. Open `chrome://extensions` and turn on "Developer mode".
-3. "Load unpacked" → pick the `extension/` folder.
-4. Open any video on YouTube. The panel appears in the right-hand column.
+2. Get the extension: download `niche-finder-extension-<version>.zip` from
+   the [latest release](https://github.com/pandich93/youtube-niche-finder/releases/latest)
+   and unzip it, or use the `extension/` folder of your clone (it stays in
+   sync with your backend when you `git pull`).
+3. Open `chrome://extensions` and turn on "Developer mode".
+4. "Load unpacked" → pick the unzipped folder (or `extension/`).
+5. Open any video on YouTube. The panel appears in the right-hand column.
+
+To update, replace the folder's contents and press ⟳ on the extension's card
+in `chrome://extensions`. The extension is not in the Chrome Web Store: it only
+works with a backend running on your own machine.
 
 The extension icon's badge tells you the state. A red `!` means the backend
 is unreachable: check that it's running and that the address in the
@@ -96,8 +104,9 @@ blue number is the count of unseen alerts. The badge is refreshed via
 
 Fetching one video costs 1 unit (`videos.list`), plus 1 unit for the channel
 if it's unknown (`channels.list`). List badges cost 1 unit per 50 videos. For
-comparison, one `search.list` costs 100 units, and the daily limit is
-10,000. Everything fetched goes into the same Postgres, so viewing the same
+comparison, the shared pool is 10,000 units a day, and `search.list` (which
+the extension never calls) is capped separately at 100 calls a day — see
+[Quota essentials](../backend/README.md#quota-essentials-changed-june-1-2026). Everything fetched goes into the same Postgres, so viewing the same
 page again is free: a video is re-read from the database until it goes stale
 (6 hours), a channel — for a day. The ⟳ button in the panel header forces a
 re-read.

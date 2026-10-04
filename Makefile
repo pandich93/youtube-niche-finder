@@ -15,7 +15,7 @@ PYTHON  ?= $(shell command -v python3.13 || command -v python3.12 || \
 RUFF_VERSION ?= 0.16.9
 RUFF    ?= uvx ruff@$(RUFF_VERSION)
 
-.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli
+.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli api-docs extension-zip
 
 doctor: ## проверить ключ, сеть и базу (начните отсюда)
 	$(COMPOSE) run --rm mcp python cli.py doctor
@@ -108,6 +108,12 @@ local-test:     ## run all backend tests on the host in one pytest process
 # без uv:  make lint RUFF=ruff  (ruff==$(RUFF_VERSION) из pip).
 lint:           ## lint the backend with ruff (same pinned version as CI)
 	$(RUFF) check backend
+
+api-docs:       ## regenerate docs/http-api.md from the HTTP routes (CI checks it is current)
+	python3 scripts/gen_http_api_docs.py
+
+extension-zip:  ## pack extension/ into dist/niche-finder-extension-v<version>.zip (committed files only)
+	sh scripts/package_extension.sh
 
 # Смоук-тест дашборда в headless Chromium (frontend/tests/test_smoke.py): свой
 # uvicorn на свободном порту + своя схема с демо-данными, рабочую базу не трогает.

@@ -7,7 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-04
+
+Everything since the first public release: the tool count grew from 24 to 80
+MCP tools plus 7 ready-made scenarios, the Chrome extension arrived, and the
+project learned to plan your own videos, watch your channels and run for a
+small team. Highlights:
+
+- **On top of YouTube:** a Chrome extension with panels on watch and channel
+  pages and multiplier / views-per-hour badges on every thumbnail list.
+- **Plan your own video:** outlier to brief, metadata review with drafts
+  linked to the published video, hook score, title scoring and suggestions,
+  content gaps from comments, an idea checker.
+- **Read a niche deeper:** niche trend (growing / stable / cooling /
+  saturated), niche map, template risk, sponsor map, similar thumbnails and
+  thumbnail styles, repackaging history, RPM as a range, YPP thresholds.
+- **Stay on top of it:** alerts (new outlier, acceleration, title change,
+  silence break, gone channel or video) on the dashboard, in the extension
+  and to Telegram or a webhook, plus a morning digest; a free RSS watch for
+  new uploads.
+- **Your own channels:** real YouTube Analytics numbers through your own
+  Google OAuth client, and your real RPM against the estimate.
+- **Optional LLM** via OpenRouter or a local Ollama, with a daily budget.
+- **Multi-user mode (experimental):** invited accounts, per-user data, quota
+  shares, personal API tokens and alert settings; see SECURITY.md.
+- **Foundations:** pgvector similarity search, a shared YouTube quota
+  counter, HTTP rate limiting, PRIVACY.md and SECURITY.md.
+
 ### Added
+
+- **Documentation map and HTTP API reference** — `docs/README.md` says which
+  document answers what; `docs/http-api.md` lists all 103 HTTP routes with
+  their parameters, cost and MCP twin. It is generated from
+  `backend/interfaces/http/api.py` by `scripts/gen_http_api_docs.py`
+  (`make api-docs`), and CI fails when a route changes without regenerating
+  it. The rest of `docs/` stays internal and out of the repository.
+- **Release packaging** — `scripts/package_extension.sh` (`make
+  extension-zip`) packs the committed `extension/` into
+  `dist/niche-finder-extension-v<version>.zip`, and pushing a `v*` tag runs
+  `.github/workflows/release.yml`: it checks the tag against
+  `extension/manifest.json` and this changelog, then publishes the GitHub
+  release with this section as notes and the extension zip attached.
+  CONTRIBUTING.md describes the steps.
 
 - **"Алерты" screen and a "gone" mark on the channel screen** (plan 04
   follow-up) — the dashboard now lists the alert events of your watchlist
@@ -685,6 +726,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **README rewritten as the project's front page** — what it is and why, the
+  features grouped by job, screenshots, a five-minute quick start (key,
+  Docker, Claude Desktop, the extension from a release zip), an updated
+  architecture diagram and a documentation table. The details moved to the
+  part READMEs instead of being repeated.
+- **Docs brought in line with the code** — `frontend/README.md` describes the
+  "Мои каналы" screen and `hook_view.js`; `extension/README.md` explains
+  installing from a release zip and no longer says `search.list` costs 100
+  units; `backend/README.md` copies `.env.example` from the project root in
+  the no-Docker setup and states Python 3.10+ (Docker and CI use 3.12);
+  `.env.example` documents `LLM_HOOK_TTL_DAYS` and
+  `WORKER_DIGEST_CHECK_INTERVAL_MIN`, which the code already read.
+- Extension version 0.2.0.
 - HTTP API now sends CORS headers for `chrome-extension://` origins; it
   still binds to `127.0.0.1` only.
 - CI and `make local-test` now run every `backend/tests/test_*.py` (one
@@ -743,5 +797,6 @@ Initial public release.
   coverage badge.
 - MIT license.
 
-[Unreleased]: https://github.com/pandich93/youtube-niche-finder/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/pandich93/youtube-niche-finder/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/pandich93/youtube-niche-finder/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/pandich93/youtube-niche-finder/releases/tag/v0.1.0
