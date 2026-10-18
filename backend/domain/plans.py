@@ -8,6 +8,7 @@ never locks existing plans: daily limits default to the NF_USER_DAILY_* values
 from .env (0 there has always meant "no limit"), count limits to None and
 features to on.
 """
+import math
 import os
 from datetime import datetime, timezone
 
@@ -89,7 +90,7 @@ def validate(limits, features) -> list:
             errors.append(f"limits.{key}: неизвестный лимит")
         elif value is None:
             continue
-        elif isinstance(value, bool) or not isinstance(value, (int, float)):
+        elif isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
             errors.append(f"limits.{key}: нужно число или null")
         elif value < 0:
             errors.append(f"limits.{key}: не может быть меньше 0")

@@ -74,6 +74,13 @@ def test_errors_are_not_value_errors():
     assert DP.FeatureOff("export").key == "export"
 
 
+def test_validate_rejects_non_finite_floats():
+    errors = DP.validate({"yt_units": float("inf"), "llm_usd": float("nan")}, {})
+    assert len(errors) == 2
+    assert any("yt_units" in e for e in errors)
+    assert any("llm_usd" in e for e in errors)
+
+
 if __name__ == "__main__":
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))
