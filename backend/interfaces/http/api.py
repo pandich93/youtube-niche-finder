@@ -1110,7 +1110,8 @@ def auth_me(request: Request):
         return {"multiUser": False, "user": {"id": LOCAL_USER_ID, "email": "local", "isAdmin": True}}
     user = request.state.user
     return {"multiUser": True, "user": user,
-            "quota": yt.user_usage(user["id"]) if user else None}
+            "quota": yt.user_usage(user["id"]) if user else None,
+            "plan": PL.summary(user["id"]) if user else None}
 
 
 @app.post("/api/auth/login")
@@ -1163,6 +1164,94 @@ def api_tokens_revoke(request: Request, token_id: int):
     if not AUTH.revoke_api_token(_session_user(request), token_id):
         raise HTTPException(status_code=404, detail="token not found")
     return {"revoked": token_id}
+
+
+# ------------------------------------------------------ tariffs (SaaS sub-project 1)
+
+def _plans_on():
+    if not multi_user_enabled():
+        raise HTTPException(status_code=409, detail="tariffs exist only with NF_MULTI_USER=1")
+
+
+def _admin(request) -> int:
+    """Admins signed in to the dashboard; an API token never edits tariffs."""
+    _plans_on()
+    user = getattr(request.state, "user", None)
+    if getattr(request.state, "via", None) != "session" or not (user and user.get("isAdmin")):
+        raise HTTPException(status_code=403, detail="admins only, signed in to the dashboard")
+    return user["id"]
+
+
+def _plan_call(fn, *args):
+    try:
+        return fn(*args)
+    except PL.PlanError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/plan")
+def plan_get(request: Request):
+    _plans_on()
+    return {**PL.summary(_uid(request)), "plans": PL.public_plans(), "catalog": PL.catalog()}
+
+
+@app.post("/api/plan/choose")
+def plan_choose(request: Request, payload: dict = Body(...)):
+    """Free plans only until payments exist; a paid one is set by an admin."""
+    _plans_on()
+    try:
+        plan_id = int(payload.get("planId") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="planId: нужен номер тарифа")
+    _plan_call(PL.choose, _uid(request), plan_id)
+    return PL.summary(_uid(request))
+
+
+@app.get("/api/admin/plans")
+def admin_plans(request: Request):
+    _admin(request)
+    return {"plans": PL.list_plans(), "catalog": PL.catalog()}
+
+
+@app.post("/api/admin/plans")
+def admin_plan_create(request: Request, payload: dict = Body(...)):
+    _admin(request)
+    return _plan_call(PL.create_plan, payload)
+
+
+@app.put("/api/admin/plans/{plan_id}")
+def admin_plan_update(request: Request, plan_id: int, payload: dict = Body(...)):
+    _admin(request)
+    return _plan_call(PL.update_plan, plan_id, payload)
+
+
+@app.post("/api/admin/plans/{plan_id}/archive")
+def admin_plan_archive(request: Request, plan_id: int):
+    _admin(request)
+    return _plan_call(PL.set_archived, plan_id, True)
+
+
+@app.post("/api/admin/plans/{plan_id}/restore")
+def admin_plan_restore(request: Request, plan_id: int):
+    _admin(request)
+    return _plan_call(PL.set_archived, plan_id, False)
+
+
+@app.get("/api/admin/users")
+def admin_users(request: Request):
+    _admin(request)
+    return {"users": PL.list_users()}
+
+
+@app.put("/api/admin/users/{user_id}/plan")
+def admin_user_plan(request: Request, user_id: int, payload: dict = Body(...)):
+    admin = _admin(request)
+    try:
+        plan_id = int(payload.get("planId") or 0)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="planId: нужен номер тарифа")
+    _plan_call(PL.assign, admin, user_id, plan_id, payload.get("expiresAt"))
+    return {"userId": user_id, **PL.summary(user_id)}
 
 
 # ------------------------------------------------------ own channels (plan 14)

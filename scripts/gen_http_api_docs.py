@@ -36,6 +36,7 @@ GROUPS = [
     ("inspect", "Chrome extension: inspect any YouTube page"),
     ("own", "Your own channels (Google OAuth)"),
     ("auth", "Sign-in and personal tokens (multi-user mode)"),
+    ("plan", "Tariffs: your plan and the admin plan editor (multi-user mode)"),
 ]
 
 # "METHOD /path": (group, summary)
@@ -168,6 +169,15 @@ SUMMARY = {
     "GET /api/auth/tokens": ("auth", "Your personal API tokens (names and dates, never the secret)."),
     "POST /api/auth/tokens": ("auth", "Create a personal token for the extension or MCP over HTTP; shown once."),
     "DELETE /api/auth/tokens/{token_id}": ("auth", "Revoke a personal token."),
+    "GET /api/plan": ("plan", "Your plan, its usage, the plans you can pick and the feature catalog."),
+    "POST /api/plan/choose": ("plan", "Switch to a free plan; a paid one is set by an admin."),
+    "GET /api/admin/plans": ("plan", "Admin: every plan, archived too, with the limit and feature catalog."),
+    "POST /api/admin/plans": ("plan", "Admin: create a plan."),
+    "PUT /api/admin/plans/{plan_id}": ("plan", "Admin: edit a plan."),
+    "POST /api/admin/plans/{plan_id}/archive": ("plan", "Admin: hide a plan from users."),
+    "POST /api/admin/plans/{plan_id}/restore": ("plan", "Admin: bring an archived plan back."),
+    "GET /api/admin/users": ("plan", "Admin: all users with their current plan."),
+    "PUT /api/admin/users/{user_id}/plan": ("plan", "Admin: put a user on a plan, optionally until a date."),
 }
 
 # Anything not listed here only reads the local database: zero quota, no LLM.
