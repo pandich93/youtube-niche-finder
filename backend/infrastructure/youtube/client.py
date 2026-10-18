@@ -50,14 +50,23 @@ def user_search_key(user_id) -> str:
     return f"search_calls_{P.pacific_date_key()}_u{user_id}"
 
 
-def user_limits() -> dict:
-    """Daily budget per signed-in user in multi-user mode; 0 = no limit.
-    Read on every call so a changed .env needs only a restart."""
+def user_limits(user_id=None) -> dict:
+    """A signed-in user's daily budget in multi-user mode: from their tariff
+    (application/plans.py registers the lookup in quota_owner), else from
+    .env. None = no limit, 0 = not at all; 0 in .env has always meant "no
+    limit"."""
+    from infrastructure import quota_owner
+    if user_id is not None:
+        got = quota_owner.limits_for(user_id)
+        if got is not None:
+            return got
+
     def num(name, default):
         try:
-            return max(0, int(os.environ.get(name) or default))
+            value = max(0, int(os.environ.get(name) or default))
         except ValueError:
-            return default
+            value = default
+        return value or None
     return {"units": num("NF_USER_DAILY_UNITS", 2000),
             "searchCalls": num("NF_USER_DAILY_SEARCH_CALLS", 20)}
 
@@ -70,10 +79,10 @@ def user_usage(user_id) -> dict:
         searches = int(db.get_meta(conn, user_search_key(user_id)) or 0)
     finally:
         conn.close()
-    limits = user_limits()
+    limits = user_limits(user_id)
     return {"units": units, "searchCalls": searches, "limits": limits,
-            "unitsLeft": None if not limits["units"] else max(0, limits["units"] - units),
-            "searchCallsLeft": (None if not limits["searchCalls"]
+            "unitsLeft": None if limits["units"] is None else max(0, limits["units"] - units),
+            "searchCallsLeft": (None if limits["searchCalls"] is None
                                 else max(0, limits["searchCalls"] - searches)),
             "resetsAt": "midnight Pacific Time"}
 
@@ -87,11 +96,12 @@ def _check_user_budget(path: str):
         return
     usage = user_usage(uid)
     limits = usage["limits"]
-    if limits["units"] and usage["units"] + COST.get(path, 1) > limits["units"]:
+    if limits["units"] is not None and usage["units"] + COST.get(path, 1) > limits["units"]:
         raise UserQuotaExceeded(
             f"your daily YouTube budget on this server is spent ({usage['units']} of "
             f"{limits['units']} units); it resets at midnight Pacific Time")
-    if path == "search" and limits["searchCalls"] and usage["searchCalls"] >= limits["searchCalls"]:
+    if (path == "search" and limits["searchCalls"] is not None
+            and usage["searchCalls"] >= limits["searchCalls"]):
         raise UserQuotaExceeded(
             f"your daily search budget on this server is spent ({usage['searchCalls']} of "
             f"{limits['searchCalls']} searches); it resets at midnight Pacific Time")

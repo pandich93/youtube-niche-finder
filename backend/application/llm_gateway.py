@@ -13,6 +13,7 @@ import os
 from datetime import datetime, timezone
 
 import infrastructure.postgres as db
+from application import plans
 from domain.users import SYSTEM_USER_ID
 from infrastructure import quota_owner
 from infrastructure.llm import factory
@@ -20,14 +21,11 @@ from infrastructure.llm import factory
 DAILY_BUDGET_USD = float(os.environ.get("LLM_DAILY_BUDGET_USD", "1.0"))
 
 
-def user_daily_budget_usd() -> float:
-    """plan 15 (5.10): each signed-in user's share of the day's LLM spend in
-    multi-user mode; 0 = no personal limit. The installation-wide
+def user_daily_budget_usd(user_id=None) -> float | None:
+    """A signed-in user's share of the day's LLM spend in multi-user mode,
+    from their tariff; None = no personal limit. The installation-wide
     LLM_DAILY_BUDGET_USD still caps everyone together."""
-    try:
-        return max(0.0, float(os.environ.get("NF_USER_DAILY_LLM_USD") or 0.25))
-    except ValueError:
-        return 0.25
+    return plans.plan_for(user_id).limits["llm_usd"] if user_id is not None else None
 
 
 def today_utc() -> str:
@@ -82,9 +80,13 @@ def run(task: str, system: str, user: str, schema: dict, model: str = None,
             return None
         # the signed-in user who asked (multi-user mode; the worker has none)
         owner = quota_owner.current()
-        limit = user_daily_budget_usd()
-        if owner is not None and limit and user_spent_today(conn, owner) >= limit:
-            return None
+        if owner is not None:
+            ent = plans.plan_for(owner)
+            if not ent.features["llm"]:
+                return None
+            limit = ent.limits["llm_usd"]
+            if limit is not None and user_spent_today(conn, owner) >= limit:
+                return None
 
         result = provider.complete_json(system, user, schema, model=model)
         if result is None:
