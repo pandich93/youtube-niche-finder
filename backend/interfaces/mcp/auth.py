@@ -51,12 +51,37 @@ def current_user_id() -> int:
     return LOCAL_USER_ID
 
 
+# SaaS sub-project 1: MCP tools that need a tariff feature beyond api_access
+MCP_TOOL_FEATURES = {"own_channels": "own_channels", "own_vs_niche": "own_channels",
+                     "own_channel_formats": "own_channels", "sync_own_channels": "own_channels"}
+
+
+def blocked_feature(user_id: int, method, params):
+    """The tariff feature a token's user lacks for this MCP message, else None."""
+    from application import plans
+    features = plans.plan_for(user_id).features
+    if not features["api_access"]:
+        return "api_access"
+    if method == "tools/call":
+        feature = MCP_TOOL_FEATURES.get((params or {}).get("name"))
+        if feature and not features[feature]:
+            return feature
+    return None
+
+
 async def quota_owner_middleware(ctx, call_next):
-    """YouTube calls made by a tool count against the token's user (5.5)."""
+    """YouTube calls made by a tool count against the token's user (5.5); a
+    tool the user's tariff does not include is refused before it runs."""
     tok = get_access_token()
     if not (tok and tok.client_id and tok.client_id.isdigit()):
         return await call_next(ctx)
-    reset = quota_owner.set_owner(int(tok.client_id))
+    uid = int(tok.client_id)
+    feature = await to_thread.run_sync(blocked_feature, uid, getattr(ctx, "method", None),
+                                       getattr(ctx, "params", None))
+    if feature:
+        from domain.plans import FeatureOff
+        raise FeatureOff(feature)
+    reset = quota_owner.set_owner(uid)
     try:
         return await call_next(ctx)
     finally:

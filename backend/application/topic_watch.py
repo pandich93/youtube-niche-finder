@@ -149,6 +149,8 @@ def search_topics(api_key: str) -> dict:
             (since, SEARCH_MAX_PER_DAY)).fetchall()
         published_after = PD.to_rfc3339(datetime.now(timezone.utc) - timedelta(hours=24))
         for t in topics:
+            if not PL.plan_for(t["user_id"]).features["topic_youtube_search"]:
+                continue
             if C.search_calls_today(conn) >= yt.SEARCH_DAILY_CALL_LIMIT:
                 out["stoppedBy"] = "search-quota"
                 break

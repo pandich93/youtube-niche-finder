@@ -311,6 +311,7 @@ def sync_all(today: date = None) -> dict:
             "SELECT DISTINCT user_id FROM own_channels ORDER BY user_id").fetchall()]
     finally:
         conn.close()
+    users = [uid for uid in users if PL.plan_for(uid).features["own_channels"]]
     return {str(uid): sync(user_id=uid, today=today) for uid in users}
 
 

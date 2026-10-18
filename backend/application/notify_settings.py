@@ -9,6 +9,7 @@ address from a user must be https to a public address (urlguard.py).
 """
 import infrastructure.postgres as db
 import infrastructure.secrets as SEC
+from application import plans as PL
 from domain.users import LOCAL_USER_ID
 from infrastructure.notify.null import NullNotifier
 from infrastructure.notify.telegram import TelegramNotifier
@@ -131,14 +132,16 @@ def mode_for(user_id: int = LOCAL_USER_ID) -> str:
 
 def recipients() -> list:
     """Users who may get alerts: the local user (.env or saved settings) and
-    everyone who saved settings."""
+    everyone who saved settings -- minus those whose tariff has no
+    notifications."""
     conn = db.get_conn()
     try:
         ids = [r["user_id"] for r in conn.execute(
             "SELECT user_id FROM user_settings ORDER BY user_id").fetchall()]
     finally:
         conn.close()
-    return sorted({LOCAL_USER_ID, *ids})
+    return [uid for uid in sorted({LOCAL_USER_ID, *ids})
+            if PL.plan_for(uid).features["notifications"]]
 
 
 def target_name(user_id: int = LOCAL_USER_ID) -> str:

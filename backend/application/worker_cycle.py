@@ -41,6 +41,7 @@ from application import maturity_curve as curve_mod
 from application import niche_clusters as clusters_mod
 from application import own_channels as own_mod
 from application import packaging as packaging_mod
+from application import plans as plans_mod
 from application import sponsors as sponsors_mod
 from application import thumbnail_search as thumbsearch_mod
 from application import topic_watch as topic_mod
@@ -238,6 +239,7 @@ def cycle():
             for query in QUERIES:
                 _safe(f"collect '{query}'", lambda query=query: collector.collect_niche(
                     API_KEY, query, period=QUERY_PERIOD, pages=QUERY_PAGES, embed=True))
+        _safe("plan expiry", lambda: plans_mod.expire_due())
         _mark("daily")
 
     if _due("clusters", CLUSTER_INTERVAL_MIN):

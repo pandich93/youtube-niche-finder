@@ -12,6 +12,7 @@
 """
 import hmac
 import os
+import re
 import time
 from collections import defaultdict, deque
 from pathlib import Path
@@ -55,6 +56,7 @@ from application import notify_settings as NS
 from application import outlier_traits as OT
 from application import own_channels as OWN
 from application import packaging as PKG
+from application import plans as PL
 from application import profit as PF
 from application import repeatability as RP
 from application import saturation as SAT
@@ -153,6 +155,34 @@ _PUBLIC_API = frozenset({"/api/auth/login", "/api/auth/logout", "/api/auth/me", 
                          "/api/own/oauth/callback"})
 
 
+# SaaS sub-project 1: route -> the tariff feature it needs. Methods None = any.
+# /api/own/status and the OAuth callback stay open (the screen explains what
+# is missing), and DELETE of an own channel always works -- disconnecting and
+# revoking the token must never depend on the plan.
+_FEATURE_ROUTES = (
+    (frozenset({"GET", "POST", "PUT"}), re.compile(r"^/api/own/(?!status$|oauth/callback$)"),
+     "own_channels"),
+    (None, re.compile(r"^/api/own/rpm-calibration$"), "own_revenue"),
+    (frozenset({"GET"}), re.compile(r"^/api/niche/[^/]+/export\.[a-z]+$"), "export"),
+    (frozenset({"PUT"}), re.compile(r"^/api/settings/notifications$"), "notifications"),
+    (frozenset({"POST"}), re.compile(r"^/api/settings/notifications/test$"), "notifications"),
+)
+
+
+def _feature_block(request, user_id):
+    """The first tariff feature this request needs and the user lacks, else
+    None. Touches the database only when a feature is at stake."""
+    path, method = request.url.path, request.method
+    needed = [f for methods, rx, f in _FEATURE_ROUTES
+              if (methods is None or method in methods) and rx.search(path)]
+    if getattr(request.state, "via", None) == "token":
+        needed.insert(0, "api_access")
+    if not needed:
+        return None
+    features = PL.plan_for(user_id).features
+    return next((f for f in needed if not features[f]), None)
+
+
 @app.middleware("http")
 async def session_guard(request, call_next):
     request.state.user_id = LOCAL_USER_ID
@@ -178,6 +208,11 @@ async def session_guard(request, call_next):
         return JSONResponse(status_code=401,
                             content={"detail": "Sign in first: NF_MULTI_USER is on -- "
                                                "войдите в дашборде."})
+    if user and path.startswith("/api/") and path not in _PUBLIC_API:
+        blocked = await run_in_threadpool(_feature_block, request, user["id"])
+        if blocked:
+            return JSONResponse(status_code=403, content={
+                "error": "FeatureOff", "feature": blocked, "detail": str(PD.FeatureOff(blocked))})
     # plan 15 (5.5): YouTube calls made for this request count against the
     # signed-in user's daily budget (infrastructure/quota_owner.py)
     owner = quota_owner.set_owner(user["id"]) if user else None
