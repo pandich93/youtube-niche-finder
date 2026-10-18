@@ -6,7 +6,7 @@ import { $, api } from './ui.js';
 let me = { multiUser: false, user: null, plan: null };
 
 // экран -> функция тарифа, без которой он не нужен
-const ROUTE_FEATURE = { own: 'own_channels', mcp: 'api_access' };
+const ROUTE_FEATURE = { own: 'own_channels' };
 
 function setMe(next) { if (next) me = next; }
 function getMe() { return me; }

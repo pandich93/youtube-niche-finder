@@ -67,8 +67,9 @@ async function viewAdmin() {
   }
   const [{ plans, catalog }, { users }] = await Promise.all([
     api('/api/admin/plans'), api('/api/admin/users')]);
-  const options = (sel) => plans.filter((p) => !p.archived).map((p) =>
-    `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+  const options = (sel) => plans.filter((p) => !p.archived || p.id === sel).map((p) =>
+    `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}${p.archived ? ' (архив)' : ''}</option>`).join('');
+  const unlimited = '<span style="color:var(--muted)">без ограничений</span>';
   view.innerHTML = `
     <div class="card">
       ${sectionHead('Тарифы', 'цена и срок пока только показываются — оплата не подключена')}
@@ -88,10 +89,10 @@ async function viewAdmin() {
       ${sectionHead('Пользователи', 'тариф, дата окончания и расход сегодня')}
       ${table([
         { label: 'Email', render: (u) => `${esc(u.email)}${u.isAdmin ? ' <span class="chip">админ</span>' : ''}` },
-        { label: 'Тариф', render: (u) => `<select class="uplan" data-id="${u.id}">${options(u.plan.id)}</select>` },
-        { label: 'До', render: (u) => `<input type="date" class="uexp" data-id="${u.id}" value="${u.expiresAt ? u.expiresAt.slice(0, 10) : ''}">` },
+        { label: 'Тариф', render: (u) => (u.isAdmin ? unlimited : `<select class="uplan" data-id="${u.id}">${options(u.plan.id)}</select>`) },
+        { label: 'До', render: (u) => (u.isAdmin ? '' : `<input type="date" class="uexp" data-id="${u.id}" value="${u.expiresAt ? u.expiresAt.slice(0, 10) : ''}">`) },
         { label: 'Сегодня', render: (u) => `${u.today.ytUnits} units · $${u.today.llmUsd}` },
-        { label: '', render: (u) => `<button class="btn btn-ghost btn-sm usave" data-id="${u.id}">сохранить</button>` },
+        { label: '', render: (u) => (u.isAdmin ? '' : `<button class="btn btn-ghost btn-sm usave" data-id="${u.id}">сохранить</button>`) },
       ], users)}
     </div>`;
 

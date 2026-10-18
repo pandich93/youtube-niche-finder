@@ -8,9 +8,9 @@ const fmt = (v, unit) => (v == null ? 'без лимита' : v === 0 ? 'нет'
 
 function card(p, current, catalog) {
   const price = p.price > 0 ? `${p.price} ${esc(p.currency)} / мес` : 'Бесплатно';
-  const lim = catalog.limits.filter((l) => l.key in p.limits)
-    .map((l) => `<li>${esc(l.label)}: ${esc(fmt(p.limits[l.key], l.unit))}</li>`).join('');
-  const off = catalog.features.filter((f) => p.features[f.key] === false)
+  const lim = catalog.limits
+    .map((l) => `<li>${esc(l.label)}: ${esc(fmt(p.effectiveLimits[l.key], l.unit))}</li>`).join('');
+  const off = catalog.features.filter((f) => p.effectiveFeatures[f.key] === false)
     .map((f) => `<li style="color:var(--muted)">без: ${esc(f.label)}</li>`).join('');
   const btn = current
     ? '<span class="chip chip-accent">ваш тариф</span>'
@@ -36,7 +36,7 @@ async function viewPlan() {
   const until = d.expiresAt ? ` · до ${new Date(d.expiresAt).toLocaleDateString('ru-RU')}` : '';
   view.innerHTML = `
     <div class="card">
-      ${sectionHead(`Ваш тариф: ${esc(d.plan.name)}${until}`, 'расход сегодня и что входит')}
+      ${sectionHead(`Ваш тариф: ${d.plan.name}${until}`, 'расход сегодня и что входит')}
       <ul>
         <li>Квота YouTube: ${used.yt_units} / ${esc(fmt(d.limits.yt_units, 'units'))}</li>
         <li>Поисковые запросы: ${used.search_calls} / ${esc(fmt(d.limits.search_calls, ''))}</li>
