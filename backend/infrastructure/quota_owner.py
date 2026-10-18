@@ -24,3 +24,19 @@ def reset(token):
 
 def current():
     return _owner.get()
+
+
+# SaaS sub-project 1: the daily YouTube budget of a user comes from their
+# tariff. application/plans.py registers the lookup at import; until then (a
+# process that never imported it) the client keeps reading .env.
+_limits_provider = None
+
+
+def set_limits_provider(fn):
+    global _limits_provider
+    _limits_provider = fn
+
+
+def limits_for(user_id):
+    """{"units": int|None, "searchCalls": int|None} or None when no provider."""
+    return _limits_provider(user_id) if _limits_provider else None
