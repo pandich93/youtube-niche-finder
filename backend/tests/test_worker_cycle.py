@@ -261,3 +261,16 @@ def test_a_wrong_web_redirect_does_not_stop_the_daily_own_sync(calls, monkeypatc
                                                     "problems": ["redirect must be https"]})
     worker.cycle()
     assert "own_sync" in calls
+
+
+def test_a_failing_step_never_logs_a_secret(capsys):
+    """2026-10-18: a failing step printed its traceback with the API key in a
+    URL. The worker's log masks it."""
+    fake_key = "AIza" + "Q" * 35
+
+    def boom():
+        raise RuntimeError(f"Max retries exceeded with url: /videos?part=x&key={fake_key}")
+
+    worker._safe("probe", boom)
+    out = capsys.readouterr().out
+    assert "probe: FAILED" in out and fake_key not in out

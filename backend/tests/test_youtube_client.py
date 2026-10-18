@@ -34,7 +34,8 @@ def api(monkeypatch):
     200 once it runs out)."""
     sent, replies = [], []
 
-    def get(url, params=None, timeout=None):
+    def get(url, params=None, timeout=None, headers=None):
+        assert (headers or {}).get("X-Goog-Api-Key") == "KEY"   # the key rides in a header
         sent.append((url.rsplit("/", 1)[1], dict(params)))
         return replies.pop(0) if replies else _Resp()
 
@@ -63,10 +64,33 @@ def test_batched_splits_into_chunks_of_50():
     assert list(yt._batched([])) == []
 
 
-def test_get_drops_none_params_and_adds_the_key(api):
+def test_get_drops_none_params_and_keeps_the_key_out_of_the_url(api):
     sent, _ = api
     yt._get("videos", "KEY", id="a", pageToken=None)
-    assert sent == [("videos", {"id": "a", "key": "KEY"})]
+    assert sent == [("videos", {"id": "a"})]
+
+
+def test_a_network_error_carries_no_key(monkeypatch):
+    """requests puts the full URL in its exception text; the client must not
+    let that reach a log or an HTTP/MCP answer."""
+    import traceback
+
+    import requests
+
+    secret = "-".join(("SECRET", "KEY", "VALUE"))   # not spelled out in a traced line
+
+    def boom(url, params=None, timeout=None, headers=None):
+        raise requests.exceptions.SSLError(
+            f"Max retries exceeded with url: {url}?part=x&key={headers['X-Goog-Api-Key']}")
+
+    monkeypatch.setattr(yt.requests, "get", boom)
+    monkeypatch.setattr(yt, "_record_units", lambda path: None)
+    monkeypatch.setattr(yt.time, "sleep", lambda s: None)
+    with pytest.raises(yt.YouTubeUnreachable) as e:
+        yt._get("channels", secret, id="UC1")
+    assert isinstance(e.value, RuntimeError)
+    text = "".join(traceback.format_exception(e.type, e.value, e.tb))
+    assert secret not in text and "SSLError" in str(e.value)
 
 
 # ------------------------------------------------------------------ search
@@ -140,8 +164,7 @@ def test_channel_by_handle_normalises_the_at_sign(api):
     sent, replies = api
     replies.append(_Resp(payload={"items": [{"id": "UC1"}]}))
     assert yt.channel_by_handle("KEY", "tinylab") == {"id": "UC1"}
-    assert sent == [("channels", {"part": yt.CHANNEL_PARTS, "forHandle": "@tinylab",
-                                  "key": "KEY"})]
+    assert sent == [("channels", {"part": yt.CHANNEL_PARTS, "forHandle": "@tinylab"})]
 
 
 def test_channel_by_handle_falls_back_to_legacy_username(api):

@@ -72,6 +72,7 @@ from domain import plans as PD
 from domain.users import LOCAL_USER_ID, multi_user_enabled
 from infrastructure import quota_owner
 from infrastructure.categories import repository as C
+from infrastructure.redact import redact
 
 API_KEY = os.environ.get("YOUTUBE_API_KEY", "").strip()
 FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR")
@@ -356,9 +357,7 @@ async def _feature_off(request, exc):
 
 @app.exception_handler(Exception)
 async def _unhandled(request, exc):  # pragma: no cover
-    msg = str(exc)
-    if API_KEY:
-        msg = msg.replace(API_KEY, "<KEY>")
+    msg = redact(str(exc))
     return JSONResponse(status_code=500, content={"error": type(exc).__name__,
                                                   "detail": msg[:800]})
 

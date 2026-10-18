@@ -145,6 +145,11 @@ class UserQuotaExceeded(QuotaExceeded):
     """One signed-in user's daily share is spent; everyone else can go on."""
 
 
+class YouTubeUnreachable(RuntimeError):
+    """A network-level failure (DNS, TLS, timeout) after the retries; the
+    message names only the error type, never the request URL."""
+
+
 def parse_duration(duration: str) -> int:
     """ISO 8601 duration (PT12M34S, P1DT2H) -> seconds."""
     if not duration:
@@ -158,11 +163,21 @@ def parse_duration(duration: str) -> int:
 
 def _get(path: str, api_key: str, retries: int = 3, **params):
     params = {k: v for k, v in params.items() if v is not None}
-    params["key"] = api_key
+    # The key goes in the X-Goog-Api-Key header, never in the URL: requests
+    # puts the full URL into its exception text, and on 2026-10-18 that
+    # printed the key into the worker log.
+    headers = {"X-Goog-Api-Key": api_key}
     _check_user_budget(path)
     last = None
     for attempt in range(retries):
-        resp = requests.get(f"{BASE}/{path}", params=params, timeout=30)
+        try:
+            resp = requests.get(f"{BASE}/{path}", params=params, timeout=30, headers=headers)
+        except requests.RequestException as e:
+            if attempt + 1 < retries:
+                time.sleep(1.5 * (attempt + 1))
+                continue
+            # only the error's type: its text carries the URL
+            raise YouTubeUnreachable(f"cannot reach YouTube: {type(e).__name__}") from None
         _record_units(path)
         if resp.status_code == 200:
             return resp.json()

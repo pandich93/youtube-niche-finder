@@ -48,6 +48,7 @@ from application import topic_watch as topic_mod
 from domain import periods as P
 from infrastructure.llm import factory as llm_factory
 from infrastructure.llm.null import NullProvider
+from infrastructure.redact import redact
 
 load_env = None
 try:
@@ -123,7 +124,9 @@ def _handle_stop(signum, frame):
 
 
 def log(msg):
-    print(f"[{datetime.now(timezone.utc).isoformat(timespec='seconds')}] {msg}",
+    # every line, tracebacks included, goes through redact(): a secret that
+    # reached an exception's text must not reach the container log
+    print(f"[{datetime.now(timezone.utc).isoformat(timespec='seconds')}] {redact(msg)}",
           flush=True)
 
 

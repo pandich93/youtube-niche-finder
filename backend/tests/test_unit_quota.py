@@ -41,7 +41,7 @@ def _fake_get(responses):
     """requests.get stand-in that returns `responses` in order."""
     queue = list(responses)
 
-    def get(url, params=None, timeout=None):
+    def get(url, params=None, timeout=None, headers=None):
         return queue.pop(0)
     return get
 
