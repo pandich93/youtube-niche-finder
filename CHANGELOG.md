@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Tariffs, configured by an admin** (SaaS sub-project 1, multi-user mode):
+  daily limits, count limits and features per tariff; a base tariff Free that
+  everyone starts on; users pick a free tariff themselves on the new "Тариф"
+  screen; admins edit tariffs and users' tariffs on the new "Админка" screen.
+  Prices and periods are stored and shown; nothing is charged yet. Nothing is
+  deleted when a user moves to a smaller tariff.
+
 ## [0.4.0] - 2026-10-04
 
 The third round of plans (26-33, without 28 and 32, which wait for a

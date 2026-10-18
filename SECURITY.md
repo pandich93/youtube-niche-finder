@@ -124,9 +124,10 @@ Known limits (by design, worth knowing before you invite anyone):
 
 - **Everyone who signs in can change shared public data.** That covers pasting
   or re-pasting a video's transcript (one shared copy), curated tags,
-  recomputing the niche map and naming niches by collecting them. The `--admin`
-  flag is stored but not yet enforced anywhere. Invite only people you trust
-  with that.
+  recomputing the niche map and naming niches by collecting them.
+- **Admins.** `users.is_admin` guards `/api/admin/*` (tariffs and users'
+  tariffs): only an admin signed in to the dashboard, never an API token.
+  Admins are not limited by tariffs.
 - **API tokens do not expire.** Revoke unused ones on the MCP screen. Changing a
   password revokes all of that user's tokens and sessions.
 - **MCP over HTTP needs `NF_MULTI_USER=1` to ask for a token.** Without that

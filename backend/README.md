@@ -285,6 +285,26 @@ and each user may spend `NF_USER_DAILY_LLM_USD` (0.25, 0 = no limit) of LLM
 money a day inside the installation-wide `LLM_DAILY_BUDGET_USD`; cached answers
 cost nothing. LLM usage is recorded per user (`llm_usage.user_id`).
 
+### Tariffs (SaaS sub-project 1, `NF_MULTI_USER=1`)
+
+Every user is on a tariff. A tariff sets daily limits (YouTube units, search
+calls, LLM dollars), count limits (own channels, tracked channels, topics,
+saved items, drafts and briefs, API tokens) and which features are on (own
+channels, own revenue, LLM features, MCP and the browser extension, niche
+export, topic search on all of YouTube, alerts and digests). A limit is a
+number or empty (no limit); 0 means "not at all".
+
+- The first start creates the base tariff **Free**: new users start on it and
+  return to it when another tariff's period ends. Its daily limits are the
+  `NF_USER_DAILY_*` values from `.env` until an admin sets others.
+- Admins edit tariffs on the dashboard's **Админка** screen and change a
+  user's tariff there; admins themselves are not limited.
+- Users pick a free tariff on the **Тариф** screen. A tariff with a price is
+  shown but can only be assigned by an admin until payments exist.
+- A smaller tariff never deletes anything: existing rows stay, only new ones
+  are refused (`403 {"error":"PlanLimit"}`); a switched-off feature answers
+  `403 {"error":"FeatureOff"}` and its data stays.
+
 ### CLI: everything, without Claude Desktop
 
 ```bash
