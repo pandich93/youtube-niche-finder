@@ -23,6 +23,7 @@ from application import collecting
 from application import maturity_curve as MC
 from application import milestones as MILESTONES
 from application import monetization as MON
+from application import plans as PL
 from domain import keywords as K
 from domain import metrics as M
 from domain import monetization as MZ
@@ -117,9 +118,15 @@ def resolve_channel_id(conn, api_key: str, raw: str) -> str:
 
 def track(channel_id: str, note: str = None, user_id: int = LOCAL_USER_ID) -> dict:
     conn = db.get_conn()
-    db.track_channel(conn, channel_id, note, user_id=user_id)
-    conn.commit()
-    conn.close()
+    try:
+        already = conn.execute("SELECT 1 FROM tracked_channels WHERE user_id = ? AND channel_id = ?",
+                               (user_id, channel_id)).fetchone()
+        if not already:            # re-tracking updates the note, it is not a new row
+            PL.ensure_room(user_id, "tracked_channels")
+        db.track_channel(conn, channel_id, note, user_id=user_id)
+        conn.commit()
+    finally:
+        conn.close()
     return {"channelId": channel_id, "tracked": True, "note": note}
 
 

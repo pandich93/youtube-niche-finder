@@ -11,6 +11,7 @@ import json
 
 import infrastructure.postgres as db
 from application import discovery as trends
+from application import plans as PL
 from domain import keywords as K
 from domain import metadata as MD
 from domain import periods as P
@@ -193,6 +194,7 @@ def _shape_draft(r) -> dict:
 def save_draft(title: str, description: str = "", tags=None, niche: str = None,
               channel_id: str = None, is_short: bool = False, review: dict = None,
               source_video_id: str = None, user_id: int = LOCAL_USER_ID) -> dict:
+    PL.ensure_room(user_id, "drafts")
     conn = db.get_conn()
     now = db.now_iso()
     row = conn.execute(

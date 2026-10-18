@@ -16,9 +16,11 @@ from datetime import date, timedelta
 import infrastructure.postgres as db
 import infrastructure.secrets as SEC
 from application import own_formats as OF
+from application import plans as PL
 from domain import metrics as M
 from domain import own_metrics as OM
 from domain import periods as P
+from domain import plans as DP
 from domain.users import LOCAL_USER_ID
 from infrastructure.youtube import analytics as YA
 from infrastructure.youtube import oauth as OA
@@ -117,8 +119,10 @@ def start_connect(user_id: int = LOCAL_USER_ID, redirect_uri: str = None,
     one's own installation, no in web mode (plan 25: asked separately)."""
     _require_configured()
     redirect = os.environ.get(REDIRECT_ENV, "").strip() or redirect_uri or DEFAULT_REDIRECT
+    if include_revenue:
+        PL.ensure_feature(user_id, "own_revenue")
     if include_revenue is None:
-        include_revenue = mode() != "web"
+        include_revenue = mode() != "web" and PL.plan_for(user_id).features["own_revenue"]
     scopes = OA.SCOPES if include_revenue else OA.BASE_SCOPES
     verifier, challenge = OA.pkce_pair()
     state = OA.new_state()
@@ -168,6 +172,21 @@ def finish_connect(state: str, code: str, today: date = None) -> dict:
         ch = YA.mine_channel(tokens["access_token"])
     except YA.AnalyticsError as e:
         raise ConnectError(str(e)) from None
+    conn = db.get_conn()
+    try:
+        known = conn.execute("SELECT 1 FROM own_channels WHERE user_id = ? AND channel_id = ?",
+                             (user_id, ch["channelId"])).fetchone()
+    finally:
+        conn.close()
+    if not known:              # reconnecting (consent expires) is never blocked
+        try:
+            PL.ensure_room(user_id, "own_channels")
+        except DP.PlanLimitReached as e:
+            try:
+                OA.revoke(refresh)
+            except Exception:
+                pass
+            raise ConnectError(str(e)) from None
     conn = db.get_conn()
     try:
         conn.execute(

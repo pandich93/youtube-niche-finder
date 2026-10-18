@@ -66,6 +66,7 @@ from application import thumbnail_search as TS
 from application import topic_watch as TW
 from application import trajectory as TJ
 from application import transcripts as TR
+from domain import plans as PD
 from domain.users import LOCAL_USER_ID, multi_user_enabled
 from infrastructure import quota_owner
 from infrastructure.categories import repository as C
@@ -304,6 +305,18 @@ def _need_key():
 async def _quota_exceeded(request, exc):
     return JSONResponse(status_code=429, content={"error": "QuotaExceeded",
                                                   "detail": str(exc)[:800]})
+
+
+@app.exception_handler(PD.PlanLimitReached)
+async def _plan_limit(request, exc):
+    return JSONResponse(status_code=403, content={"error": "PlanLimit", "limit": exc.key,
+                                                  "max": exc.max, "detail": str(exc)})
+
+
+@app.exception_handler(PD.FeatureOff)
+async def _feature_off(request, exc):
+    return JSONResponse(status_code=403, content={"error": "FeatureOff", "feature": exc.key,
+                                                  "detail": str(exc)})
 
 
 @app.exception_handler(Exception)

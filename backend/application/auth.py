@@ -14,6 +14,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 import infrastructure.postgres as db
+from application import plans as PL
 
 MIN_PASSWORD_LEN = 10
 SESSION_DAYS = 30
@@ -178,6 +179,7 @@ TOKEN_PREFIX = "nf_"
 
 
 def create_api_token(user_id: int, name: str = None) -> dict:
+    PL.ensure_room(user_id, "api_tokens")
     token = TOKEN_PREFIX + secrets.token_urlsafe(32)
     conn = db.get_conn()
     try:

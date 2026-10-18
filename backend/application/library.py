@@ -10,6 +10,7 @@ like when you noticed it, not just what it looks like now.
 import json
 
 import infrastructure.postgres as db
+from application import plans as PL
 from domain.users import LOCAL_USER_ID
 
 VALID_KINDS = ("video", "channel")
@@ -22,6 +23,7 @@ def save_item(kind: str, ref_id: str, payload: dict = None, note: str = None,
         raise ValueError(f"kind must be one of {VALID_KINDS}, got {kind!r}")
     if not ref_id:
         raise ValueError("ref_id is required")
+    PL.ensure_room(user_id, "saved_items")
     conn = db.get_conn()
     now = db.now_iso()
     row = conn.execute(

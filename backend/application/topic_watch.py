@@ -24,6 +24,7 @@ import numpy as np
 
 import infrastructure.postgres as db
 from application import alerts as AL
+from application import plans as PL
 from domain.users import LOCAL_USER_ID
 
 WINDOW_HOURS = 48
@@ -63,6 +64,9 @@ def add_topic(text: str, threshold: float = DEFAULT_THRESHOLD,
         raise ValueError("topic text is longer than 300 characters")
     if not 0 < float(threshold) < 1:
         raise ValueError("threshold must be between 0 and 1")
+    PL.ensure_room(user_id, "topics")
+    if search_youtube:
+        PL.ensure_feature(user_id, "topic_youtube_search")
     vec = np.asarray(_embed(text), dtype=np.float32)
     conn = db.get_conn()
     try:
@@ -107,6 +111,8 @@ def set_paused(topic_id: int, paused: bool, user_id: int = LOCAL_USER_ID) -> dic
 
 def set_search(topic_id: int, on: bool, user_id: int = LOCAL_USER_ID) -> dict:
     """Turn the daily YouTube search of a topic on or off."""
+    if on:
+        PL.ensure_feature(user_id, "topic_youtube_search")
     conn = db.get_conn()
     try:
         row = conn.execute("UPDATE user_topics SET search_youtube = ? WHERE id = ? AND user_id = ? "
