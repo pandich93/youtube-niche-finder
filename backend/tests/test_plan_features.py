@@ -102,6 +102,11 @@ def test_mcp_blocked_feature(user):
     switch_off(user.uid, {"own_channels": False})
     assert MA.blocked_feature(user.uid, "tools/call", {"name": "own_channels"}) == "own_channels"
     assert MA.blocked_feature(user.uid, "tools/call", {"name": "search_videos"}) is None
+    assert MA.blocked_feature(user.uid, "tools/call", {"name": "rpm_calibration"}) == "own_channels"
+    switch_off(user.uid, {"own_revenue": False})
+    assert MA.blocked_feature(user.uid, "tools/call", {"name": "rpm_calibration"}) == "own_revenue"
+    assert MA.blocked_feature(user.uid, "tools/call", {"name": "own_channels"}) is None
+    switch_off(user.uid, {"own_channels": False})
     switch_off(user.uid)
     assert MA.blocked_feature(user.uid, "tools/list", None) == "api_access"
 

@@ -215,3 +215,34 @@ def test_the_search_toggle_and_the_daily_cap(yt_api, monkeypatch):
     assert TW.set_search(t["id"], True)["searchYoutube"] is True
     monkeypatch.setattr(TW, "SEARCH_MAX_PER_DAY", 0)
     assert TW.search_topics("key")["topicsSearched"] == 0 and yt_api["search"] == []
+
+
+def test_owners_without_the_feature_do_not_starve_the_others(yt_api, monkeypatch):
+    from application import auth as AUTH
+    from application import plans as PL
+    conn = db.get_conn()
+    conn.execute("DELETE FROM users WHERE id != 1")
+    conn.commit()
+    conn.close()
+    blocked = AUTH.create_user("blocked@example.com", "correct horse battery")
+    monkeypatch.setattr(TW, "SEARCH_MAX_PER_DAY", 2)
+    ids = []
+    for i in range(2):                      # older, owner lacks the feature
+        t = TW.add_topic("ai tools", user_id=blocked, search_youtube=True)
+        _backdate_topic(t["id"], 48 + i)
+        ids.append(t["id"])
+    ok = TW.add_topic("cooking", threshold=0.8, search_youtube=True)
+    _backdate_topic(ok["id"], 24)
+    real = PL.plan_for
+
+    def fake(uid):
+        ent = real(uid)
+        if uid == blocked:
+            return type(ent)(ent.plan_id, ent.name, ent.limits,
+                             {**ent.features, "topic_youtube_search": False})
+        return ent
+
+    monkeypatch.setattr(PL, "plan_for", fake)
+    res = TW.search_topics("key")
+    assert res["topicsSearched"] == 1
+    assert [c[0] for c in yt_api["search"]] == ["cooking"]

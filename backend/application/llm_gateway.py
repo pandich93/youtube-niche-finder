@@ -21,13 +21,6 @@ from infrastructure.llm import factory
 DAILY_BUDGET_USD = float(os.environ.get("LLM_DAILY_BUDGET_USD", "1.0"))
 
 
-def user_daily_budget_usd(user_id=None) -> float | None:
-    """A signed-in user's share of the day's LLM spend in multi-user mode,
-    from their tariff; None = no personal limit. The installation-wide
-    LLM_DAILY_BUDGET_USD still caps everyone together."""
-    return plans.plan_for(user_id).limits["llm_usd"] if user_id is not None else None
-
-
 def today_utc() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 

@@ -145,12 +145,20 @@ def search_topics(api_key: str) -> dict:
         topics = conn.execute(
             "SELECT id, user_id, text FROM user_topics WHERE search_youtube = 1 AND paused = 0 "
             "AND (last_searched_at IS NULL OR last_searched_at < ?) "
-            "ORDER BY last_searched_at ASC NULLS FIRST, id LIMIT ?",
-            (since, SEARCH_MAX_PER_DAY)).fetchall()
+            "ORDER BY last_searched_at ASC NULLS FIRST, id", (since,)).fetchall()
+        allowed = {}                       # the plan is read once per owner
+        picked = []
+        for t in topics:
+            if t["user_id"] not in allowed:
+                allowed[t["user_id"]] = bool(
+                    PL.plan_for(t["user_id"]).features["topic_youtube_search"])
+            if allowed[t["user_id"]]:
+                picked.append(t)
+                if len(picked) >= SEARCH_MAX_PER_DAY:
+                    break
+        topics = picked
         published_after = PD.to_rfc3339(datetime.now(timezone.utc) - timedelta(hours=24))
         for t in topics:
-            if not PL.plan_for(t["user_id"]).features["topic_youtube_search"]:
-                continue
             if C.search_calls_today(conn) >= yt.SEARCH_DAILY_CALL_LIMIT:
                 out["stoppedBy"] = "search-quota"
                 break

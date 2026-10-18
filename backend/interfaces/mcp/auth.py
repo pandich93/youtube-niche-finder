@@ -53,7 +53,8 @@ def current_user_id() -> int:
 
 # SaaS sub-project 1: MCP tools that need a tariff feature beyond api_access
 MCP_TOOL_FEATURES = {"own_channels": "own_channels", "own_vs_niche": "own_channels",
-                     "own_channel_formats": "own_channels", "sync_own_channels": "own_channels"}
+                     "own_channel_formats": "own_channels", "sync_own_channels": "own_channels",
+                     "rpm_calibration": ("own_channels", "own_revenue")}
 
 
 def blocked_feature(user_id: int, method, params):
@@ -63,9 +64,10 @@ def blocked_feature(user_id: int, method, params):
     if not features["api_access"]:
         return "api_access"
     if method == "tools/call":
-        feature = MCP_TOOL_FEATURES.get((params or {}).get("name"))
-        if feature and not features[feature]:
-            return feature
+        needed = MCP_TOOL_FEATURES.get((params or {}).get("name")) or ()
+        for feature in ((needed,) if isinstance(needed, str) else needed):
+            if not features[feature]:
+                return feature
     return None
 
 

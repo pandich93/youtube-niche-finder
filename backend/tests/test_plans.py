@@ -147,6 +147,8 @@ def test_base_rules():
         PL.update_plan(free["id"], {**free, "isBase": False})
     with pytest.raises(PL.PlanError):
         PL.update_plan(free["id"], {**free, "periodDays": 30})
+    with pytest.raises(PL.PlanError, match="базовый тариф бесплатный"):
+        PL.update_plan(free["id"], {**free, "price": 5})
 
 
 def test_bad_input_lists_fields():
@@ -208,3 +210,25 @@ def test_creating_a_base_plan_clears_the_flag_on_free():
 
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+@pytest.mark.parametrize("bad", ["nan", float("nan"), float("inf"), "inf", 1e9, -1])
+def test_unstorable_prices_are_refused(bad):
+    with pytest.raises(PL.PlanError, match="price"):
+        PL.create_plan({"slug": "badprice", "name": "Bad", "price": bad})
+    assert not any(p["slug"] == "badprice" for p in PL.list_plans())
+
+
+def test_plan_dicts_carry_the_effective_limits_and_features():
+    free = next(p for p in PL.public_plans() if p["slug"] == "free")
+    assert set(free["effectiveLimits"]) == set(DP.LIMITS)
+    assert set(free["effectiveFeatures"]) == set(DP.FEATURES)
+
+
+def test_a_malformed_stored_plan_is_not_usable():
+    free = next(p for p in PL.list_plans() if p["slug"] == "free")
+    row = {"id": 1, "slug": "x", "name": "x", "description": "", "price": 0, "currency": "USD",
+           "period_days": None, "is_base": 1, "is_public": 1, "archived_at": None,
+           "sort_order": 0, "limits": [1, 2], "features": "oops"}
+    assert not PL._usable(PL._shape(row))
+    assert free

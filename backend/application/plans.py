@@ -7,6 +7,7 @@ limited; single-user mode gets the catalog defaults, exactly as before plans
 existed. Nothing here deletes data: a smaller plan only stops new rows.
 """
 import logging
+import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -47,13 +48,18 @@ def _unlimited() -> Entitlements:
                         {k: True for k in DP.FEATURES}, unlimited=True)
 
 
+def _obj(v):
+    """A stored limits/features value; anything but an object is kept as an
+    invalid marker so validate() reports it and the env fallback applies."""
+    return dict(v or {}) if isinstance(v or {}, dict) else {"__invalid__": True}
+
+
 def _shape(r) -> dict:
     return {"id": r["id"], "slug": r["slug"], "name": r["name"], "description": r["description"],
             "price": float(r["price"] or 0), "currency": r["currency"],
             "periodDays": r["period_days"], "isBase": bool(r["is_base"]),
             "isPublic": bool(r["is_public"]), "archived": r["archived_at"] is not None,
-            "sortOrder": r["sort_order"], "limits": dict(r["limits"] or {}),
-            "features": dict(r["features"] or {})}
+            "sortOrder": r["sort_order"], "limits": _obj(r["limits"]), "features": _obj(r["features"])}
 
 
 def _usable(plan) -> bool:
@@ -162,6 +168,8 @@ def list_plans() -> list:
     out = []
     for r in rows:
         p = _shape(r)
+        p["effectiveLimits"] = DP.resolve_limits(p["limits"])
+        p["effectiveFeatures"] = DP.resolve_features(p["features"])
         p["users"] = counts.get(p["id"], 0) + (no_row if p["isBase"] else 0)
         out.append(p)
     return out
@@ -264,7 +272,7 @@ def _clean(data: dict) -> dict:
         errors.append("slug: латиница в нижнем регистре, цифры и дефис")
     try:
         price = round(float(data.get("price") or 0), 2)
-        if price < 0:
+        if not math.isfinite(price) or price < 0 or price >= 100_000_000:
             raise ValueError
     except (TypeError, ValueError):
         price = 0
@@ -283,6 +291,8 @@ def _clean(data: dict) -> dict:
         except (TypeError, ValueError):
             errors.append("periodDays: целое число дней от 1 или пусто")
     is_base, is_public = bool(data.get("isBase")), bool(data.get("isPublic", True))
+    if is_base and price:
+        errors.append("price: базовый тариф бесплатный")
     if is_base and period:
         errors.append("periodDays: у базового тарифа нет срока")
     if is_base and not is_public:
