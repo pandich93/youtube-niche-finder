@@ -128,10 +128,11 @@ def _pool():
 
 class _PGConn:
     """Sqlite3.Connection-lookalike backed by a pooled psycopg2 connection."""
-    __slots__ = ("_conn",)
+    __slots__ = ("_conn", "_returned")
 
     def __init__(self, conn):
         self._conn = conn
+        self._returned = False
 
     def execute(self, sql, params=None):
         cur = self._conn.cursor()
@@ -158,6 +159,10 @@ class _PGConn:
         # Hand the real connection back to the pool instead of closing the
         # socket -- every call site treats get_conn()/close() as cheap, the
         # way it was with sqlite3, so the pooling stays invisible to them.
+        # Only once: a second putconn of the same connection raises.
+        if self._returned:
+            return
+        self._returned = True
         try:
             if self._conn.closed == 0:
                 self._conn.rollback()  # drop any uncommitted work, matches
@@ -165,6 +170,18 @@ class _PGConn:
         except Exception:
             pass
         _pool().putconn(self._conn)
+
+    def __del__(self):
+        # Many call sites do get_conn() ... close() with no try/finally. When
+        # one of them raises in between (a network error mid-collection, a
+        # deadlock), the wrapper is dropped without close() and the pool would
+        # keep the connection checked out and "idle in transaction" for good,
+        # holding its locks -- on 2026-10-18 that blocked every container's
+        # start for 13 hours. Rolling back and returning it here closes that.
+        try:
+            self.close()
+        except Exception:
+            pass
 
 
 def get_conn() -> _PGConn:
