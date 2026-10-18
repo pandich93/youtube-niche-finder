@@ -29,6 +29,9 @@ import { viewData } from './screens/data.js';
 import { viewHelp } from './screens/help.js';
 import { viewMcp } from './screens/mcp.js';
 import { viewOwn } from './screens/own.js';
+import { viewPlan } from './screens/plan.js';
+import { viewAdmin } from './screens/admin.js';
+import { routeAllowed } from './plan-state.js';
 
 async function guard(fn) {
   view.innerHTML = '<div class="skeleton-page"></div>';
@@ -69,6 +72,8 @@ const ROUTES = {
   data: { title: 'Данные', run: viewData },
   help: { title: 'Справка и FAQ', run: viewHelp },
   mcp: { title: 'MCP-подключение', run: viewMcp },
+  plan: { title: 'Тариф', run: viewPlan },
+  admin: { title: 'Админка', run: viewAdmin },
 };
 
 function setActive(href) {
@@ -99,6 +104,12 @@ async function render() {
   if (name === 'niche' && arg) {
     $('#crumbSection').textContent = 'Ниша'; setActive('#/niches');
     return guard(() => viewNiche(decodeURIComponent(arg)));
+  }
+  if (name && ROUTES[name] && !routeAllowed(name)) {
+    $('#crumbSection').textContent = ROUTES[name].title; setActive(`#/${name}`);
+    view.innerHTML = notice(`Раздел «${esc(ROUTES[name].title)}» не входит в ваш тариф.
+      <a href="#/plan">Сменить тариф</a>`);
+    return;
   }
   const route = ROUTES[name || 'overview'] || ROUTES.overview;
   $('#crumbSection').textContent = route.title;

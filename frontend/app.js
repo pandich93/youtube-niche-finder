@@ -3,6 +3,7 @@
 import { $, api, esc, notice, state, loadScores } from './ui.js';
 import { loadFootStat } from './shared.js';
 import { render } from './router.js';
+import { setMe, applyNav, renderPlanLine } from './plan-state.js';
 
 /* --------------------------------------------------------------- запуск */
 
@@ -71,6 +72,7 @@ async function start() {
   let me = { multiUser: false, user: null };
   try { me = await api('/api/auth/me'); } catch { /* старый сервер без входа */ }
   if (me.multiUser && !me.user) { showSignIn(); return; }
+  setMe(me);
   if (me.multiUser) {
     const out = $('#signOut');
     out.hidden = false;
@@ -79,16 +81,9 @@ async function start() {
       await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
       location.reload();
     });
-    // План 15 (5.5): личная доля общей квоты YouTube на сегодня.
-    const qd = me.quota;
-    if (qd) {
-      const part = (used, limit) => (limit ? `${used}/${limit}` : `${used}, без лимита`);
-      const box = $('#myQuota');
-      box.hidden = false;
-      box.textContent = `Ваша квота сегодня: ${part(qd.units, qd.limits.units)} units, `
-        + `поисков ${part(qd.searchCalls, qd.limits.searchCalls)}`;
-    }
+    renderPlanLine();
   }
+  applyNav();
   addEventListener('nf:signin-required', () => showSignIn('Сессия закончилась — войдите снова.'));
   loadNiches();
   loadFootStat();

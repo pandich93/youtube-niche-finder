@@ -29,12 +29,12 @@ ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "backend"
 SHOTS = Path(__file__).resolve().parent / "screenshots"
 
-# 24 ключа ROUTES из router.js (до разбивки -- из app.js) + глубокие ссылки
+# 26 ключей ROUTES из router.js (до разбивки -- из app.js) + глубокие ссылки
 # на объекты из seed_demo.py.
 ROUTES = [
     "overview", "find", "viral", "channels", "categories", "keywords", "tags",
     "tracker", "alerts", "ideas", "language", "transcripts", "clusters", "titles", "saved", "packaging", "metadata", "calendar",
-    "niches", "enter", "own", "data", "help", "mcp",
+    "niches", "enter", "own", "data", "help", "mcp", "plan", "admin",
     "niche/demo", "channel/UC0000000000000000000a", "channel/UC0000000000000000000f", "brief/avid000",
     "brief/avid000?gap=how%20to%20start%20a%20tiny%20AI%20lab%3F",
     "compare/avid000,avid001",

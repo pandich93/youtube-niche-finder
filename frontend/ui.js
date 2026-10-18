@@ -27,6 +27,7 @@ async function api(path, opts = {}) {
     const msg = data?.detail || data?.error || `HTTP ${res.status}`;
     throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
   }
+  if (opts.method && opts.method !== 'GET') dispatchEvent(new CustomEvent('nf:api-write'));
   return data;
 }
 

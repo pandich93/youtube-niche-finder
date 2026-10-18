@@ -108,6 +108,9 @@ a { color: inherit; text-decoration: none; }
 
 .sidebar-foot { margin-top: auto; padding-top: 16px; display: grid; gap: 10px; flex: none; }
 .foot-stat { font-size: 11px; color: var(--muted); line-height: 1.6; }
+.nav-item[hidden] { display: none; }
+a.foot-stat { display: block; text-decoration: none; }
+a.foot-stat:hover { color: var(--ink); }
 
 .main { min-width: 0; display: flex; flex-direction: column; }
 
