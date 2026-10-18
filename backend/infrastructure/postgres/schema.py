@@ -493,6 +493,49 @@ CREATE TABLE IF NOT EXISTS event_reads (
     seen_at TEXT NOT NULL,
     PRIMARY KEY (user_id, event_id)
 );
+
+-- ---------- SaaS sub-project 1: tariffs (used when NF_MULTI_USER=1) ----------
+-- plans is shared: what a tariff allows. limits/features hold only the values
+-- an admin set; a missing key means the catalog default (domain/plans.py).
+CREATE TABLE IF NOT EXISTS plans (
+    id BIGSERIAL PRIMARY KEY,
+    slug TEXT NOT NULL UNIQUE,
+    name TEXT NOT NULL,
+    description TEXT,
+    price NUMERIC(10,2) NOT NULL DEFAULT 0,
+    currency TEXT NOT NULL DEFAULT 'USD',
+    period_days INTEGER,
+    is_base INTEGER NOT NULL DEFAULT 0,
+    is_public INTEGER NOT NULL DEFAULT 1,
+    archived_at TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    limits JSONB NOT NULL DEFAULT '{}'::jsonb,
+    features JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TEXT,
+    updated_at TEXT
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_plans_one_base ON plans(is_base) WHERE is_base = 1;
+
+-- personal: a user's tariff; no row = the base plan
+CREATE TABLE IF NOT EXISTS user_plans (
+    user_id BIGINT PRIMARY KEY,
+    plan_id BIGINT NOT NULL REFERENCES plans(id),
+    started_at TEXT NOT NULL,
+    expires_at TEXT,
+    assigned_by TEXT NOT NULL
+);
+
+-- personal: every change of a user's tariff (self, admin:<id>, system)
+CREATE TABLE IF NOT EXISTS plan_changes (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL DEFAULT 1,
+    from_plan_id BIGINT,
+    to_plan_id BIGINT NOT NULL,
+    expires_at TEXT,
+    changed_by TEXT NOT NULL,
+    changed_at TEXT NOT NULL
+);
 """
 
 # columns added to pre-existing tables (name -> DDL type)
@@ -715,6 +758,14 @@ def migrate(conn):
                      "ON CONFLICT (id) DO NOTHING", (LOCAL_USER_ID, now_iso()))
         conn.execute("SELECT setval(pg_get_serial_sequence('users', 'id'), "
                      "GREATEST((SELECT MAX(id) FROM users), 1))")
+    if _existing_columns(conn, "plans"):
+        # SaaS sub-project 1: the base tariff everyone starts on. Empty limits
+        # and features: the catalog defaults (NF_USER_DAILY_* from .env, no
+        # count limits, every feature on) -- nothing changes for anyone.
+        conn.execute(
+            "INSERT INTO plans (slug, name, description, is_base, is_public, created_at, updated_at) "
+            "SELECT 'free', 'Free', 'Базовый тариф', 1, 1, ?, ? "
+            "WHERE NOT EXISTS (SELECT 1 FROM plans)", (now_iso(), now_iso()))
     conn.execute(
         "INSERT INTO meta (key, value) VALUES ('schema_version', ?) "
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value",

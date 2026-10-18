@@ -17,7 +17,8 @@ SYSTEM_USER_ID = 0
 # Tables whose rows belong to one user (plan 15 "personal"). Rows written
 # before multi-user mode existed are moved to LOCAL_USER_ID by the migration.
 PERSONAL_TABLES = ("tracked_channels", "saved_items", "drafts", "alert_deliveries",
-                   "transcript_requests", "llm_usage", "user_topics", "own_channel_daily")
+                   "transcript_requests", "llm_usage", "user_topics", "own_channel_daily",
+                   "plan_changes")
 
 
 def multi_user_enabled() -> bool:
