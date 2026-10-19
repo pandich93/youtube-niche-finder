@@ -27,6 +27,16 @@ and `main` are supported.
 - **Secrets stay local.** Your YouTube key lives in `.env`. The OAuth refresh
   tokens of your own channels are encrypted with `OWN_TOKENS_KEY` and never
   returned or logged.
+- **The YouTube key stays out of URLs and logs.**
+  - The key goes in the `X-Goog-Api-Key` header, never in the request URL
+    (`_get` in `backend/infrastructure/youtube/client.py`).
+  - A network error is re-raised as `YouTubeUnreachable` without the URL.
+  - The worker log and HTTP 500 answers pass through
+    `backend/infrastructure/redact.py`, which masks `key=`, `access_token=`,
+    `refresh_token=` and `client_secret=` parameters, `AIza...` keys and the
+    configured secrets.
+  - A key that ever appeared in a log (older versions put it in the URL) should
+    be rotated in Google Cloud Console.
 
 ## Multi-user mode (`NF_MULTI_USER=1`)
 
@@ -89,9 +99,10 @@ What you have to do before you give anyone an account:
    it makes stored tokens unreadable. Leaking it exposes them.
 3. **Back up Postgres.** It now holds accounts, sessions and encrypted
    secrets. Protect the backups like the server itself.
-4. **Give each person their own account.** Admins are marked `--admin`, but
-   no route grants extra powers over HTTP. Accounts are managed only from the
-   command line on the server.
+4. **Give each person their own account.** Admins are marked `--admin`; over
+   HTTP their only extra power is editing tariffs and users' tariffs
+   (`/api/admin/*`, signed-in dashboard sessions only). Accounts themselves are
+   created only from the command line on the server.
 5. **Read YouTube's API policies for a service others use.**
    - III.D.1.c: one API project per application. That is why the installation
      uses one key, and users do not bring their own.

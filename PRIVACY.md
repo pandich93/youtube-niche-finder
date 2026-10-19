@@ -44,6 +44,14 @@ Everything lives in the Postgres database you point the app at (by default the
   only to the backend address you set. Each user's notification settings
   (`user_settings`): the Telegram chat id in clear, the bot token and webhook
   address encrypted with `OWN_TOKENS_KEY`.
+- **Tariffs** (only with `NF_MULTI_USER=1`) -- the tariffs themselves (`plans`:
+  name, price, limits and features) are shared settings, not data about
+  anyone. Per user, `user_plans` keeps the user's tariff, its start and end
+  date and who assigned it (the user, an admin or the system), and
+  `plan_changes` is a log of every tariff change with the same facts. Both
+  are personal rows with the owner's `user_id`. The app has no account
+  deletion yet, so they are removed only by deleting the database (see
+  "Deleting everything" below).
 - **Your own channels** (plan 14, only if you connect one) — the channel id and
   title, the granted scopes, the OAuth refresh token **encrypted** with
   `OWN_TOKENS_KEY` from your `.env` (Fernet; the key is never in the database),
@@ -141,7 +149,7 @@ box — the application contacts exactly three external hosts:
 
 | Host | Why | Sends your API key? |
 |---|---|---|
-| `www.googleapis.com` | YouTube Data API v3 — every quota-spending call | Yes |
+| `www.googleapis.com` | YouTube Data API v3 — every quota-spending call | Yes, in the `X-Goog-Api-Key` header |
 | `www.youtube.com` | Channel RSS feeds (`/feeds/videos.xml`), used by the free upload watcher | No |
 | `i.ytimg.com` | Thumbnail images of tracked channels' videos from the last `WORKER_FULL_PERIOD`, every `WORKER_THUMBS_INTERVAL_MIN`, to notice thumbnail swaps (the API cannot). Plain image GETs — Google sees which videos you check. `WORKER_THUMBS=0` turns it off | No |
 | `i.ytimg.com` | Plan 13, **off by default**: with `WORKER_THUMB_EMBED=1` (or the "Посчитать векторы превью" button / `embed_thumbnails`) the thumbnails of any collected videos, to compute their CLIP vectors locally; the image is dropped after that | No |
@@ -234,9 +242,10 @@ message text.
 
 ## Your API key
 
-`YOUTUBE_API_KEY` is read from `.env` at startup and used only as a query
-parameter to `www.googleapis.com`. It is not logged, not written to the
-database, and not sent anywhere else. `.env` is listed in `.gitignore`, so it
+`YOUTUBE_API_KEY` is read from `.env` at startup and used only to call
+`www.googleapis.com`, sent in the `X-Goog-Api-Key` header and never in a URL,
+so it does not appear in error messages or logs. It is not written to the
+database and not sent anywhere else. `.env` is listed in `.gitignore`, so it
 does not end up in git — but it is a plaintext file on your disk, so treat it
 like any other credential and do not commit it or paste it into an issue.
 

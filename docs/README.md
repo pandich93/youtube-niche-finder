@@ -8,7 +8,8 @@ five-minute tour; everything below goes deeper into one part.
 | Document | Read it when you want to |
 |---|---|
 | [README](../README.md) | see what the project does, install it, connect Claude Desktop and the extension |
-| [backend/README.md](../backend/README.md) | understand YouTube quota, run with or without Docker, use the CLI, look up any of the 100 MCP tools and the 7 ready-made scenarios, read the formulas |
+| [self-hosting.md](self-hosting.md) | install and run your own copy: Docker, Claude Desktop, the extension, without Docker, how it works |
+| [backend/README.md](../backend/README.md) | understand YouTube quota, run with or without Docker, use the CLI, set up multi-user mode and tariffs, look up any of the 100 MCP tools and the 7 ready-made scenarios, read the formulas |
 | [frontend/README.md](../frontend/README.md) | find your way around the dashboard: every screen, where its data comes from, what costs quota |
 | [extension/README.md](../extension/README.md) | install the Chrome extension and know what each panel, badge and popup section shows |
 | [HTTP API reference](http-api.md) | call the backend from your own scripts: all routes, parameters, costs and their MCP twins |
@@ -34,7 +35,7 @@ five-minute tour; everything below goes deeper into one part.
 - `docs/http-api.md` is generated from the code:
   `python3 scripts/gen_http_api_docs.py` rewrites it, `--check` fails when a
   route was added, removed or changed without regenerating it.
-- The tool count (80), the scenario count (7) and the screenshots in
+- The tool count (100), the scenario count (7) and the screenshots in
   [`assets/`](../assets) are written by hand -- update them in the same pull
   request that changes the code.
 - Internal notes (decision history, market research, iteration plans) live in

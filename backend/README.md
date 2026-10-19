@@ -5,7 +5,7 @@
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue?style=flat-square&logo=python&logoColor=white)](#running-without-docker)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](interfaces/http/api.py)
 [![PostgreSQL 16](https://img.shields.io/badge/postgres-16-336791?style=flat-square&logo=postgresql&logoColor=white)](../docker-compose.yml)
-[![MCP](https://img.shields.io/badge/MCP-80%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
+[![MCP](https://img.shields.io/badge/MCP-100%20tools-8A2BE2?style=flat-square)](interfaces/mcp/server.py)
 
 A self-hosted alternative to NexLev / vidIQ / ViewStats: find niches, viral
 videos from small channels, trending categories and keywords **over
@@ -227,6 +227,7 @@ quota, an empty database, no history. One check costs 1 quota unit.
 ### Multi-user mode (plan 15, experimental, off by default)
 
 Checklist before you give anyone an account: [SECURITY.md](../SECURITY.md).
+Per-user limits and features are set by tariffs, see [Tariffs](#tariffs-saas-sub-project-1-nf_multi_user1).
 
 `NF_MULTI_USER=1` turns on sign-in. Accounts are by invitation — there is no
 sign-up page:
@@ -621,7 +622,9 @@ One-time setup (each user brings their own OAuth client; nothing is shared):
 5. `docker compose up -d web worker`, open the dashboard → **Мои каналы** →
    **Подключить канал**, sign in and allow read-only access.
 
-**Running it as a service (plan 25, `OWN_OAUTH_MODE=web`).** Customers do not
+**Running it as a service (plan 25, `OWN_OAUTH_MODE=web`).** Who gets what is
+set by [tariffs](#tariffs-saas-sub-project-1-nf_multi_user1); a tariff can switch
+the own-channels feature off. Customers do not
 create OAuth clients: the service has one, of type **Web application**, and a
 customer only clicks "Подключить канал" and allows read-only access in
 Google's consent window. Set `OWN_OAUTH_MODE=web` and

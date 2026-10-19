@@ -40,6 +40,7 @@ container read-only, no image rebuild needed.
 | `app.js` | entry point: theme, global filters, footer, first render |
 | `router.js` | hash routing: route table, active menu item, loading/error state |
 | `shared.js` | shared by screens: `#view`, period labels, the collect form, the quota footer, the niche overview block |
+| `plan-state.js` | the signed-in user's tariff (multi-user mode only): hides menu sections the tariff switches off and fills the footer line "Тариф <name> · квота used/limit" |
 | `hook_view.js` | the hook-score result card shared by the Transcripts and Title check screens |
 | `screens/*.js` | one file per screen (`overview.js`, `find.js`, …, `channel.js`, `niche.js`) |
 | `tests/test_smoke.py` | opens every screen in headless Chromium against a seeded backend (`make frontend-test`) |
@@ -375,6 +376,30 @@ consent flow (`POST /api/own/connect`), "Refresh numbers" syncs now
 (`POST /api/own/sync`; the worker also syncs daily), "Disconnect" revokes the
 token and deletes everything stored for the channel. The refresh token is
 stored encrypted and never reaches the browser.
+
+### Tariff (`#/plan`)
+
+Only in multi-user mode (`NF_MULTI_USER=1`); without it the screen says tariffs
+need that mode. "Ваш тариф" shows the current tariff and its end date, today's
+use against each daily limit (YouTube units, search calls, LLM dollars) and the
+count of own channels, watchlist channels, topics, saved items, drafts and
+tokens against their limits (`/api/plan`). Below, a card per tariff with its
+price, limits and features. A free tariff has a button that switches to it
+(`POST /api/plan/choose`); a tariff with a price is shown, but only an admin can
+assign it, there are no payments yet. The sidebar footer shows the same tariff
+as "Тариф <name> · квота used/limit" (YouTube units today) and links here.
+`plan-state.js` hides the menu sections a tariff switches off, such as "Мои
+каналы".
+
+### Admin (`#/admin`)
+
+Only in multi-user mode and only for admins (`users.is_admin`); the menu item
+is hidden for everyone else. Two lists: tariffs and users. A tariff is created
+or edited with its price, period, daily limits, count limits and features, and
+can be archived and restored (`/api/admin/plans`). Each user has their tariff
+and an end date that an admin can change (`PUT /api/admin/users/{id}/plan`).
+Admins are not limited by tariffs. Moving a user to a smaller tariff deletes
+nothing: existing rows stay, only new ones are refused.
 
 ### Data
 

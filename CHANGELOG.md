@@ -16,6 +16,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   Prices and periods are stored and shown; nothing is charged yet. Nothing is
   deleted when a user moves to a smaller tariff.
 
+### Changed
+
+- The README is rewritten as the page of the upcoming hosted service. Install
+  instructions moved to [docs/self-hosting.md](docs/self-hosting.md).
+
+### Fixed
+
+- A pooled database connection whose caller raised before `close()` is now
+  rolled back and returned to the pool. Before, it stayed "idle in
+  transaction" and held its locks. On 2026-10-18 a network error during the
+  trending collection blocked every container's start and exhausted Postgres
+  connections.
+
+### Security
+
+- The YouTube API key is no longer put in request URLs: it goes in the
+  `X-Goog-Api-Key` header. Network errors no longer carry the URL, and logs and
+  HTTP 500 answers mask secrets. Rotate a key that may have been logged.
+
 ## [0.4.0] - 2026-10-04
 
 The third round of plans (26-33, without 28 and 32, which wait for a
