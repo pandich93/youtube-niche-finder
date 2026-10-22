@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 
 import infrastructure.postgres as db
 from domain import plans as DP
+from domain.i18n import tr
 from domain.users import SYSTEM_USER_ID, multi_user_enabled
 from infrastructure import quota_owner
 
@@ -144,15 +145,18 @@ def usage(user_id) -> dict:
 
 def summary(user_id) -> dict:
     ent = plan_for(user_id)
-    return {"plan": {"id": ent.plan_id, "name": ent.name}, "expiresAt": ent.expires_at,
+    # an admin-made plan's name is data; only the built-in "unlimited" one is ours to translate
+    name = tr(ent.name) if ent.unlimited else ent.name
+    return {"plan": {"id": ent.plan_id, "name": name}, "expiresAt": ent.expires_at,
             "unlimited": ent.unlimited, "limits": ent.limits, "features": ent.features,
             "usage": usage(user_id)}
 
 
 def catalog() -> dict:
-    return {"limits": [{"key": k, "label": s["label"], "unit": s["unit"], "kind": s["kind"],
+    """Limit and feature labels (and units) in the reader's language."""
+    return {"limits": [{"key": k, "label": tr(s["label"]), "unit": tr(s["unit"]), "kind": s["kind"],
                         "default": s["default"]()} for k, s in DP.LIMITS.items()],
-            "features": [{"key": k, "label": label} for k, label in DP.FEATURES.items()]}
+            "features": [{"key": k, "label": tr(label)} for k, label in DP.FEATURES.items()]}
 
 
 def list_plans() -> list:
@@ -201,9 +205,9 @@ def choose(user_id, plan_id) -> None:
     try:
         p = conn.execute("SELECT * FROM plans WHERE id = ?", (plan_id,)).fetchone()
         if not p or p["archived_at"] or not p["is_public"]:
-            raise PlanError("такого тарифа нет")
+            raise PlanError(tr("такого тарифа нет"))
         if float(p["price"] or 0) > 0:
-            raise PlanError("оплата пока не подключена -- этот тариф назначает администратор")
+            raise PlanError(tr("оплата пока не подключена -- этот тариф назначает администратор"))
         expires = ((now + timedelta(days=p["period_days"])).isoformat()
                    if p["period_days"] and not p["is_base"] else None)
         _set_plan(conn, user_id, p["id"], expires, "self", now)
@@ -218,15 +222,15 @@ def assign(admin_id, user_id, plan_id, expires_at) -> None:
         try:
             datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
         except ValueError:
-            raise PlanError("expiresAt: нужна дата в формате ISO") from None
+            raise PlanError(tr("expiresAt: нужна дата в формате ISO")) from None
     conn = db.get_conn()
     try:
         if not conn.execute("SELECT 1 FROM users WHERE id = ?", (user_id,)).fetchone():
-            raise PlanError("нет такого пользователя")
+            raise PlanError(tr("нет такого пользователя"))
         p = conn.execute("SELECT id, archived_at, is_base FROM plans WHERE id = ?",
                          (plan_id,)).fetchone()
         if not p or p["archived_at"]:
-            raise PlanError("такого тарифа нет")
+            raise PlanError(tr("такого тарифа нет"))
         _set_plan(conn, user_id, p["id"], None if p["is_base"] else (expires_at or None),
                   f"admin:{admin_id}", now)
         conn.commit()
@@ -266,20 +270,20 @@ def _clean(data: dict) -> dict:
     errors = []
     name = str(data.get("name") or "").strip()
     if not name:
-        errors.append("name: обязательно")
+        errors.append(tr("name: обязательно"))
     slug = str(data.get("slug") or "").strip().lower()
     if not _SLUG.fullmatch(slug):
-        errors.append("slug: латиница в нижнем регистре, цифры и дефис")
+        errors.append(tr("slug: латиница в нижнем регистре, цифры и дефис"))
     try:
         price = round(float(data.get("price") or 0), 2)
         if not math.isfinite(price) or price < 0 or price >= 100_000_000:
             raise ValueError
     except (TypeError, ValueError):
         price = 0
-        errors.append("price: число не меньше 0")
+        errors.append(tr("price: число не меньше 0"))
     currency = str(data.get("currency") or "USD").strip().upper()
     if not re.fullmatch(r"[A-Z]{3}", currency):
-        errors.append("currency: три латинские буквы, например USD")
+        errors.append(tr("currency: три латинские буквы, например USD"))
     period = data.get("periodDays")
     if period in ("", None):
         period = None
@@ -289,19 +293,19 @@ def _clean(data: dict) -> dict:
             if period < 1:
                 raise ValueError
         except (TypeError, ValueError):
-            errors.append("periodDays: целое число дней от 1 или пусто")
+            errors.append(tr("periodDays: целое число дней от 1 или пусто"))
     is_base, is_public = bool(data.get("isBase")), bool(data.get("isPublic", True))
     if is_base and price:
-        errors.append("price: базовый тариф бесплатный")
+        errors.append(tr("price: базовый тариф бесплатный"))
     if is_base and period:
-        errors.append("periodDays: у базового тарифа нет срока")
+        errors.append(tr("periodDays: у базового тарифа нет срока"))
     if is_base and not is_public:
-        errors.append("isPublic: базовый тариф всегда виден")
+        errors.append(tr("isPublic: базовый тариф всегда виден"))
     try:
         sort_order = int(data.get("sortOrder") or 0)
     except (TypeError, ValueError):
         sort_order = 0
-        errors.append("sortOrder: целое число")
+        errors.append(tr("sortOrder: целое число"))
     limits, features = data.get("limits") or {}, data.get("features") or {}
     errors += DP.validate(limits, features)
     if errors:
@@ -339,7 +343,7 @@ def create_plan(data: dict) -> dict:
     conn = db.get_conn()
     try:
         if conn.execute("SELECT 1 FROM plans WHERE slug = ?", (c["slug"],)).fetchone():
-            raise PlanError(f"slug: тариф {c['slug']} уже есть")
+            raise PlanError(tr("slug: тариф {slug} уже есть", slug=c["slug"]))
         row = _write(conn, None, c, db.now_iso())
         conn.commit()
         return _shape(row)
@@ -353,14 +357,14 @@ def update_plan(plan_id, data: dict) -> dict:
     try:
         cur = conn.execute("SELECT * FROM plans WHERE id = ?", (plan_id,)).fetchone()
         if not cur:
-            raise PlanError("такого тарифа нет")
+            raise PlanError(tr("такого тарифа нет"))
         if cur["is_base"] and not c["is_base"]:
-            raise PlanError("isBase: сначала назначьте базовым другой тариф")
+            raise PlanError(tr("isBase: сначала назначьте базовым другой тариф"))
         if c["is_base"] and cur["archived_at"]:
-            raise PlanError("isBase: архивный тариф не может быть базовым")
+            raise PlanError(tr("isBase: архивный тариф не может быть базовым"))
         if conn.execute("SELECT 1 FROM plans WHERE slug = ? AND id != ?",
                         (c["slug"], plan_id)).fetchone():
-            raise PlanError(f"slug: тариф {c['slug']} уже есть")
+            raise PlanError(tr("slug: тариф {slug} уже есть", slug=c["slug"]))
         row = _write(conn, plan_id, c, db.now_iso())
         conn.commit()
         return _shape(row)
@@ -373,9 +377,9 @@ def set_archived(plan_id, archived: bool) -> dict:
     try:
         cur = conn.execute("SELECT is_base FROM plans WHERE id = ?", (plan_id,)).fetchone()
         if not cur:
-            raise PlanError("такого тарифа нет")
+            raise PlanError(tr("такого тарифа нет"))
         if archived and cur["is_base"]:
-            raise PlanError("базовый тариф нельзя архивировать")
+            raise PlanError(tr("базовый тариф нельзя архивировать"))
         row = conn.execute("UPDATE plans SET archived_at = ?, updated_at = ? WHERE id = ? RETURNING *",
                            (db.now_iso() if archived else None, db.now_iso(), plan_id)).fetchone()
         conn.commit()

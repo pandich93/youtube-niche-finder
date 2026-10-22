@@ -12,6 +12,8 @@ import math
 import os
 from datetime import datetime, timezone
 
+from domain.i18n import tr
+
 
 def _env_int(name, default):
     try:
@@ -80,27 +82,27 @@ def resolve_features(stored) -> dict:
 def validate(limits, features) -> list:
     """Every problem with an admin's input, one string per field."""
     if not isinstance(limits, dict):
-        return ["limits: ожидается объект"]
+        return [tr("limits: ожидается объект")]
     if not isinstance(features, dict):
-        return ["features: ожидается объект"]
+        return [tr("features: ожидается объект")]
     errors = []
     for key, value in limits.items():
         spec = LIMITS.get(key)
         if spec is None:
-            errors.append(f"limits.{key}: неизвестный лимит")
+            errors.append(tr("limits.{key}: неизвестный лимит", key=key))
         elif value is None:
             continue
         elif isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
-            errors.append(f"limits.{key}: нужно число или null")
+            errors.append(tr("limits.{key}: нужно число или null", key=key))
         elif value < 0:
-            errors.append(f"limits.{key}: не может быть меньше 0")
+            errors.append(tr("limits.{key}: не может быть меньше 0", key=key))
         elif spec["type"] is int and value != int(value):
-            errors.append(f"limits.{key}: нужно целое число")
+            errors.append(tr("limits.{key}: нужно целое число", key=key))
     for key, value in features.items():
         if key not in FEATURES:
-            errors.append(f"features.{key}: неизвестная функция")
+            errors.append(tr("features.{key}: неизвестная функция", key=key))
         elif not isinstance(value, bool):
-            errors.append(f"features.{key}: нужно true или false")
+            errors.append(tr("features.{key}: нужно true или false", key=key))
     return errors
 
 
@@ -129,12 +131,13 @@ class PlanLimitReached(Exception):
 
     def __init__(self, key: str, limit: int):
         self.key, self.max = key, limit
-        super().__init__(f"ваш тариф позволяет не больше {limit} ({LIMITS[key]['label'].lower()}) "
-                         "-- сменить тариф можно на странице «Тариф»")
+        super().__init__(tr("ваш тариф позволяет не больше {limit} ({what}) "
+                            "-- сменить тариф можно на странице «Тариф»",
+                            limit=limit, what=tr(LIMITS[key]["label"]).lower()))
 
 
 class FeatureOff(Exception):
     def __init__(self, key: str):
         self.key = key
-        super().__init__(f"«{FEATURES[key]}» не входит в ваш тариф "
-                         "-- сменить тариф можно на странице «Тариф»")
+        super().__init__(tr("«{feature}» не входит в ваш тариф "
+                            "-- сменить тариф можно на странице «Тариф»", feature=tr(FEATURES[key])))

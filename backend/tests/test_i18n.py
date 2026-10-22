@@ -94,7 +94,8 @@ def _tr_sources():
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
-            if (isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) == "tr"
+            name = getattr(node, "func", None) and getattr(node.func, "id", getattr(node.func, "attr", None))
+            if (isinstance(node, ast.Call) and name == "tr"
                     and node.args and isinstance(node.args[0], ast.Constant)
                     and isinstance(node.args[0].value, str)):
                 found.add(node.args[0].value)

@@ -52,7 +52,9 @@ def test_single_user_mode_needs_no_login(monkeypatch):
     c = client()
     assert c.get("/api/stats").status_code == 200
     me = c.get("/api/auth/me").json()
-    assert me == {"multiUser": False, "user": {"id": 1, "email": "local", "isAdmin": True}}
+    # locale (план i18n): язык, сохранённый пользователем; ещё не выбирал -- None
+    assert me == {"multiUser": False, "user": {"id": 1, "email": "local", "isAdmin": True},
+                  "locale": None}
 
 
 # ------------------------------------------------------------ multi user
@@ -61,7 +63,8 @@ def test_multi_user_mode_answers_401_without_a_session(multi):
     c = client()
     resp = c.get("/api/stats")
     assert resp.status_code == 401 and "sign in" in resp.json()["detail"].lower()
-    assert c.get("/api/auth/me").json() == {"multiUser": True, "user": None, "quota": None, "plan": None}
+    assert c.get("/api/auth/me").json() == {"multiUser": True, "user": None, "quota": None, "plan": None,
+                                            "locale": None}
 
 
 def test_public_routes_stay_open(multi):

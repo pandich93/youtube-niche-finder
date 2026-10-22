@@ -18,6 +18,7 @@ import infrastructure.youtube.client as yt
 from domain import alerts as A
 from domain import metrics as M
 from domain import periods as P
+from domain.i18n import tr
 
 try:
     from langdetect import LangDetectException
@@ -199,13 +200,13 @@ def collect_niche(api_key: str, query: str, label: str = None, language: str = N
 
         calls_today = search_calls_today(conn)
         if calls_today >= yt.SEARCH_DAILY_CALL_LIMIT:
-            raise yt.QuotaExceeded(
-                f"Дневной лимит поиска исчерпан ({calls_today}/{yt.SEARCH_DAILY_CALL_LIMIT}). "
+            raise yt.QuotaExceeded(tr(
+                "Дневной лимит поиска исчерпан ({calls_today}/{limit}). "
                 "search.list сбрасывается в полночь по Тихоокеанскому времени. "
-                f"Ниша '{slug}' уже создана (пока пустая) -- запустите тот же поиск "
+                "Ниша '{slug}' уже создана (пока пустая) -- запустите тот же поиск "
                 "позже, или используйте collect_channel/collect_trending, которые "
-                "не тратят эту квоту."
-            )
+                "не тратят эту квоту.",
+                calls_today=calls_today, limit=yt.SEARCH_DAILY_CALL_LIMIT, slug=slug))
 
         video_ids, token = [], None
         search_calls = 0

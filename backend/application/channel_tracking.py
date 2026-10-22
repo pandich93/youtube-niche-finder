@@ -28,6 +28,7 @@ from domain import keywords as K
 from domain import metrics as M
 from domain import monetization as MZ
 from domain import periods as P
+from domain.i18n import tr
 from domain.users import LOCAL_USER_ID
 from infrastructure.categories import repository as C
 
@@ -700,11 +701,13 @@ def recently_added_outlier_channels(period: str = "24h", period_by: str = "disco
     channels.sort(key=lambda c: c["multiplier"] or 0, reverse=True)
     hint = None
     if not channels:
-        hint = (f"Ни один из {before} каналов в окне не дотянул до множителя "
-                f"{min_multiplier} — понизьте min_multiplier." if before else
-                f"В окне {period} по '{period_by}' нет видео — сначала соберите корпус. "
-                f"Множитель считается по медиане предыдущих загрузок канала, поэтому "
-                f"каналу нужно минимум 4 видео в базе.")
+        hint = (tr("Ни один из {before} каналов в окне не дотянул до множителя "
+                   "{min_multiplier} — понизьте min_multiplier.",
+                   before=before, min_multiplier=min_multiplier)
+                if before else
+                tr("В окне {period} по '{period_by}' нет видео — сначала соберите корпус. "
+                   "Множитель считается по медиане предыдущих загрузок канала, поэтому "
+                   "каналу нужно минимум 4 видео в базе.", period=period, period_by=period_by))
     return {
         "period": period, "periodBy": period_by,
         "minMultiplier": min_multiplier, "minYppStatus": min_ypp_status, "hint": hint,
@@ -811,5 +814,5 @@ def channel_history(channel_id: str, limit: int = 400) -> dict:
         "points": points,
         "count": len(points),
         "hint": None if len(points) > 1 else
-        "Нужно минимум два снимка. Их пишет воркер: docker compose up -d worker",
+        tr("Нужно минимум два снимка. Их пишет воркер: docker compose up -d worker"),
     }

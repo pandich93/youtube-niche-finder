@@ -133,9 +133,9 @@ async def rate_limit(request, call_next):
         retry_after = max(1, int(60.0 - (now - hits[0])) + 1)
         return JSONResponse(
             status_code=429,
-            content={"detail": f"Больше {RATE_LIMIT_PER_MINUTE} запросов в минуту "
-                               f"к /api. Повторите через {retry_after} с или "
-                               f"поднимите RATE_LIMIT_PER_MINUTE в .env."},
+            content={"detail": tr("Больше {limit} запросов в минуту к /api. Повторите через "
+                                  "{retry_after} с или поднимите RATE_LIMIT_PER_MINUTE в .env.",
+                                  limit=RATE_LIMIT_PER_MINUTE, retry_after=retry_after)},
             headers={"Retry-After": str(retry_after)},
         )
 
@@ -170,6 +170,13 @@ def _saved_locale(user_id):
     except Exception:
         # язык -- не повод ронять запрос (например, до init_db на пустой базе)
         return None
+
+
+def _header_locale(request):
+    """Язык для ответов middleware, которые стоят СНАРУЖИ locale_scope
+    (session_guard, local_only_guard): только заголовки, без базы."""
+    return (i18n.normalize(request.headers.get("x-nf-locale"))
+            or i18n.from_accept_language(request.headers.get("accept-language")))
 
 
 # ------------------------------------------------ вход (план 15)
@@ -238,14 +245,17 @@ async def session_guard(request, call_next):
     path = request.url.path
     if (path.startswith("/api/") and path not in _PUBLIC_API and not user
             and request.method != "OPTIONS"):
-        return JSONResponse(status_code=401,
-                            content={"detail": "Sign in first: NF_MULTI_USER is on -- "
-                                               "войдите в дашборде."})
+        with i18n.use_locale(_header_locale(request)):
+            # без заголовка языка -- прежний двуязычный текст: на него смотрят скрипты
+            detail = tr("Sign in first: NF_MULTI_USER is on -- войдите в дашборде.")
+        return JSONResponse(status_code=401, content={"detail": detail})
     if user and path.startswith("/api/") and path not in _PUBLIC_API:
         blocked = await run_in_threadpool(_feature_block, request, user["id"])
         if blocked:
+            with i18n.use_locale(_header_locale(request)):
+                detail = str(PD.FeatureOff(blocked))
             return JSONResponse(status_code=403, content={
-                "error": "FeatureOff", "feature": blocked, "detail": str(PD.FeatureOff(blocked))})
+                "error": "FeatureOff", "feature": blocked, "detail": detail})
     # plan 15 (5.5): YouTube calls made for this request count against the
     # signed-in user's daily budget (infrastructure/quota_owner.py)
     owner = quota_owner.set_owner(user["id"]) if user else None
@@ -326,20 +336,19 @@ async def local_only_guard(request, call_next):
     host = request.headers.get("host")
     if _host_name(host) not in ALLOWED_HOSTS:
         shown = (host or "")[:100]
-        return JSONResponse(
-            status_code=400,
-            content={"detail": f"Недопустимый заголовок Host: {shown!r}. API отвечает "
-                               f"только на 127.0.0.1, localhost и [::1]; другое имя "
-                               f"добавьте в NF_ALLOWED_HOSTS в .env."})
+        with i18n.use_locale(_header_locale(request)):
+            detail = tr("Недопустимый заголовок Host: {host}. API отвечает только на 127.0.0.1, "
+                        "localhost и [::1]; другое имя добавьте в NF_ALLOWED_HOSTS в .env.",
+                        host=repr(shown))
+        return JSONResponse(status_code=400, content={"detail": detail})
     if (request.method in _UNSAFE_METHODS
             and not _is_json(request.headers.get("content-type"))
             and not request.headers.get("x-nf-client", "").strip()):
-        return JSONResponse(
-            status_code=403,
-            content={"detail": "Изменяющий запрос без Content-Type: application/json "
-                               "и без заголовка X-NF-Client отклонён -- так выглядит "
-                               "запрос с чужого сайта. Добавьте заголовок "
-                               "X-NF-Client: <имя клиента>."})
+        with i18n.use_locale(_header_locale(request)):
+            detail = tr("Изменяющий запрос без Content-Type: application/json и без заголовка "
+                        "X-NF-Client отклонён -- так выглядит запрос с чужого сайта. Добавьте "
+                        "заголовок X-NF-Client: <имя клиента>.")
+        return JSONResponse(status_code=403, content={"detail": detail})
     return await call_next(request)
 
 
@@ -364,8 +373,8 @@ def _need_key():
     if not API_KEY:
         raise HTTPException(
             status_code=428,
-            detail="YOUTUBE_API_KEY не задан. Впишите его в .env рядом с "
-                   "docker-compose.yml и перезапустите: docker compose up -d web",
+            detail=tr("YOUTUBE_API_KEY не задан. Впишите его в .env рядом с "
+                      "docker-compose.yml и перезапустите: docker compose up -d web"),
         )
 
 
@@ -643,7 +652,7 @@ def tracked(request: Request, faceless: bool = None, content_format: str = None,
 def channel(channel_id: str, period: str = "30d"):
     res = T.channel_analytics(channel_id, period=period)
     if not res.get("found"):
-        raise HTTPException(status_code=404, detail=res.get("hint", "канал не найден"))
+        raise HTTPException(status_code=404, detail=res.get("hint", tr("канал не найден")))
     return res
 
 
@@ -1089,8 +1098,8 @@ def test_notification(request: Request):
     notifier = NS.notifier_for(_uid(request))
     if NS.target_name(_uid(request)) == "none":
         raise HTTPException(status_code=409, detail="no Telegram or webhook set up yet")
-    return {"sent": bool(notifier.send("\U0001F9EA niche-finder: тестовое сообщение. "
-                                       "Если вы это видите, уведомления настроены верно."))}
+    return {"sent": bool(notifier.send(tr("\U0001F9EA niche-finder: тестовое сообщение. "
+                                          "Если вы это видите, уведомления настроены верно.")))}
 
 
 @app.post("/api/briefs")
@@ -1245,7 +1254,7 @@ def plan_choose(request: Request, payload: dict = Body(...)):
     try:
         plan_id = int(payload.get("planId") or 0)
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="planId: нужен номер тарифа")
+        raise HTTPException(status_code=400, detail=tr("planId: нужен номер тарифа"))
     _plan_call(PL.choose, _uid(request), plan_id)
     return PL.summary(_uid(request))
 
@@ -1292,7 +1301,7 @@ def admin_user_plan(request: Request, user_id: int, payload: dict = Body(...)):
     try:
         plan_id = int(payload.get("planId") or 0)
     except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="planId: нужен номер тарифа")
+        raise HTTPException(status_code=400, detail=tr("planId: нужен номер тарифа"))
     _plan_call(PL.assign, admin, user_id, plan_id, payload.get("expiresAt"))
     return {"userId": user_id, **PL.summary(user_id)}
 
@@ -1313,16 +1322,17 @@ def _own_call(fn, *args, **kwargs):
 # ------------------------------------------- public legal pages (plan 25)
 
 @app.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
-def privacy_page():
-    """Public (outside /api, no sign-in): Google's OAuth verification needs it."""
+def privacy_page(lang: str = None):
+    """Public (outside /api, no sign-in): Google's OAuth verification needs it.
+    ?lang=en|ru, else the request's language."""
     from interfaces.http import legal
-    return HTMLResponse(legal.privacy_html())
+    return HTMLResponse(legal.privacy_html(lang))
 
 
 @app.get("/terms", response_class=HTMLResponse, include_in_schema=False)
-def terms_page():
+def terms_page(lang: str = None):
     from interfaces.http import legal
-    return HTMLResponse(legal.terms_html())
+    return HTMLResponse(legal.terms_html(lang))
 
 
 @app.get("/api/own/status")
@@ -1480,7 +1490,7 @@ def collect_channel(request: Request, payload: dict = Body(...)):
     _need_key()
     ref = (payload.get("channel") or "").strip()
     if not ref:
-        raise HTTPException(status_code=400, detail="нужно поле channel")
+        raise HTTPException(status_code=400, detail=tr("нужно поле channel"))
     res = collector.collect_channel(API_KEY, ref,
                                     max_videos=int(payload.get("max_videos", 100)),
                                     niche=payload.get("niche") or None)
@@ -1497,7 +1507,7 @@ def collect_niche(payload: dict = Body(...)):
     _need_key()
     q = (payload.get("query") or "").strip()
     if not q:
-        raise HTTPException(status_code=400, detail="нужно поле query")
+        raise HTTPException(status_code=400, detail=tr("нужно поле query"))
     return collector.collect_niche(
         API_KEY, q, label=payload.get("label") or None,
         language=payload.get("language") or None,
@@ -1715,7 +1725,7 @@ def inspect_channel(request: Request, ref: str, refresh: bool = False, fetch: bo
 def inspect_videos(payload: dict = Body(...)):
     ids = payload.get("ids") or []
     if not isinstance(ids, list):
-        raise HTTPException(status_code=400, detail="ids должен быть списком")
+        raise HTTPException(status_code=400, detail=tr("ids должен быть списком"))
     return I.inspect_videos(API_KEY, ids, fetch=bool(payload.get("fetch", True)))
 
 
@@ -1736,5 +1746,5 @@ if FRONTEND_DIR.is_dir():
 else:  # pragma: no cover
     @app.get("/")
     def _no_frontend():
-        return {"error": f"Папка фронта не найдена: {FRONTEND_DIR}",
-                "hint": "Задайте FRONTEND_DIR или смонтируйте ./frontend в контейнер"}
+        return {"error": tr("Папка фронта не найдена: {path}", path=FRONTEND_DIR),
+                "hint": tr("Задайте FRONTEND_DIR или смонтируйте ./frontend в контейнер")}

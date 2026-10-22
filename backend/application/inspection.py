@@ -27,6 +27,7 @@ from application import milestones as MILESTONES
 from application import monetization as MON
 from domain import metrics as M
 from domain import periods as P
+from domain.i18n import tr
 from domain.users import LOCAL_USER_ID
 
 # Насколько свежей считаем запись в базе. Видео меняет счётчики быстро,
@@ -185,11 +186,14 @@ def inspect_video(api_key: str, video_id: str, refresh: bool = False,
                     fetched = True
 
         if not v:
-            hint = "видео нет в локальной базе"
             if not api_key:
-                hint += ", а YOUTUBE_API_KEY не задан — дозагрузить неоткуда"
+                hint = tr("видео нет в локальной базе, а YOUTUBE_API_KEY не задан — "
+                          "дозагрузить неоткуда")
             elif not fetch:
-                hint += " (дозагрузка выключена в настройках расширения)"
+                hint = tr("видео нет в локальной базе (дозагрузка выключена в настройках "
+                          "расширения)")
+            else:
+                hint = tr("видео нет в локальной базе")
             return {"videoId": video_id, "found": False, "quotaUnits": quota, "hint": hint}
 
         channel_id = v.get("channel_id")
@@ -341,11 +345,14 @@ def inspect_channel(api_key: str, ref: str, refresh: bool = False, fetch: bool =
                 fetched = True
 
         if not ch:
-            hint = "канала нет в локальной базе"
             if not api_key:
-                hint += ", а YOUTUBE_API_KEY не задан — дозагрузить неоткуда"
+                hint = tr("канала нет в локальной базе, а YOUTUBE_API_KEY не задан — "
+                          "дозагрузить неоткуда")
             elif not fetch:
-                hint += " (дозагрузка выключена в настройках расширения)"
+                hint = tr("канала нет в локальной базе (дозагрузка выключена в настройках "
+                          "расширения)")
+            else:
+                hint = tr("канала нет в локальной базе")
             return {"ref": ref, "found": False, "quotaUnits": quota, "hint": hint}
 
         channel_id = ch["channel_id"]

@@ -15,6 +15,7 @@ from application import plans as PL
 from domain import keywords as K
 from domain import metadata as MD
 from domain import periods as P
+from domain.i18n import tr
 from domain.users import LOCAL_USER_ID
 
 OUTLIER_THRESHOLD_DEFAULT = 3.0
@@ -145,13 +146,23 @@ def review_metadata(title: str, description: str = "", tags=None, niche: str = N
         if feat["verdict"] == "unreliable":
             continue
         wants_it = bool(feat["lift"] and feat["lift"] >= 1.2)
+        args = {"label": feat["label"], "lift": feat["lift"], "sample": feat["sample"]}
+        if present and present == wants_it:
+            explanation = tr("{label}: lift ×{lift} у выбросов (выборка {sample}); в черновике "
+                             "есть, и это соответствует паттерну", **args)
+        elif present:
+            explanation = tr("{label}: lift ×{lift} у выбросов (выборка {sample}); в черновике "
+                             "есть, а паттерн ниши другой", **args)
+        elif present == wants_it:
+            explanation = tr("{label}: lift ×{lift} у выбросов (выборка {sample}); в черновике "
+                             "нет, и это соответствует паттерну", **args)
+        else:
+            explanation = tr("{label}: lift ×{lift} у выбросов (выборка {sample}); в черновике "
+                             "нет, а паттерн ниши другой", **args)
         signals.append({
             "id": f"structure_{feat['feature']}",
             "verdict": "ok" if present == wants_it else "warn",
-            "explanation": (f"{feat['label']}: lift ×{feat['lift']} у выбросов "
-                            f"(выборка {feat['sample']}); в черновике "
-                            f"{'есть' if present else 'нет'}, "
-                            f"{'и это соответствует паттерну' if present == wants_it else 'а паттерн ниши другой'}"),  # noqa: E501
+            "explanation": explanation,
         })
 
     trending_phrases = []

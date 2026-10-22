@@ -24,6 +24,8 @@ import re
 import statistics as st
 from datetime import datetime, timezone
 
+from domain.i18n import tr
+
 OUTLIER_MIN = 3.0
 ORDINARY_MAX = 1.5
 MIN_GROUP = 10
@@ -100,7 +102,7 @@ def compare(videos, outlier_min=OUTLIER_MIN, ordinary_max=ORDINARY_MAX) -> dict:
     for key, label, kind, get in FEATURES:
         a = [x for x in (get(v) for v in out) if x is not None]
         b = [x for x in (get(v) for v in reg) if x is not None]
-        t = {"key": key, "label": label, "kind": kind, "nOutliers": len(a), "nOrdinary": len(b),
+        t = {"key": key, "label": tr(label), "kind": kind, "nOutliers": len(a), "nOrdinary": len(b),
              "outliers": None, "ordinary": None, "diff": None, "direction": None,
              "significant": False}
         if len(a) >= MIN_GROUP and len(b) >= MIN_GROUP:

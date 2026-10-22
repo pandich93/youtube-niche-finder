@@ -14,6 +14,8 @@ estimate.
 """
 import re
 
+from domain.i18n import tr
+
 MIN_RELIABLE_SAMPLE = 20
 VISIBLE_TITLE_CHARS = 45          # roughly what search/mobile shows before truncating
 VISIBLE_DESCRIPTION_CHARS = 150   # shown before "...more" on the watch page
@@ -56,15 +58,17 @@ def length_signal(signal_id: str, value: int, baseline_values, label: str) -> di
         sample = stats["sample"] if stats else 0
         return {
             "id": signal_id, "value": value, "baseline": stats, "verdict": "unreliable",
-            "explanation": (f"{label}: {value} симв.; в базе только {sample} выбросов ниши "
-                            f"для сравнения (нужно {MIN_RELIABLE_SAMPLE}+)"),
+            "explanation": tr("{label}: {value} симв.; в базе только {sample} выбросов ниши "
+                              "для сравнения (нужно {min}+)",
+                              label=tr(label), value=value, sample=sample, min=MIN_RELIABLE_SAMPLE),
         }
     verdict = "ok" if stats["p25"] <= value <= stats["p75"] else "warn"
     return {
         "id": signal_id, "value": value, "baseline": stats, "verdict": verdict,
-        "explanation": (f"{label}: {value} симв. против медианы {round(stats['median'])} "
-                        f"(p25-p75: {round(stats['p25'])}-{round(stats['p75'])}) у выбросов "
-                        f"ниши, выборка {stats['sample']}"),
+        "explanation": tr("{label}: {value} симв. против медианы {median} "
+                          "(p25-p75: {p25}-{p75}) у выбросов ниши, выборка {sample}",
+                          label=tr(label), value=value, median=round(stats["median"]),
+                          p25=round(stats["p25"]), p75=round(stats["p75"]), sample=stats["sample"]),
     }
 
 
@@ -76,9 +80,10 @@ def visible_prefix_signal(title: str, key_phrase: str = None) -> dict:
     truncated = len(title) > VISIBLE_TITLE_CHARS
     hit = bool(key_phrase) and key_phrase.lower() in prefix.lower()
     verdict = "ok" if (not truncated or not key_phrase or hit) else "warn"
-    explanation = f"первые {VISIBLE_TITLE_CHARS} символов: «{prefix}»"
+    explanation = tr("первые {n} символов: «{prefix}»", n=VISIBLE_TITLE_CHARS, prefix=prefix)
     if key_phrase:
-        explanation += f" -- фраза «{key_phrase}» {'попадает' if hit else 'НЕ попадает'} в видимую часть"
+        explanation += (tr(" -- фраза «{phrase}» попадает в видимую часть", phrase=key_phrase) if hit
+                        else tr(" -- фраза «{phrase}» НЕ попадает в видимую часть", phrase=key_phrase))
     return {"id": "visible_prefix", "value": prefix, "truncated": truncated,
             "verdict": verdict, "explanation": explanation}
 
@@ -100,12 +105,13 @@ def structural_lift(rows, outlier_threshold: float = 3.0) -> list:
     lift, applied to five yes/no title features instead of n-grams."""
     total = len(rows)
     if not total:
-        return [{"feature": f, "label": lbl, "lift": None, "sample": 0,
+        return [{"feature": f, "label": tr(lbl), "lift": None, "sample": 0,
                  "verdict": "unreliable"} for f, lbl in FEATURE_LABELS.items()]
     base_hits = sum(1 for r in rows if (r.get("outlier") or 0) >= outlier_threshold)
     base_rate = base_hits / total
     out = []
     for feature, label in FEATURE_LABELS.items():
+        label = tr(label)
         with_feature = [r for r in rows if structural_features(r.get("title"))[feature]]
         n = len(with_feature)
         if n < MIN_RELIABLE_SAMPLE or base_rate <= 0:
@@ -128,11 +134,13 @@ def tag_overlap(draft_tags, trending_phrases) -> dict:
     missing = [p for p in trending_norm if p not in draft_norm][:10]
     total_chars = sum(len(t) for t in (draft_tags or []))
     over_limit = total_chars > YOUTUBE_TAGS_CHAR_LIMIT
-    explanation = f"{len(draft_tags or [])} тегов, {total_chars}/{YOUTUBE_TAGS_CHAR_LIMIT} символов"
+    explanation = tr("{tags} тегов, {chars}/{limit} символов", tags=len(draft_tags or []),
+                     chars=total_chars, limit=YOUTUBE_TAGS_CHAR_LIMIT)
     if over_limit:
-        explanation += " -- ПРЕВЫШЕН лимит YouTube, лишние теги будут отброшены"
+        explanation += tr(" -- ПРЕВЫШЕН лимит YouTube, лишние теги будут отброшены")
     if trending_norm:
-        explanation += f"; из {len(trending_norm)} трендовых фраз ниши совпало {len(matched)}"
+        explanation += tr("; из {trending} трендовых фраз ниши совпало {matched}",
+                          trending=len(trending_norm), matched=len(matched))
     return {
         "id": "tags", "matchedTrending": matched, "missingTrending": missing,
         "tagCount": len(draft_tags or []), "totalChars": total_chars,
@@ -151,11 +159,13 @@ def description_signal(description: str, key_phrase: str = None) -> dict:
         verdict = "warn"
     else:
         verdict = "ok"
-    explanation = f"{len(desc)} симв."
+    explanation = tr("{n} симв.", n=len(desc))
     if key_phrase:
-        explanation += (f"; фраза «{key_phrase}» {'есть' if hit else 'отсутствует'} в первых "
-                        f"{VISIBLE_DESCRIPTION_CHARS} символах (видно до «ещё»)")
-    explanation += "; таймкоды есть" if has_timestamps else "; таймкодов нет"
+        explanation += (tr("; фраза «{phrase}» есть в первых {n} символах (видно до «ещё»)",
+                           phrase=key_phrase, n=VISIBLE_DESCRIPTION_CHARS) if hit
+                        else tr("; фраза «{phrase}» отсутствует в первых {n} символах (видно до «ещё»)",
+                                phrase=key_phrase, n=VISIBLE_DESCRIPTION_CHARS))
+    explanation += tr("; таймкоды есть") if has_timestamps else tr("; таймкодов нет")
     return {"id": "description", "length": len(desc), "visiblePrefix": prefix,
             "hasTimestamps": has_timestamps, "verdict": verdict, "explanation": explanation}
 
