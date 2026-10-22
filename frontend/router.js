@@ -32,6 +32,11 @@ import { viewOwn } from './screens/own.js';
 import { viewPlan } from './screens/plan.js';
 import { viewAdmin } from './screens/admin.js';
 import { routeAllowed } from './plan-state.js';
+import { dict } from './i18n.js';
+import ru from './i18n/ru/router.js';
+import en from './i18n/en/router.js';
+
+const t = dict({ ru, en });
 
 async function guard(fn) {
   view.innerHTML = '<div class="skeleton-page"></div>';
@@ -39,42 +44,45 @@ async function guard(fn) {
     await fn();
   } catch (e) {
     view.innerHTML = notice(
-      `<div><b>Не удалось загрузить данные.</b><br>${esc(e.message)}<br>
-       <span style="color:var(--muted)">Проверьте, что сервис поднят:
+      `<div><b>${t('loadFailed')}</b><br>${esc(e.message)}<br>
+       <span style="color:var(--muted)">${t('checkService')}
        <code>docker compose up -d web</code></span></div>`, 'error');
   }
 }
 
 /* --------------------------------------------------------------- роутинг */
 
+/* Название раздела -- ключ словаря router с тем же именем, переводится при рендере. */
 const ROUTES = {
-  overview: { title: 'Обзор', run: viewOverview },
-  find: { title: 'Найти нишу', run: viewFind },
-  viral: { title: 'Вирусные видео', run: viewViral },
-  channels: { title: 'Outlier-каналы', run: viewChannels },
-  categories: { title: 'Категории', run: viewCategories },
-  keywords: { title: 'Ключевые слова', run: viewKeywords },
-  tags: { title: 'Топ теги по категориям', run: viewTopTags },
-  tracker: { title: 'Трекер каналов', run: viewTracker },
-  alerts: { title: 'Алерты', run: viewAlerts },
-  ideas: { title: 'Проверка идей', run: viewIdeas },
-  language: { title: 'Другой язык', run: viewLanguage },
-  transcripts: { title: 'Транскрипты', run: viewTranscripts },
-  clusters: { title: 'Карта ниш', run: viewNicheClusters },
-  titles: { title: 'Проверить заголовки', run: viewTitleScoring },
-  saved: { title: 'Избранное', run: viewSaved },
-  packaging: { title: 'Перепаковки', run: viewPackaging },
-  metadata: { title: 'Разбор метаданных', run: viewMetadata },
-  calendar: { title: 'Календарь', run: viewCalendar },
-  niches: { title: 'Ниши', run: viewNiches },
-  enter: { title: 'Где заходить', run: viewEnter },
-  own: { title: 'Мои каналы', run: viewOwn },
-  data: { title: 'Данные', run: viewData },
-  help: { title: 'Справка и FAQ', run: viewHelp },
-  mcp: { title: 'MCP-подключение', run: viewMcp },
-  plan: { title: 'Тариф', run: viewPlan },
-  admin: { title: 'Админка', run: viewAdmin },
+  overview: { run: viewOverview },
+  find: { run: viewFind },
+  viral: { run: viewViral },
+  channels: { run: viewChannels },
+  categories: { run: viewCategories },
+  keywords: { run: viewKeywords },
+  tags: { run: viewTopTags },
+  tracker: { run: viewTracker },
+  alerts: { run: viewAlerts },
+  ideas: { run: viewIdeas },
+  language: { run: viewLanguage },
+  transcripts: { run: viewTranscripts },
+  clusters: { run: viewNicheClusters },
+  titles: { run: viewTitleScoring },
+  saved: { run: viewSaved },
+  packaging: { run: viewPackaging },
+  metadata: { run: viewMetadata },
+  calendar: { run: viewCalendar },
+  niches: { run: viewNiches },
+  enter: { run: viewEnter },
+  own: { run: viewOwn },
+  data: { run: viewData },
+  help: { run: viewHelp },
+  mcp: { run: viewMcp },
+  plan: { run: viewPlan },
+  admin: { run: viewAdmin },
 };
+
+const routeTitle = (name) => t(name);
 
 function setActive(href) {
   document.querySelectorAll('.nav-item').forEach((a) =>
@@ -88,35 +96,35 @@ async function render() {
   const [path, query] = raw.split('?');
   const [name, arg] = path.split('/');
   if (name === 'channel' && arg) {
-    $('#crumbSection').textContent = 'Канал'; setActive(null);
+    $('#crumbSection').textContent = t('crumbChannel'); setActive(null);
     return guard(() => viewChannel(decodeURIComponent(arg)));
   }
   if (name === 'brief' && arg) {
-    $('#crumbSection').textContent = 'Бриф'; setActive(null);
+    $('#crumbSection').textContent = t('crumbBrief'); setActive(null);
     // #/brief/<videoId>?gap=<вопрос зрителей> -- бриф под пробел (план 03).
     const gap = new URLSearchParams(query || '').get('gap');
     return guard(() => viewBrief(decodeURIComponent(arg), gap));
   }
   if (name === 'compare') {
-    $('#crumbSection').textContent = 'Сравнение'; setActive(null);
+    $('#crumbSection').textContent = t('crumbCompare'); setActive(null);
     return guard(() => viewCompare(arg || ''));
   }
   if (name === 'niche' && arg) {
-    $('#crumbSection').textContent = 'Ниша'; setActive('#/niches');
+    $('#crumbSection').textContent = t('crumbNiche'); setActive('#/niches');
     return guard(() => viewNiche(decodeURIComponent(arg)));
   }
   if (name && ROUTES[name] && !routeAllowed(name)) {
-    $('#crumbSection').textContent = ROUTES[name].title; setActive(`#/${name}`);
-    view.innerHTML = notice(`Раздел «${esc(ROUTES[name].title)}» не входит в ваш тариф.
-      <a href="#/plan">Сменить тариф</a>`);
+    $('#crumbSection').textContent = routeTitle(name); setActive(`#/${name}`);
+    view.innerHTML = notice(`${t('notInPlan', { title: esc(routeTitle(name)) })}
+      <a href="#/plan">${t('changePlan')}</a>`);
     return;
   }
-  const route = ROUTES[name || 'overview'] || ROUTES.overview;
-  $('#crumbSection').textContent = route.title;
+  const key = ROUTES[name] ? name : 'overview';
+  $('#crumbSection').textContent = routeTitle(key);
   setActive(`#/${name || 'overview'}`);
-  return guard(route.run);
+  return guard(ROUTES[key].run);
 }
 
 setRender(render);
 
-export { render };
+export { render, routeTitle };

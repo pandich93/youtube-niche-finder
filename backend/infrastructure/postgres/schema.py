@@ -471,6 +471,15 @@ CREATE TABLE IF NOT EXISTS user_settings (
     updated_at TEXT
 );
 
+-- i18n plan: the interface language a person chose (ru | en) -- for the
+-- dashboard on another device, and for their alerts and digest. Its own table:
+-- a row in user_settings for user 1 would switch off the NOTIFY_* fallback.
+CREATE TABLE IF NOT EXISTS user_prefs (
+    user_id BIGINT PRIMARY KEY,
+    locale TEXT,
+    updated_at TEXT
+);
+
 -- plan 15 (5.7-5.8): personal API tokens for the browser extension and MCP
 -- over HTTP ("Authorization: Bearer nf_..."); only the SHA-256 is stored and
 -- the plaintext is shown once, when the token is created.

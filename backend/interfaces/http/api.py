@@ -47,6 +47,7 @@ from application import hook_score as HK
 from application import inspection as I
 from application import language_gaps as LG
 from application import library as L
+from application import locale_prefs as LP
 from application import maturity_curve
 from application import metadata_review as MR
 from application import niche_clusters as NCL
@@ -68,7 +69,9 @@ from application import thumbnail_search as TS
 from application import topic_watch as TW
 from application import trajectory as TJ
 from application import transcripts as TR
+from domain import i18n
 from domain import plans as PD
+from domain.i18n import tr
 from domain.users import LOCAL_USER_ID, multi_user_enabled
 from infrastructure import quota_owner
 from infrastructure.categories import repository as C
@@ -138,6 +141,35 @@ async def rate_limit(request, call_next):
 
     hits.append(now)
     return await call_next(request)
+
+
+# ------------------------------------------------ язык ответа (план i18n)
+#
+# Тексты для человека (подсказки, ошибки, каталог оценок) -- на языке читателя:
+# X-NF-Locale (дашборд шлёт всегда) -> язык, сохранённый пользователем ->
+# Accept-Language -> NF_DEFAULT_LOCALE. Объявлено ВЫШЕ session_guard, поэтому
+# работает внутри него и уже знает пользователя (request.state.user_id).
+
+@app.middleware("http")
+async def locale_scope(request, call_next):
+    loc = i18n.normalize(request.headers.get("x-nf-locale"))
+    if loc is None and request.url.path.startswith("/api/"):
+        loc = await run_in_threadpool(_saved_locale, getattr(request.state, "user_id", LOCAL_USER_ID))
+    if loc is None:
+        loc = i18n.from_accept_language(request.headers.get("accept-language"))
+    token = i18n.set_locale(loc)
+    try:
+        return await call_next(request)
+    finally:
+        i18n.reset(token)
+
+
+def _saved_locale(user_id):
+    try:
+        return LP.get(user_id=user_id)
+    except Exception:
+        # язык -- не повод ронять запрос (например, до init_db на пустой базе)
+        return None
 
 
 # ------------------------------------------------ вход (план 15)
@@ -1106,11 +1138,23 @@ def _cookie_secure(request) -> bool:
 @app.get("/api/auth/me")
 def auth_me(request: Request):
     if not multi_user_enabled():
-        return {"multiUser": False, "user": {"id": LOCAL_USER_ID, "email": "local", "isAdmin": True}}
+        return {"multiUser": False, "user": {"id": LOCAL_USER_ID, "email": "local", "isAdmin": True},
+                "locale": _saved_locale(LOCAL_USER_ID)}
     user = request.state.user
     return {"multiUser": True, "user": user,
             "quota": yt.user_usage(user["id"]) if user else None,
-            "plan": PL.summary(user["id"]) if user else None}
+            "plan": PL.summary(user["id"]) if user else None,
+            "locale": _saved_locale(user["id"]) if user else None}
+
+
+@app.put("/api/me/locale")
+def me_locale(request: Request, payload: dict = Body(...)):
+    """План i18n: язык интерфейса -- для дашборда на другом устройстве и для
+    алертов и дайджеста этого пользователя."""
+    try:
+        return {"locale": LP.save(payload.get("locale"), user_id=_uid(request))}
+    except LP.LocaleError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/api/auth/login")
@@ -1636,7 +1680,7 @@ def why_viral(video_id: str, force_refresh: bool = False):
 def track(request: Request, payload: dict = Body(...)):
     raw = (payload.get("channel_id") or "").strip()
     if not raw:
-        raise HTTPException(status_code=400, detail="нужно поле channel_id")
+        raise HTTPException(status_code=400, detail=tr("нужно поле channel_id"))
     conn = db.get_conn()
     try:
         cid = T.resolve_channel_id(conn, API_KEY or None, raw)

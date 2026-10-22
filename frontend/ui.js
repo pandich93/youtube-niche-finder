@@ -1,6 +1,8 @@
 /* niche-finder dashboard — vanilla ES modules, без сборки.
    Каждый экран читает те же функции, что и MCP-инструменты, через backend/api.py. */
 
+import { getLocale, intlLocale } from './i18n.js';
+
 const $ = (sel, root = document) => root.querySelector(sel);
 
 const state = {
@@ -13,7 +15,8 @@ const state = {
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
-    headers: { 'content-type': 'application/json' },
+    // X-NF-Locale: сервер отвечает текстами (подсказки, ошибки, каталог оценок) на этом языке
+    headers: { 'content-type': 'application/json', 'x-nf-locale': getLocale() },
     ...opts,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
@@ -42,9 +45,15 @@ function q(params) {
 
 /* ------------------------------------------------------------ форматтеры */
 
-const nf = new Intl.NumberFormat('ru-RU');
+// формат чисел текущего языка; пересоздаётся при смене языка
+let nf = null;
+let nfLocale = null;
 
-function num(n) { return n === null || n === undefined ? '—' : nf.format(Math.round(n)); }
+function num(n) {
+  if (n === null || n === undefined) return '—';
+  if (nfLocale !== intlLocale()) { nfLocale = intlLocale(); nf = new Intl.NumberFormat(nfLocale); }
+  return nf.format(Math.round(n));
+}
 
 function compact(n) {
   if (n === null || n === undefined) return '—';
