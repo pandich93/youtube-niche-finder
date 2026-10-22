@@ -18,6 +18,13 @@ const DEFAULTS = {
   timeoutMs: 12000,
 };
 
+const t = (key, subs) => chrome.i18n.getMessage(
+  key, subs === undefined ? undefined : [].concat(subs).map(String)) || key;
+
+// Язык подсказок сервера -- тот же, что у интерфейса расширения: ru для
+// русскоязычных и соседних локалей браузера, иначе en (заголовок X-NF-Locale).
+const NF_LOCALE = /^(ru|uk|be|kk|uz|ky|tg)(?:[-_]|$)/i.test(chrome.i18n.getUILanguage() || '') ? 'ru' : 'en';
+
 const TTL = { video: 120e3, channel: 300e3, deep: 300e3, batch: 600e3, health: 30e3, comments: 1800e3,
              stats: 60e3, why: 1800e3 };
 
@@ -63,6 +70,7 @@ async function api(path, { method = 'GET', body = null } = {}) {
       // или с JSON-телом, иначе 403 (защита от чужих сайтов, api.py local_only_guard)
       headers: {
         'X-NF-Client': 'extension',
+        'X-NF-Locale': NF_LOCALE,
         ...(body ? { 'Content-Type': 'application/json' } : {}),
         ...(s.apiToken ? { Authorization: `Bearer ${s.apiToken}` } : {}),
       },
@@ -70,7 +78,7 @@ async function api(path, { method = 'GET', body = null } = {}) {
       signal: AbortSignal.timeout(s.timeoutMs),
     });
   } catch (e) {
-    const err = new Error(`бэкенд не отвечает (${base}). Запущен ли он? make dev`);
+    const err = new Error(t('errBackendOffline', base));
     err.offline = true;
     throw err;
   }
@@ -353,7 +361,7 @@ const HANDLERS = {
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const handler = HANDLERS[msg && msg.type];
-  if (!handler) { sendResponse({ ok: false, error: 'неизвестная команда' }); return false; }
+  if (!handler) { sendResponse({ ok: false, error: t('errUnknownCommand') }); return false; }
   Promise.resolve(handler(msg))
     .then((data) => sendResponse({ ok: true, data }))
     .catch((e) => sendResponse({ ok: false, error: String(e.message || e), offline: !!e.offline, status: e.status }));
