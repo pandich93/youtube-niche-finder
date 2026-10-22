@@ -1,0 +1,18 @@
+export default {
+  title: 'Трекер каналов',
+  sub: 'воркер снимает статистику по этим каналам и копит историю',
+  facelessAny: 'faceless: любой',
+  facelessYes: 'faceless: да',
+  facelessNo: 'faceless: нет',
+  formatPlaceholder: 'формат',
+  topicPlaceholder: 'тема',
+  colChannel: 'Канал',
+  colSubs: 'Подписчиков',
+  colVideos: 'Видео',
+  colViews: 'Просмотров',
+  colSnapshots: 'Снимков',
+  colRefreshed: 'Обновлён',
+  remove: 'убрать',
+  empty: 'пока никого — добавьте канал ниже, или фильтр по AI-разметке ничего не нашёл',
+  removed: 'Убрал из трекера',
+};

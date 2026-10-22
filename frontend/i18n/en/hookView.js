@@ -1,0 +1,40 @@
+export default {
+  levelStrong: 'strong',
+  levelOk: 'average',
+  levelWeak: 'weak',
+  levelInsufficient: 'too little text',
+
+  featQuestion: 'question to the viewer',
+  featNumber: 'number or amount',
+  featPromise: 'promise of a result',
+  featIntrigue: 'intrigue or conflict',
+  featSecondPerson: 'speaks to "you"',
+  featFirstSentence: 'short first sentence',
+  featPace: 'speaking pace',
+
+  notScored: '{label}: not scored',
+  hitYes: '✓ yes',
+  hitNo: '✗ no',
+  featureRow: '{hit} — {label}: {points} of {max}',
+
+  cmpInsufficient: 'Niche comparison: not enough data (10 outliers and 10 ordinary videos with transcripts are needed).',
+  cmpGaps: 'Outliers more often have what yours lacks: {list}.',
+  cmpLine: 'Niche comparison: your score {your}, outliers average {outlier}, ordinary videos {regular}.',
+
+  llmTitle: 'LLM review',
+  llmCached: '(cached)',
+  llmWorks: 'What works',
+  llmImprove: 'What to improve',
+  llmRewrite: 'Alternative opening:',
+
+  noTranscript: 'no transcript',
+  tooLittleText: 'Too little text to score.',
+  penaltyGreeting: 'greeting at the start',
+  penaltyFiller: 'filler phrases: {text}',
+  wordsTimed: { one: '{n} word, with timestamps', other: '{n} words, with timestamps' },
+  wordsUntimed: { one: '{n} word, no timestamps', other: '{n} words, no timestamps' },
+  noPunctuation: 'The text has almost no punctuation — "?" questions and first-sentence length are not scored.',
+  fillerTitle: 'Filler at the start',
+  tipsTitle: 'Things to try',
+  disclaimer: 'Scores the text of the opening, not the visual hook; correlation, not causation.',
+};

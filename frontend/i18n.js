@@ -91,7 +91,7 @@ const warned = new Set();
 function warnOnce(key) {
   if (warned.has(key)) return;
   warned.add(key);
-  console.warn(`[i18n] нет перевода "${key}" для ${locale}`);
+  console.warn(`[i18n] missing "${key}" for ${locale}`);
 }
 
 function pick(entry, params) {

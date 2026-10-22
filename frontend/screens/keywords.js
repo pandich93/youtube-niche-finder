@@ -1,6 +1,11 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, q, num, compact, esc, tile, sectionHead, empty, table, state } from '../ui.js';
 import { view, plabel, base, render } from '../shared.js';
+import { dict } from '../i18n.js';
+import ru from '../i18n/ru/keywords.js';
+import en from '../i18n/en/keywords.js';
+
+const t = dict({ ru, en });
 
 /* --------------------------------------------------------- Ключевые слова */
 
@@ -10,42 +15,34 @@ async function viewKeywords() {
     keywords_mode: semantic ? 'semantic' : 'ngram' })}`);
   view.innerHTML = `
     <div class="card">
-      ${sectionHead('Трендовые ключевые слова', plabel(state.period), `
+      ${sectionHead(t('title'), plabel(state.period), `
         <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)">
           <input type="checkbox" id="semanticModeToggle" ${semantic ? 'checked' : ''}>
-          смысловой режим (слияние синонимов через эмбеддинги)
+          ${t('semanticMode')}
         </label>`)}
       <div class="tiles">
-        ${tile('Видео в анализе', num(d.videosAnalysed))}
-        ${tile('В предыдущем окне', num(d.previousWindowVideos))}
-        ${tile('Базовая доля outlier', `${d.outlierBaseRate}%`, 'сколько видео вообще пробивают')}
-        ${tile('Покрытие тегами', `${d.tagCoveragePercent}%`, 'теги проставляют не все авторы')}
+        ${tile(t('tileAnalysed'), num(d.videosAnalysed))}
+        ${tile(t('tilePrevious'), num(d.previousWindowVideos))}
+        ${tile(t('tileBaseRate'), `${d.outlierBaseRate}%`, t('tileBaseRateSub'))}
+        ${tile(t('tileTagCoverage'), `${d.tagCoveragePercent}%`, t('tileTagCoverageSub'))}
       </div>
     </div>
     <div class="card">
       ${d.keywords.length ? table([
-        { label: 'Фраза', wrap: true, render: (r) => esc(r.keyword) },
+        { label: t('colPhrase'), wrap: true, render: (r) => esc(r.keyword) },
         { label: 'Opportunity', num: true, tip: 'trendScore', render: (r) => r.opportunityScore != null
             ? `<span class="chip ${r.opportunityScore >= 70 ? 'chip-good' : r.opportunityScore < 30 ? 'chip-bad' : ''}">${r.opportunityScore}</span>`
             : '—' },
-        { label: 'Видео', num: true, render: (r) => num(r.videos) },
+        { label: t('colVideos'), num: true, render: (r) => num(r.videos) },
         { label: 'Momentum', num: true, tip: 'trendScore', render: (r) => r.momentum ?? '—' },
         { label: 'Lift', num: true, tip: 'trendScore', render: (r) => r.outlierLift ?? '—' },
-        { label: 'Доля', num: true, render: (r) => `${r.share}%` },
-        { label: 'Медиана просмотров', num: true, render: (r) => compact(r.medianViews) },
-        { label: 'Новая', render: (r) => (r.isNew ? 'да' : '') },
-        { label: 'Пример', wrap: true, render: (r) => esc(r.examples?.[0]?.title || '') },
-      ], d.keywords) : empty(d.hint || 'нет фраз над порогом')}
+        { label: t('colShare'), num: true, render: (r) => `${r.share}%` },
+        { label: t('colMedianViews'), num: true, render: (r) => compact(r.medianViews) },
+        { label: t('colNew'), render: (r) => (r.isNew ? t('yes') : '') },
+        { label: t('colExample'), wrap: true, render: (r) => esc(r.examples?.[0]?.title || '') },
+      ], d.keywords) : empty(d.hint || t('empty'))}
       <div class="section-sub" style="margin-top:14px">
-        <b>Opportunity</b> — 0-100, для удобства чтения: trendScore, растянутый по
-        мин/макс среди фраз именно этого экрана. Это НЕ настоящий keyword score вроде
-        vidIQ (для него нужен бы объём поиска YouTube, а такого API не существует) —
-        сравнивать это число между разными запросами или окнами нельзя, только внутри
-        одной текущей выдачи.<br>
-        <b>momentum</b> — доля фразы в этом окне против доли в предыдущем таком же
-        (со сглаживанием); больше 2 значит быстрый рост.<br>
-        <b>outlierLift</b> — во сколько раз фраза повышает шансы видео пробить;
-        больше 1.5 значит, что фраза реально коррелирует с пробитиями.
+        ${t('note')}
       </div>
     </div>`;
 

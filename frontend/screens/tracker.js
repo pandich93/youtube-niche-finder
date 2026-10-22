@@ -1,6 +1,11 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, q, num, compact, ago, esc, toast, sectionHead, empty, table, aiLabelsBadge } from '../ui.js';
 import { view, collectForm, wireCollect, render } from '../shared.js';
+import { dict } from '../i18n.js';
+import ru from '../i18n/ru/tracker.js';
+import en from '../i18n/en/tracker.js';
+
+const t = dict({ ru, en });
 
 /* ----------------------------------------------------------------- Трекер */
 
@@ -16,24 +21,24 @@ async function viewTracker() {
   })}`);
   view.innerHTML = `
     <div class="card">
-      ${sectionHead('Трекер каналов', 'воркер снимает статистику по этим каналам и копит историю', `
+      ${sectionHead(t('title'), t('sub'), `
         <select id="filterFaceless">
-          <option value="" ${f.faceless === '' ? 'selected' : ''}>faceless: любой</option>
-          <option value="true" ${f.faceless === 'true' ? 'selected' : ''}>faceless: да</option>
-          <option value="false" ${f.faceless === 'false' ? 'selected' : ''}>faceless: нет</option>
+          <option value="" ${f.faceless === '' ? 'selected' : ''}>${t('facelessAny')}</option>
+          <option value="true" ${f.faceless === 'true' ? 'selected' : ''}>${t('facelessYes')}</option>
+          <option value="false" ${f.faceless === 'false' ? 'selected' : ''}>${t('facelessNo')}</option>
         </select>
-        <input type="text" id="filterFormat" placeholder="формат" value="${esc(f.format)}" style="width:120px">
-        <input type="text" id="filterTopic" placeholder="тема" value="${esc(f.topic)}" style="width:120px">`)}
+        <input type="text" id="filterFormat" placeholder="${esc(t('formatPlaceholder'))}" value="${esc(f.format)}" style="width:120px">
+        <input type="text" id="filterTopic" placeholder="${esc(t('topicPlaceholder'))}" value="${esc(f.topic)}" style="width:120px">`)}
       ${d.channels.length ? table([
-        { label: 'Канал', render: (r) => `<a href="#/channel/${esc(r.channel_id)}">${esc(r.title || r.channel_id)}</a>` },
+        { label: t('colChannel'), render: (r) => `<a href="#/channel/${esc(r.channel_id)}">${esc(r.title || r.channel_id)}</a>` },
         { label: 'AI', render: (r) => aiLabelsBadge(r.aiLabels) || '—' },
-        { label: 'Подписчиков', num: true, render: (r) => compact(r.subscriber_count) },
-        { label: 'Видео', num: true, render: (r) => num(r.video_count) },
-        { label: 'Просмотров', num: true, render: (r) => compact(r.view_count) },
-        { label: 'Снимков', num: true, render: (r) => num(r.snapshots) },
-        { label: 'Обновлён', render: (r) => ago(r.last_refreshed_at) },
-        { label: '', render: (r) => `<button class="btn btn-ghost btn-sm untrack" data-id="${esc(r.channel_id)}">убрать</button>` },
-      ], d.channels) : empty('пока никого — добавьте канал ниже, или фильтр по AI-разметке ничего не нашёл')}
+        { label: t('colSubs'), num: true, render: (r) => compact(r.subscriber_count) },
+        { label: t('colVideos'), num: true, render: (r) => num(r.video_count) },
+        { label: t('colViews'), num: true, render: (r) => compact(r.view_count) },
+        { label: t('colSnapshots'), num: true, render: (r) => num(r.snapshots) },
+        { label: t('colRefreshed'), render: (r) => ago(r.last_refreshed_at) },
+        { label: '', render: (r) => `<button class="btn btn-ghost btn-sm untrack" data-id="${esc(r.channel_id)}">${t('remove')}</button>` },
+      ], d.channels) : empty(t('empty'))}
     </div>
     ${collectForm()}`;
   wireCollect(render);
@@ -51,7 +56,7 @@ async function viewTracker() {
   view.querySelectorAll('.untrack').forEach((b) => b.addEventListener('click', async () => {
     try {
       await api(`/api/channels/tracked/${b.dataset.id}`, { method: 'DELETE' });
-      toast('Убрал из трекера', 'ok'); render();
+      toast(t('removed'), 'ok'); render();
     } catch (e) { toast(e.message, 'err'); }
   }));
 }

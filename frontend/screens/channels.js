@@ -1,6 +1,11 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, q, sectionHead, empty, channelRow, state, yppSelect } from '../ui.js';
 import { view, plabel, base, render } from '../shared.js';
+import { dict } from '../i18n.js';
+import ru from '../i18n/ru/channels.js';
+import en from '../i18n/en/channels.js';
+
+const t = dict({ ru, en });
 
 /* --------------------------------------------------------- Outlier-каналы */
 
@@ -15,25 +20,22 @@ async function viewChannels() {
   })}`);
   view.innerHTML = `
     <div class="card">
-      ${sectionHead('Outlier-каналы', `${plabel(state.period)} · по попаданию в базу — свежие возможности`)}
+      ${sectionHead(t('title'), t('sub', { period: plabel(state.period) }))}
       <div class="form-row">
-        <label class="field"><span class="field-label">Множитель не меньше</span>
+        <label class="field"><span class="field-label">${t('minMultiplier')}</span>
           <input type="number" id="fcMult" value="${p.min_multiplier}" step="0.5"></label>
-        <label class="field"><span class="field-label">Подписчиков не меньше</span>
+        <label class="field"><span class="field-label">${t('minSubs')}</span>
           <input type="number" id="fcMinSubs" value="${p.min_subscribers}" step="1000"></label>
-        <label class="field"><span class="field-label">Подписчиков не больше</span>
+        <label class="field"><span class="field-label">${t('maxSubs')}</span>
           <input type="number" id="fcMaxSubs" value="${p.max_subscribers}" step="1000"></label>
         ${yppSelect('fcYpp', p.min_ypp_status)}
-        <button class="btn" id="applyChannels" type="button">Применить</button>
+        <button class="btn" id="applyChannels" type="button">${t('apply')}</button>
       </div>
-      <div class="section-sub" style="margin-top:10px">Множитель — лучший возрастно-нормированный outlier среди
-        видео канала в окне, против медианы предыдущих загрузок этого же канала.
-        Полоса: &lt;2x, 2–3x, 3–5x, 5–10x, &gt;10x. Отсортировано по силе множителя;
-        сузьте окно периода вверху, чтобы увидеть только самые свежие открытия.</div>
+      <div class="section-sub" style="margin-top:10px">${t('note')}</div>
     </div>
     <div class="card">
       ${d.channels.length ? `<div class="rows">${d.channels.map(channelRow).join('')}</div>`
-                          : empty(d.hint || 'нет каналов над порогом')}
+                          : empty(d.hint || t('empty'))}
     </div>`;
 
   $('#applyChannels').addEventListener('click', () => {

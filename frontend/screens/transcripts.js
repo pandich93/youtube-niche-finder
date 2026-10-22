@@ -2,6 +2,11 @@
 import { $, api, q, compact, esc, toast, sectionHead, notice, empty, state } from '../ui.js';
 import { view } from '../shared.js';
 import { hookResultHtml, HOOK_FEATURE_LABEL } from '../hook_view.js';
+import { dict } from '../i18n.js';
+import ru from '../i18n/ru/transcripts.js';
+import en from '../i18n/en/transcripts.js';
+
+const t = dict({ ru, en });
 
 /* ------------------------------------------------------- Транскрипты (19) */
 
@@ -17,33 +22,33 @@ function transcriptQueueCard(item, tab) {
       <div style="display:flex;width:100%;justify-content:space-between;gap:12px">
         <div class="row-main">
           <div class="row-title"><a href="${link}" target="_blank" rel="noopener">${esc(item.title || item.videoId)}</a></div>
-          <div class="row-sub">${esc(item.channelTitle || '')}${item.views != null ? ` · ${compact(item.views)} просмотров` : ''}
-            ${item.reason ? ` · причина: ${esc(item.reason)}` : ''}${item.compareGroup ? ` · группа: ${esc(item.compareGroup)}` : ''}</div>
+          <div class="row-sub">${esc(item.channelTitle || '')}${item.views != null ? ` · ${t('viewsCount', { views: compact(item.views) })}` : ''}
+            ${item.reason ? ` · ${t('reason', { reason: esc(item.reason) })}` : ''}${item.compareGroup ? ` · ${t('group', { group: esc(item.compareGroup) })}` : ''}</div>
           ${item.error ? `<div class="row-sub" style="color:var(--critical)">${esc(item.error)}</div>` : ''}
         </div>
         ${tab === 'pending' || tab === 'error'
           ? `<button class="btn btn-ghost btn-sm transcript-paste-btn" data-video-id="${esc(item.videoId)}">
-              ${tab === 'error' ? 'Повторить' : 'Вставить транскрипт'}</button>`
+              ${tab === 'error' ? t('retry') : t('paste')}</button>`
           : `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-              <button class="btn btn-ghost btn-sm transcript-hook-btn" data-video-id="${esc(item.videoId)}">Крючок</button>
-              <button class="btn btn-ghost btn-sm transcript-reindex-btn" data-video-id="${esc(item.videoId)}">Переиндексировать</button>
+              <button class="btn btn-ghost btn-sm transcript-hook-btn" data-video-id="${esc(item.videoId)}">${t('hook')}</button>
+              <button class="btn btn-ghost btn-sm transcript-reindex-btn" data-video-id="${esc(item.videoId)}">${t('reindex')}</button>
             </div>`}
       </div>
       ${tab === 'ready' ? `
       <div class="transcript-hook-box" data-video-id="${esc(item.videoId)}" hidden style="width:100%">
         <label class="row-sub" style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
           <input type="checkbox" class="transcript-hook-llm">
-          LLM-разбор (может стоить денег, отправляет текст провайдеру)
+          ${t('llmLabel')}
         </label>
         <div class="transcript-hook-result"></div>
       </div>` : ''}
       <div class="transcript-paste-form" data-video-id="${esc(item.videoId)}" ${transcriptPasteOpenFor === item.videoId ? '' : 'hidden'}
         style="width:100%">
-        <textarea class="transcript-paste-input" rows="8" placeholder="Вставьте текст транскрипта с YouTube (со таймкодами или без)"
+        <textarea class="transcript-paste-input" rows="8" placeholder="${esc(t('pastePlaceholder'))}"
           style="width:100%;font-family:inherit;resize:vertical"></textarea>
         <div style="display:flex;gap:10px;margin-top:8px;align-items:center">
-          <input type="text" class="transcript-lang-input" placeholder="язык (необязательно)" style="width:140px">
-          <button class="btn btn-sm transcript-save-btn" data-video-id="${esc(item.videoId)}">Сохранить</button>
+          <input type="text" class="transcript-lang-input" placeholder="${esc(t('langPlaceholder'))}" style="width:140px">
+          <button class="btn btn-sm transcript-save-btn" data-video-id="${esc(item.videoId)}">${t('save')}</button>
           <span class="transcript-save-status row-sub"></span>
         </div>
       </div>
@@ -51,32 +56,32 @@ function transcriptQueueCard(item, tab) {
 }
 
 function hookBenchmarkHtml(b) {
-  const head = sectionHead('Бенчмарк ниши: крючок',
-    'первые ~30 секунд у outliers и у обычных видео — только по вставленным транскриптам; оценка текста, не картинки');
-  if (!b) return `<div class="card">${head}<div class="section-sub">Выберите нишу в фильтре сверху.</div></div>`;
-  if (!b.found) return `<div class="card">${head}<div class="section-sub">Мало данных: 0 из 10 —
-    у видео этой ниши нет сохранённых транскриптов.</div></div>`;
+  const head = sectionHead(t('benchTitle'), t('benchSub'));
+  if (!b) return `<div class="card">${head}<div class="section-sub">${t('pickNiche')}</div></div>`;
+  if (!b.found) return `<div class="card">${head}<div class="section-sub">${t('benchNone')}</div></div>`;
   if (!b.reliable) {
-    return `<div class="card">${head}<div class="section-sub">Мало данных: outliers ${b.have.outliers} из ${b.need},
-      обычных видео ${b.have.regular} из ${b.need}. Серая зона (${b.greyZone}) и видео без базы (${b.withoutOutlierScore}) не считаются.</div></div>`;
+    return `<div class="card">${head}<div class="section-sub">${t('benchThin', {
+      outliers: b.have.outliers, need: b.need, regular: b.have.regular,
+      grey: b.greyZone, noBase: b.withoutOutlierScore })}</div></div>`;
   }
   const more = b.moreCommonInOutliers.length
-    ? b.moreCommonInOutliers.map((n) => `${esc(HOOK_FEATURE_LABEL[n] || n)} (+${b.features[n].diffPp} п.п.)`).join(', ')
-    : 'заметной разницы нет';
+    ? b.moreCommonInOutliers.map((n) => t('featureDiff', { label: esc(HOOK_FEATURE_LABEL[n] || n), pp: b.features[n].diffPp })).join(', ')
+    : t('noDiff');
   return `<div class="card">${head}
-    <div class="section-sub">Средний балл: outliers ${b.outliers.meanScore}, обычные ${b.regular.meanScore}
-      (по ${b.outliers.n} и ${b.regular.n} видео). Чаще у outliers: ${more}. Это корреляция, не причинность.</div></div>`;
+    <div class="section-sub">${t('benchResult', {
+      outScore: b.outliers.meanScore, regScore: b.regular.meanScore,
+      outN: b.outliers.n, regN: b.regular.n, more })}</div></div>`;
 }
 
 function transcriptSearchResultsHtml(result) {
   if (!result) return '';
   if (result.hint) return notice(esc(result.hint));
-  if (!result.results.length) return empty('ничего не найдено');
+  if (!result.results.length) return empty(t('nothingFound'));
   return `<div class="rows">${result.results.map((r) => `
     <div class="row" style="align-items:flex-start">
       <div class="row-main">
         <div class="row-title"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.title || r.videoId)}</a></div>
-        <div class="row-sub">${esc(r.channelTitle || '')}${r.views != null ? ` · ${compact(r.views)} просмотров` : ''}
+        <div class="row-sub">${esc(r.channelTitle || '')}${r.views != null ? ` · ${t('viewsCount', { views: compact(r.views) })}` : ''}
           ${r.startSec != null ? ` · ${Math.floor(r.startSec / 60)}:${String(r.startSec % 60).padStart(2, '0')}` : ''}</div>
         <div style="margin-top:4px">${esc(r.text || '')}</div>
       </div>
@@ -96,14 +101,14 @@ async function viewTranscripts() {
     ready: queue.filter((i) => i.status === 'ready'),
     error: queue.filter((i) => i.status === 'error'),
   };
-  const tabs = [['pending', 'Ожидают'], ['ready', 'Готовы'], ['error', 'Ошибки']];
+  const tabs = [['pending', t('tabPending')], ['ready', t('tabReady')], ['error', t('tabError')]];
 
   view.innerHTML = `
     <div class="card">
-      ${sectionHead('Поиск по транскриптам', 'гибридный поиск: вектор + полнотекстовый')}
+      ${sectionHead(t('searchTitle'), t('searchSub'))}
       <div style="display:flex;gap:10px">
-        <input type="text" id="transcriptSearchInput" placeholder="что ищем..." value="${esc(transcriptSearchQuery)}" style="flex:1">
-        <button class="btn" id="transcriptSearchBtn">Искать</button>
+        <input type="text" id="transcriptSearchInput" placeholder="${esc(t('searchPlaceholder'))}" value="${esc(transcriptSearchQuery)}" style="flex:1">
+        <button class="btn" id="transcriptSearchBtn">${t('searchBtn')}</button>
       </div>
       ${transcriptSearchQuery ? `<div style="margin-top:12px">${transcriptSearchResultsHtml(transcriptSearchResult)}</div>` : ''}
     </div>
@@ -111,11 +116,11 @@ async function viewTranscripts() {
     ${hookBenchmarkHtml(hookBench)}
 
     <div class="card">
-      ${sectionHead('Очередь транскриптов', 'субтитры не скачиваются автоматически — только вручную')}
+      ${sectionHead(t('queueTitle'), t('queueSub'))}
       <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
-        <input type="text" id="transcriptAddVideoId" placeholder="ID видео" style="width:140px">
-        <input type="text" id="transcriptAddReason" placeholder="причина (необязательно)" style="width:200px">
-        <button class="btn btn-ghost btn-sm" id="transcriptAddBtn">Запросить транскрипт</button>
+        <input type="text" id="transcriptAddVideoId" placeholder="${esc(t('videoIdPlaceholder'))}" style="width:140px">
+        <input type="text" id="transcriptAddReason" placeholder="${esc(t('reasonPlaceholder'))}" style="width:200px">
+        <button class="btn btn-ghost btn-sm" id="transcriptAddBtn">${t('requestBtn')}</button>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:12px">
         ${tabs.map(([key, label]) => `<button class="btn btn-sm ${transcriptTab === key ? '' : 'btn-ghost'} transcript-tab-btn" data-tab="${key}">
@@ -123,17 +128,17 @@ async function viewTranscripts() {
       </div>
       <div class="rows">${byTab[transcriptTab].length
         ? byTab[transcriptTab].map((item) => transcriptQueueCard(item, transcriptTab)).join('')
-        : empty('пусто')}</div>
+        : empty(t('emptyTab'))}</div>
     </div>`;
 
   $('#transcriptAddBtn').addEventListener('click', async () => {
     const videoId = $('#transcriptAddVideoId').value.trim();
-    if (!videoId) { toast('Введите ID видео', 'err'); return; }
+    if (!videoId) { toast(t('enterVideoId'), 'err'); return; }
     try {
       await api('/api/transcripts/request', { method: 'POST', body: {
         videoId, reason: $('#transcriptAddReason').value.trim() || undefined,
       } });
-      toast('Добавлено в очередь', 'ok');
+      toast(t('queued'), 'ok');
       viewTranscripts();
     } catch (e) { toast(e.message, 'err'); }
   });
@@ -153,7 +158,7 @@ async function viewTranscripts() {
     b.disabled = true;
     try {
       await api(`/api/transcripts/${encodeURIComponent(b.dataset.videoId)}/reindex`, { method: 'POST' });
-      toast('Переиндексировано', 'ok');
+      toast(t('reindexed'), 'ok');
     } catch (e) { toast(e.message, 'err'); }
     finally { b.disabled = false; }
   }));
@@ -162,7 +167,7 @@ async function viewTranscripts() {
     const out = box.querySelector('.transcript-hook-result');
     box.hidden = false;
     b.disabled = true;
-    out.innerHTML = '<div class="row-sub">считаю…</div>';
+    out.innerHTML = `<div class="row-sub">${t('computing')}</div>`;
     try {
       const llm = box.querySelector('.transcript-hook-llm').checked;
       const r = await api(`/api/videos/${encodeURIComponent(b.dataset.videoId)}/hook${q({
@@ -176,18 +181,18 @@ async function viewTranscripts() {
     const text = form.querySelector('.transcript-paste-input').value;
     const language = form.querySelector('.transcript-lang-input').value.trim() || undefined;
     const status = form.querySelector('.transcript-save-status');
-    if (!text.trim()) { status.textContent = 'вставьте текст'; return; }
+    if (!text.trim()) { status.textContent = t('pasteText'); return; }
     b.disabled = true;
-    status.textContent = 'сохраняю…';
+    status.textContent = t('saving');
     try {
       const r = await api(`/api/transcripts/${encodeURIComponent(b.dataset.videoId)}/save`,
         { method: 'POST', body: { text, language } });
       if (r.status === 'ready') {
-        toast(`Сохранено: ${r.chunks} кусков, ${r.wordCount} слов`, 'ok');
+        toast(t('savedChunks', { chunks: r.chunks, words: r.wordCount }), 'ok');
         transcriptPasteOpenFor = null;
         viewTranscripts();
       } else {
-        status.textContent = r.error || 'ошибка';
+        status.textContent = r.error || t('error');
       }
     } catch (e) {
       status.textContent = e.message;
