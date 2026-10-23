@@ -46,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The YouTube API key is no longer put in request URLs: it goes in the
   `X-Goog-Api-Key` header. Network errors no longer carry the URL, and logs and
   HTTP 500 answers mask secrets. Rotate a key that may have been logged.
+- **Multi-user mode: password guessing is slowed down.** After 5 failed
+  sign-ins for one email the next waits 1, 2, 4 ... up to 15 minutes; 30
+  failures from one address close sign-in from it for 15 minutes (HTTP 429,
+  counters in Postgres). New and changed passwords refuse common long ones,
+  keyboard runs and the email's own name. Behind a reverse proxy set
+  `NF_TRUSTED_PROXIES` so limits count each real client, not the proxy.
 
 ## [0.4.0] - 2026-10-04
 
