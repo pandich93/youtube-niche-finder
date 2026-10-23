@@ -15,13 +15,14 @@ The production setup is `docker-compose.prod.yml`, layered on top of the usual
   and sign-in limits count each visitor by their own address
   (`NF_TRUSTED_PROXIES`), not all of them as the proxy.
 - **MCP works over HTTPS** at `https://YOUR-DOMAIN/mcp`, with a personal API
-  token per person.
+  token per person. So does the Chrome extension.
 - **The database is backed up on a schedule.** Each dump is checked by a
   trial restore, and old ones are rotated out.
 
 - [Before you start](#before-you-start)
 - [First start](#first-start)
 - [Connect an MCP client](#connect-an-mcp-client)
+- [The Chrome extension](#the-chrome-extension)
 - [Backups](#backups)
 - [Monitoring](#monitoring)
 - [Restore from a backup](#restore-from-a-backup)
@@ -139,6 +140,32 @@ The client connects to `https://YOUR-DOMAIN/mcp` over streamable HTTP and
 sends the header `Authorization: Bearer nf_…`. Without a valid token the
 server answers 401. The tools then act as that person: their watchlist, their
 drafts, their share of the quota.
+
+## The Chrome extension
+
+The same extension that works with a local copy works with the server:
+
+1. Each person creates a personal API token on the dashboard's MCP screen with
+   the scopes `read` and `write` (no `mcp` needed). `read` alone is not enough:
+   the list badges, comments, "collect", "track", "save" and the popup's
+   metadata review are POST requests.
+2. In the extension popup they set the service address to
+   `https://YOUR-DOMAIN`. Chrome asks to allow access to that host; they allow
+   it (or click "Allow access to this address" later).
+3. They paste the token into "Access token". The popup says so when the service
+   is reachable but the token is missing; a revoked or expired token shows the
+   same hint on the panels.
+
+The extension sends the token only over `https` to a remote address. Its own
+requests do not need CORS (it has host access), so the server answers CORS for
+no extension at all unless you list IDs:
+
+| Setting | Value |
+| --- | --- |
+| `NF_EXTENSION_IDS` | IDs of your extensions, comma-separated: the Chrome Web Store build, and the unpacked one you debug with. Without it a server with sign-in lets no extension in through CORS, so no other extension can read the API from your users' browsers. |
+
+Publishing the extension in the Chrome Web Store, so people don't have to load
+it unpacked: [chrome-web-store.md](chrome-web-store.md).
 
 ## Backups
 

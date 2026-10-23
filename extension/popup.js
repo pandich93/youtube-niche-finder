@@ -26,8 +26,14 @@ const $ = (id) => document.getElementById(id);
 const COMPACT = new Intl.NumberFormat(UI_LANG, { notation: 'compact' });
 const compact = (n) => n == null ? '—' : COMPACT.format(n);
 
+const DEFAULT_BASE = 'http://127.0.0.1:8080';
+let savedBase = DEFAULT_BASE;   // сохранённый адрес: доступ к прежнему удалённому хосту отпускаем
+let tokenSaved = false;
+
 async function load() {
   const s = (await send({ type: 'settings:get' })).data;
+  savedBase = s.baseUrl;
+  tokenSaved = !!s.apiToken;
   $('baseUrl').value = s.baseUrl;
   $('apiToken').placeholder = s.apiToken ? t('popupTokenSaved') : 'nf_…';
   $('autoFetch').checked = s.autoFetch;
@@ -35,12 +41,38 @@ async function load() {
   $('onlyOutliers').checked = s.onlyOutliers;
   $('showVph').checked = s.showVph;
   $('dash').href = s.baseUrl;
+  await updateAccessUi();
+  checkHealth();
+}
+
+// ------------------------------------------- доступ к удалённому сервису (P1-16)
+// Chrome выдаёт optional_host_permissions только из жеста пользователя, поэтому
+// запрос уходит синхронно в обработчике изменения адреса или кнопки «Разрешить».
+async function requestAccess(target) {
+  try { return await chrome.permissions.request({ origins: [target.origin] }); } catch { return false; }
+}
+
+async function updateAccessUi() {
+  const target = nfServiceTarget(savedBase);
+  $('grant').hidden = !target || await nfHasHostAccess(target);
+}
+
+async function grantAccess() {
+  const target = nfServiceTarget(savedBase);
+  if (target && !target.local) await requestAccess(target);
+  await send({ type: 'cache:drop' });
+  await updateAccessUi();
   checkHealth();
 }
 
 async function save() {
-  await send({ type: 'settings:set', patch: {
-    baseUrl: $('baseUrl').value.trim() || 'http://127.0.0.1:8080',
+  const baseUrl = $('baseUrl').value.trim() || DEFAULT_BASE;
+  const target = nfServiceTarget(baseUrl);
+  // запрос уходит синхронно, а адрес сохраняется параллельно: на время диалога
+  // Chrome может закрыть попап, и адрес не должен потеряться вместе с ним
+  const asked = target && !target.local && baseUrl !== savedBase ? requestAccess(target) : null;
+  const res = await send({ type: 'settings:set', patch: {
+    baseUrl,
     autoFetch: $('autoFetch').checked,
     showBadges: $('showBadges').checked,
     onlyOutliers: $('onlyOutliers').checked,
@@ -48,8 +80,18 @@ async function save() {
     // пустое поле -- «не менять»; новый токен заменяет старый
     ...($('apiToken').value.trim() ? { apiToken: $('apiToken').value.trim() } : {}),
   }});
+  // доступ держим только к одному удалённому хосту -- к тому, что настроен сейчас
+  const old = nfServiceTarget(savedBase);
+  if (old && !old.local && (!target || old.origin !== target.origin)) {
+    chrome.permissions.remove({ origins: [old.origin] }).catch(() => {});
+  }
+  savedBase = baseUrl;
+  if (asked) await asked;
+  if (res.ok) tokenSaved = !!res.data.apiToken;
   $('apiToken').value = '';
-  $('dash').href = $('baseUrl').value.trim();
+  $('apiToken').placeholder = tokenSaved ? t('popupTokenSaved') : 'nf_…';
+  $('dash').href = baseUrl;
+  await updateAccessUi();
   checkHealth();
 }
 
@@ -67,6 +109,15 @@ async function checkHealth() {
   box.className = 'status ok';
   box.textContent = t('healthOk', [compact(h.db.videos), compact(h.db.channels)])
     + ' · ' + (h.hasApiKey ? t('healthSearchLeft', h.searchQuota.callsLeft) : t('healthNoApiKey'));
+  // /api/health открыт и без входа: про токен удалённому сервису скажем сами
+  const target = nfServiceTarget(savedBase);
+  const note = !target || target.local ? ''
+    : !target.secure ? t('popupInsecureRemote')
+    : !tokenSaved ? t('popupTokenNeeded') : '';
+  if (note) {
+    box.className = 'status err';
+    box.textContent += ' · ' + note;
+  }
 }
 
 // ------------------------------------------------------------ алерты (8.9)
@@ -175,6 +226,7 @@ document.addEventListener('DOMContentLoaded', load);
 ['baseUrl', 'autoFetch', 'showBadges', 'onlyOutliers', 'showVph', 'apiToken'].forEach((id) =>
   document.getElementById(id).addEventListener('change', save));
 document.getElementById('check').addEventListener('click', checkHealth);
+document.getElementById('grant').addEventListener('click', grantAccess);
 document.getElementById('mdReview').addEventListener('click', mdReview);
 document.getElementById('mdSave').addEventListener('click', mdSaveDraft);
 document.getElementById('alertsScan').addEventListener('click', scanAlertsNow);
