@@ -25,6 +25,7 @@ export default {
   mcp: 'MCP connection',
   plan: 'Plan',
   admin: 'Admin',
+  profile: 'Profile',
   crumbChannel: 'Channel',
   crumbBrief: 'Brief',
   crumbCompare: 'Compare',

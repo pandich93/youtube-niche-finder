@@ -66,6 +66,7 @@ In `.env`, set at least these values:
 | `OWN_TOKENS_KEY` | an encryption key for the notification and channel secrets people save; how to generate it is just below |
 | `NF_DEFAULT_LOCALE` | `en` for an English-speaking audience (`ru` by default) |
 | `NF_SERVICE_NAME`, `NF_OPERATOR_NAME`, `NF_CONTACT_EMAIL` | who runs the service; shown on `/privacy` and `/terms` |
+| `SMTP_HOST`, `SMTP_FROM` (and `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_PORT`, `SMTP_SECURITY` as your mail provider says) | optional: mail for sign-up, password reset and email change. Without it only you create accounts, and nobody can reset a forgotten password themselves. `NF_REGISTRATION=closed` keeps reset by mail but turns sign-up off. |
 
 You don't need to set `NF_MULTI_USER`, `NF_COOKIE_SECURE`, `NF_ALLOWED_HOSTS`,
 `NF_TRUSTED_PROXIES` or `MCP_PUBLIC_URL`: the production file sets them from
@@ -124,8 +125,10 @@ Open `https://YOUR-DOMAIN` and sign in. The first start takes a minute or two
 while Caddy gets the certificate. `make prod-logs` shows what is happening.
 
 Accounts for other people are created the same way, without `--admin`, or on
-the **Admin** screen, which shows a one-time password to hand over. People can
-delete their own account on the **Plan** page.
+the **Admin** screen, which shows a one-time password to hand over. With mail
+set up, people can also sign up on the sign-in screen and confirm their email
+by the link it sends. They change their password and email on the **Profile**
+page and can delete their account on the **Plan** page.
 
 ## Connect an MCP client
 

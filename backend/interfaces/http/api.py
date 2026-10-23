@@ -67,6 +67,7 @@ from application import repeatability as RP
 from application import saturation as SAT
 from application import search as Q
 from application import secrets_rotation as SR
+from application import signup as SU
 from application import sponsors as SP
 from application import tags as TG
 from application import template_risk as TRK
@@ -79,8 +80,8 @@ from domain import i18n
 from domain import plans as PD
 from domain.i18n import tr
 from domain.users import LOCAL_USER_ID, multi_user_enabled
+from infrastructure import mailer, quota_owner
 from infrastructure import observability as OBS
-from infrastructure import quota_owner
 from infrastructure.categories import repository as C
 from infrastructure.redact import redact
 
@@ -247,7 +248,11 @@ def _header_locale(request):
 
 AUTH_COOKIE = "nf_session"
 _PUBLIC_API = frozenset({"/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/health",
-                         "/api/own/oauth/callback"})
+                         "/api/own/oauth/callback",
+                         # multi-user plan P1-06: sign-up and reset by emailed link
+                         "/api/auth/register", "/api/auth/register/link",
+                         "/api/auth/register/complete", "/api/auth/password/forgot",
+                         "/api/auth/password/reset", "/api/auth/email/confirm"})
 
 
 # SaaS sub-project 1: route -> the tariff feature it needs. Methods None = any.
@@ -1275,7 +1280,9 @@ def auth_me(request: Request):
     return {"multiUser": True, "user": user,
             "quota": yt.user_usage(user["id"]) if user else None,
             "plan": PL.summary(user["id"]) if user else None,
-            "locale": _saved_locale(user["id"]) if user else None}
+            "locale": _saved_locale(user["id"]) if user else None,
+            # P1-06: what the sign-in screen offers (both need SMTP)
+            "signup": SU.options()}
 
 
 @app.put("/api/me/locale")
@@ -1301,6 +1308,11 @@ def auth_login(request: Request, response: Response, payload: dict = Body(...)):
                                       "{retry_after} с.", retry_after=e.retry_after))
     except AUTH.AuthError as e:
         raise HTTPException(status_code=401, detail=str(e))
+    return _signed_in(request, response, s)
+
+
+def _signed_in(request, response, s) -> dict:
+    """Put a new session into the HttpOnly cookie (never into the body)."""
     response.set_cookie(AUTH_COOKIE, s["token"], max_age=AUTH.SESSION_DAYS * 86400, path="/",
                         httponly=True, samesite="strict", secure=_cookie_secure(request))
     return {"user": AUTH.user_for_token(s["token"]), "expiresAt": s["expiresAt"]}
@@ -1311,6 +1323,119 @@ def auth_logout(request: Request, response: Response):
     AUTH.logout(request.cookies.get(AUTH_COOKIE, ""))
     response.delete_cookie(AUTH_COOKIE, path="/")
     return {"signedOut": True}
+
+
+# ------------------------------------------- sign-up and reset (P1-06)
+
+def _public_url(request) -> str:
+    """The dashboard address emailed links point to: NF_PUBLIC_URL, else
+    https://NF_DOMAIN, else the address of this request -- whose Host is one
+    of NF_ALLOWED_HOSTS (local_only_guard), so it cannot be forged."""
+    base = (os.environ.get("NF_PUBLIC_URL") or "").strip()
+    if not base and (os.environ.get("NF_DOMAIN") or "").strip():
+        base = "https://" + os.environ["NF_DOMAIN"].strip()
+    return (base or str(request.base_url)).rstrip("/")
+
+
+def _mail_link(request):
+    base = _public_url(request)
+    # the token rides in the #fragment: browsers never send it to a server or a log
+    return lambda kind, token: f"{base}/#/{kind}/{token}"
+
+
+def _signup_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except SU.SignupClosed as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except SU.TooManyRequests as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except (SU.SignupError, AUTH.AuthError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except mailer.MailError:
+        raise HTTPException(status_code=503, detail=tr("Не удалось отправить письмо. "
+                                                       "Попробуйте позже."))
+
+
+def _sent():
+    return {"sent": True, "detail": tr("Если адрес верный, письмо со ссылкой уже в пути. "
+                                       "Проверьте почту, в том числе папку «Спам».")}
+
+
+@app.post("/api/auth/register")
+def auth_register(request: Request, payload: dict = Body(...)):
+    """Open sign-up: mails a one-time link (24 h) to finish it. The same reply
+    whether or not the address already has an account."""
+    _signup_call(SU.register, str(payload.get("email") or ""), client_ip=_client_ip(request),
+                 link=_mail_link(request))
+    return _sent()
+
+
+@app.post("/api/auth/register/link")
+def auth_register_link(payload: dict = Body(...)):
+    """The address a sign-up link is for, to show it on the password form."""
+    return {"email": _signup_call(SU.signup_email, str(payload.get("token") or ""))}
+
+
+@app.post("/api/auth/register/complete")
+def auth_register_complete(request: Request, response: Response, payload: dict = Body(...)):
+    """Choose the password from the emailed link: the account is created and
+    signed in."""
+    s = _signup_call(SU.complete_signup, str(payload.get("token") or ""),
+                     str(payload.get("password") or ""))
+    return _signed_in(request, response, s)
+
+
+@app.post("/api/auth/password/forgot")
+def auth_password_forgot(request: Request, payload: dict = Body(...)):
+    """Mails a one-time reset link (1 h) to an active account; the same reply
+    for an unknown address."""
+    _signup_call(SU.forgot_password, str(payload.get("email") or ""),
+                 client_ip=_client_ip(request), link=_mail_link(request))
+    return _sent()
+
+
+@app.post("/api/auth/password/reset")
+def auth_password_reset(request: Request, response: Response, payload: dict = Body(...)):
+    """A new password from a reset link: every session and API token of the
+    account ends, this browser is signed in."""
+    s = _signup_call(SU.reset_password, str(payload.get("token") or ""),
+                     str(payload.get("password") or ""))
+    return _signed_in(request, response, s)
+
+
+@app.post("/api/auth/email/confirm")
+def auth_email_confirm(payload: dict = Body(...)):
+    """Open the link sent to a new address: it becomes the account's email."""
+    return {"email": _signup_call(SU.confirm_email_change, str(payload.get("token") or ""))}
+
+
+def _own_session(request) -> int:
+    """Profile changes need a dashboard sign-in, never an API token."""
+    if not multi_user_enabled():
+        raise HTTPException(status_code=409, detail="accounts exist only with NF_MULTI_USER=1")
+    if getattr(request.state, "via", None) != "session":
+        raise HTTPException(status_code=403, detail="sign in to the dashboard to change this")
+    return request.state.user_id
+
+
+@app.post("/api/auth/password")
+def auth_password_change(request: Request, response: Response, payload: dict = Body(...)):
+    """Change your password with the current one: other sign-ins and API
+    tokens end, this browser stays signed in."""
+    s = _signup_call(SU.change_password, _own_session(request),
+                     str(payload.get("currentPassword") or ""), str(payload.get("password") or ""))
+    return _signed_in(request, response, s)
+
+
+@app.post("/api/auth/email")
+def auth_email_change(request: Request, payload: dict = Body(...)):
+    """Change your email: with your password, a confirmation link goes to the
+    new address."""
+    sent_to = _signup_call(SU.request_email_change, _own_session(request),
+                           str(payload.get("password") or ""), str(payload.get("email") or ""),
+                           client_ip=_client_ip(request), link=_mail_link(request))
+    return {"sentTo": sent_to}
 
 
 def _uid(request) -> int:
