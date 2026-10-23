@@ -14,4 +14,8 @@ MESSAGES = {
     "Для удаления введите email этого пользователя.":
         "To delete, type this user's email.",
     "Неверный пароль.": "Wrong password.",
+    # the action log (application/audit.py, multi-user plan P1-07)
+    "{name}: нужна дата в формате ГГГГ-ММ-ДД": "{name}: a date as YYYY-MM-DD is needed",
+    "Неизвестное событие журнала: {event}": "Unknown log event: {event}",
+    "page и perPage: целые числа": "page and perPage: whole numbers",
 }

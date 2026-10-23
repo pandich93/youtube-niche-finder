@@ -36,7 +36,14 @@ Everything lives in the Postgres database you point the app at (by default the
   reused when present).
 - **Accounts** (plan 15, only with `NF_MULTI_USER=1`) — each user's email, a
   scrypt hash of the password (never the password), and the SHA-256 of each
-  sign-in session token with its expiry (`users`, `sessions`). Personal rows
+  sign-in session token with its expiry (`users`, `sessions`). Each session
+  also keeps the client address and browser line (User-Agent, cut to 200
+  characters) it was used from and when it was last active, so its owner can
+  see where they are signed in on the "Profile" page; they go when the
+  session ends. With mail set up, a sign-up, reset or email-change link is
+  kept as a SHA-256 with its purpose, the new address for an email change and
+  its expiry (`email_tokens`); it is deleted when used, replaced, or after it
+  expires, when the next link is issued. Personal rows
   carry the owner's `user_id`: the watchlist, swipe file, drafts, transcript
   queue and which alerts each user has read (`event_reads`) are visible only
   to their owner. Personal API tokens (`api_tokens`) are stored as SHA-256
@@ -61,9 +68,25 @@ Everything lives in the Postgres database you point the app at (by default the
   and the account itself; the OAuth tokens of their own channels are revoked
   at Google first. What is shared stays: the public YouTube data everyone
   collects, and a transcript or tag they added, which passes to the
-  operator. `admin_actions` keeps who deleted which email and when.
+  operator. The action log (below) keeps who deleted which email and when.
   Blocking an account (Admin page, `cli.py disable-user`) deletes nothing
   but ends its sessions and tokens at once.
+- **Action log** (`audit_log`, multi-user plan P1-07) -- a security record
+  only admins read (the "Admin" page, `GET /api/admin/audit`): sign-ins and
+  failed sign-ins, sign-ups, password changes and resets, email changes (the
+  old and the new address), API tokens created and revoked (id, name, scopes,
+  expiry), tariff changes, and admins' actions on accounts and tariffs. Each
+  entry has the time, the account that acted and the account acted on (as
+  numbers; the email only where the account may disappear: creating and
+  deleting it, an email change), the client address (the same one the
+  sign-in throttle uses) and short details. It **never** holds a password, a
+  token, a reset link or a secret: such fields are dropped before writing. A
+  failed sign-in names the account only if it exists -- whatever was typed
+  for an unknown email is not written down, since it is sometimes a password.
+  The log has no `user_id` column and **outlives a deleted account**: who
+  signed in from where and who deleted what is exactly what a security log is
+  for. Entries are removed by age instead: `NF_AUDIT_RETENTION_DAYS` (180 by
+  default; 0 keeps them forever), checked by the worker once a day.
 - **Your own channels** (plan 14, only if you connect one) — the channel id and
   title, the granted scopes, the OAuth refresh token **encrypted** with
   `OWN_TOKENS_KEY` from your `.env` (Fernet; the key is never in the database),

@@ -86,6 +86,25 @@ What the server does for you:
   - Changing a password ends every session of that user (the profile screen
     keeps the browser it was changed in signed in); a reset by link ends all
     of them.
+  - A session ends 14 days after the last activity (`NF_SESSION_IDLE_DAYS`)
+    and 90 days after the sign-in whatever happens (`NF_SESSION_MAX_DAYS`).
+    The idle expiry moves forward at most once per 15 minutes
+    (`NF_SESSION_TOUCH_MINUTES`), so a request only reads the database. The
+    absolute limit is checked on every request, so lowering it also ends
+    older sessions.
+  - Every sign-in, sign-up, password reset and password change starts a new
+    token; an old one is never taken over. The cookie is not rotated on its
+    own while the session lives: it never reaches JavaScript, a URL or a log,
+    the idle and absolute limits bound a stolen one, and a mid-session swap
+    would race the dashboard's parallel requests (one that left with the old
+    token would get 401) or need a grace window during which both tokens
+    work.
+  - The profile lists your sessions: when they started and were last active,
+    the client address (as `NF_TRUSTED_PROXIES` resolves it) and the browser
+    (User-Agent, cut to 200 characters). You can end one or all but the
+    current. Tokens and hashes are never shown. Only a dashboard sign-in can
+    do this, never an API token. These rows go when the session ends and with
+    the account.
   - Without a session, `/api` answers 401. Only sign-in, sign-up and password
     reset by link, email confirmation, `/api/health` and the Google OAuth
     return are open.
@@ -236,7 +255,21 @@ Known limits (by design, worth knowing before you invite anyone):
   (MCP included) at once, and it cannot sign in until unblocked. An admin
   cannot block or delete themself there, the `local` user (the data from
   before accounts) can be blocked but not deleted, and the server always
-  keeps one active admin. Each action is logged in `admin_actions`.
+  keeps one active admin. Each action goes into the action log.
+- **Action log** (multi-user plan P1-07). `audit_log` records sign-ins, failed
+  sign-ins (also the throttled ones), sign-ups, password changes and resets,
+  email changes, API tokens created and revoked, tariff changes, and admins'
+  actions on accounts and tariffs -- with the time, who acted, on whom and
+  the client address (`NF_TRUSTED_PROXIES` decides it, as for the sign-in
+  throttle). Details pass a filter that drops any key that looks like a
+  credential (password, token, secret, hash, key, cookie, auth), so neither a
+  password nor a token nor a reset link can end up there; an unknown email
+  typed at sign-in is not stored either. Only an admin signed in to the
+  dashboard reads it (`GET /api/admin/audit`, the "Admin" page with filters by
+  event, user and period); an API token cannot, even an admin's. Entries
+  survive a deleted account and leave after `NF_AUDIT_RETENTION_DAYS`
+  (default 180). The rows of P0-04's `admin_actions` were moved into it on
+  the first start, and that table is gone.
 - **Tokens made before expiry existed do not expire.** New tokens live 90 days
   by default (1 to 365 days, or no expiry if you choose it). Older tokens keep
   every scope and no expiry until revoked; the MCP screen marks them

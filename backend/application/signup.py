@@ -21,6 +21,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 import infrastructure.postgres as db
+from application import audit as AUD
 from application import auth as AUTH
 from domain.i18n import tr
 from domain.users import multi_user_enabled
@@ -205,6 +206,7 @@ def complete_signup(token: str, password: str) -> dict:
             conn.commit()
             raise SignupError(tr("Аккаунт с этим адресом уже есть: войдите или сбросьте пароль."))
         session = AUTH.start_session(conn, row["id"])
+        AUD.record(conn, "signup", actor_id=row["id"], target_id=row["id"], target_email=email)
         conn.commit()
         return session
     finally:
@@ -256,6 +258,7 @@ def reset_password(token: str, password: str) -> dict:
         conn.commit()
         AUTH.set_password(user["email"], password)
         session = AUTH.start_session(conn, uid)
+        AUD.record(conn, "password_reset", actor_id=uid, target_id=uid)
         conn.commit()
         return session
     finally:
@@ -284,6 +287,7 @@ def change_password(user_id: int, current: str, new: str) -> dict:
     conn = db.get_conn()
     try:
         session = AUTH.start_session(conn, user_id)
+        AUD.record(conn, "password_change", actor_id=user_id, target_id=user_id)
         conn.commit()
         return session
     finally:
@@ -313,6 +317,8 @@ def request_email_change(user_id: int, password: str, new_email: str, *, client_
             conn.commit()
             raise SignupError(tr("Этот адрес уже занят другим аккаунтом."))
         token = _issue(conn, "email", EMAIL_CHANGE_HOURS, now, user_id=user_id, new_email=new)
+        AUD.record(conn, "email_change_requested", actor_id=user_id, target_id=user_id,
+                   details={"from": user["email"], "to": new})
         conn.commit()
     finally:
         conn.close()
@@ -330,9 +336,14 @@ def confirm_email_change(token: str) -> str:
     try:
         row = _peek(conn, token, "email")
         _use(conn, token, "email")
+        old = conn.execute("SELECT email FROM users WHERE id = ?", (row["user_id"],)).fetchone()
         done = conn.execute("UPDATE users SET email = ? WHERE id = ? AND NOT EXISTS "
                             "(SELECT 1 FROM users WHERE email = ?) RETURNING id",
                             (row["new_email"], row["user_id"], row["new_email"])).fetchone()
+        if done:
+            AUD.record(conn, "email_change", actor_id=row["user_id"], target_id=row["user_id"],
+                       target_email=row["new_email"],
+                       details={"from": old["email"] if old else None, "to": row["new_email"]})
         conn.commit()
         if not done:
             raise SignupError(tr("Этот адрес уже занят другим аккаунтом."))

@@ -22,6 +22,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     compose files. A login that may not create roles keeps working as before
     and logs a warning. `NF_DB_RLS=0` turns it off. Details:
     [docs/hosting.md](docs/hosting.md#row-level-security).
+- **Action log** (multi-user plan P1-07). Sign-ins and failed sign-ins,
+  sign-ups, password changes and resets, email changes, API tokens created
+  and revoked, tariff changes, and what admins do to accounts and tariffs are
+  written to `audit_log` with the time, who acted, on whom, the client
+  address and short details -- never a password, a token or a secret.
+  - The **Admin** page has a new "Action log" card with filters by event (or
+    group), user (email or number) and period, and pages; the route is
+    `GET /api/admin/audit`, for admins signed in to the dashboard only.
+  - The log outlives a deleted account and is cleared by age:
+    `NF_AUDIT_RETENTION_DAYS` (180 by default, 0 = forever), by the worker.
+  - The rows of `admin_actions` (P0-04) move into it on the first start, and
+    that table is dropped.
+- **Sessions you can see and end** (multi-user plan P1-04).
+  - A sign-in now lasts 14 days after the last activity and 90 days at most,
+    instead of a fixed 30 days (`NF_SESSION_IDLE_DAYS`, `NF_SESSION_MAX_DAYS`).
+    Activity extends it at most once per 15 minutes
+    (`NF_SESSION_TOUCH_MINUTES`), so requests do not write to the database.
+  - The **Profile** page lists where you are signed in: browser, address,
+    when it started and was last active, this device marked. You can end one
+    session or sign out on all other devices.
+  - Sessions from before the update keep working; their address and browser
+    fill in on their next request.
 - **The Chrome extension works with a service on your domain** (multi-user
   plan P1-16, [extension/README.md](extension/README.md#a-service-on-your-domain)).
   Localhost stays the default.

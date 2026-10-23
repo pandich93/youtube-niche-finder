@@ -174,6 +174,9 @@ SUMMARY = {
     "POST /api/auth/email/confirm": ("auth", "Confirm a new email address with the link mailed to it."),
     "POST /api/auth/password": ("auth", "Change your password (needs the current one); ends your other sessions and tokens."),
     "POST /api/auth/email": ("auth", "Ask to change your email (needs the password); a confirmation link goes to the new address."),
+    "GET /api/auth/sessions": ("auth", "Where you are signed in: times, address and browser, the current session marked; never a token. Dashboard sign-in only."),
+    "DELETE /api/auth/sessions/{session_id}": ("auth", "Sign out one of your sessions (only your own; the current one signs this browser out)."),
+    "POST /api/auth/sessions/end-others": ("auth", "Sign out on every other device; this browser stays signed in."),
     "PUT /api/me/locale": ("auth", "Save the interface language (`ru` or `en`): the dashboard on other devices and your alerts and digest use it."),
     "GET /api/auth/tokens": ("auth", "Your personal API tokens (names and dates, never the secret)."),
     "POST /api/auth/tokens": ("auth", "Create a personal token for the extension or MCP over HTTP; shown once."),
@@ -191,6 +194,7 @@ SUMMARY = {
     "POST /api/admin/users/{user_id}/disable": ("plan", "Admin: block an account; its sessions and API tokens end at once."),
     "POST /api/admin/users/{user_id}/enable": ("plan", "Admin: unblock an account; the person signs in again."),
     "DELETE /api/admin/users/{user_id}": ("plan", "Admin: delete an account and all of its data (`confirmEmail` must match)."),
+    "GET /api/admin/audit": ("plan", "Admin (dashboard sign-in): the action log -- sign-ins, failed sign-ins, password/email changes, API tokens, plans, account actions; filters `event`, `user`, `since`, `until`, pages."),
     "DELETE /api/auth/me": ("auth", "Delete your own account and all of your data; needs your `password` and a dashboard sign-in."),
 }
 

@@ -478,22 +478,40 @@ CREATE TABLE IF NOT EXISTS email_tokens (
     expires_at TEXT NOT NULL
 );
 
--- multi-user plan P0-04: what admins did to accounts (create, disable, enable,
--- delete, self-delete). The email is kept: the users row is gone after a delete.
-CREATE TABLE IF NOT EXISTS admin_actions (
+-- multi-user plan P1-07: the action log (application/audit.py), grown from
+-- P0-04's admin_actions, whose rows migrate() moves here once. Sign-ins and
+-- failed ones, password and email changes, sign-ups, API tokens, tariffs, and
+-- what admins do to accounts and tariffs. No user_id column on purpose: the log
+-- outlives a deleted account (a security record, kept NF_AUDIT_RETENTION_DAYS),
+-- so it is not in PERSONAL_TABLES. details never holds a password or a token.
+CREATE TABLE IF NOT EXISTS audit_log (
     id BIGSERIAL PRIMARY KEY,
-    admin_id BIGINT NOT NULL,      -- 0 = the operator (CLI); the user themself for self-delete
-    action TEXT NOT NULL,
-    target_user_id BIGINT NOT NULL,
-    target_email TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    event TEXT NOT NULL,
+    actor_id BIGINT,               -- 0 = the operator (CLI, worker); NULL = nobody signed in
+    target_id BIGINT,              -- the account acted on
+    target_email TEXT,             -- written down where the account may go away
+    ip TEXT,
+    details JSONB NOT NULL DEFAULT '{}'::jsonb
 );
+
+CREATE INDEX IF NOT EXISTS idx_audit_log_created ON audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_event ON audit_log(event, created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_log_actor ON audit_log(actor_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_target ON audit_log(target_id);
 
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     created_at TEXT,
-    expires_at TEXT NOT NULL
+    expires_at TEXT NOT NULL,      -- idle expiry, moved forward by activity
+    -- multi-user plan P1-04: what the profile's session list shows -- an id
+    -- to end one by (never the hash), the last activity, the client address
+    -- (as api.py _client_ip sees it) and the trimmed User-Agent
+    id BIGSERIAL,
+    last_seen_at TEXT,
+    ip TEXT,
+    user_agent TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
@@ -614,6 +632,9 @@ MIGRATIONS = {
     # multi-user plan P1-03: older tokens keep working as before -- no expiry,
     # every scope -- until revoked
     "api_tokens": {"expires_at": "TEXT", "scopes": "TEXT NOT NULL DEFAULT 'read,write,mcp'"},
+    # multi-user plan P1-04: older sessions get an id (BIGSERIAL numbers the
+    # existing rows); their activity, address and browser fill in on next use
+    "sessions": {"id": "BIGSERIAL", "last_seen_at": "TEXT", "ip": "TEXT", "user_agent": "TEXT"},
     "tracked_channels": {"user_id": _USER_ID},
     "saved_items": {"user_id": _USER_ID},
     "alert_deliveries": {"user_id": _USER_ID},
@@ -834,6 +855,7 @@ def migrate(conn):
                      "ON CONFLICT (id) DO NOTHING", (LOCAL_USER_ID, now_iso()))
         conn.execute("SELECT setval(pg_get_serial_sequence('users', 'id'), "
                      "GREATEST((SELECT MAX(id) FROM users), 1))")
+    _audit_from_admin_actions(conn)
     if _existing_columns(conn, "plans"):
         # SaaS sub-project 1: the base tariff everyone starts on. Empty limits
         # and features: the catalog defaults (NF_USER_DAILY_* and, since P1-10,
@@ -848,6 +870,21 @@ def migrate(conn):
         (str(SCHEMA_VERSION),),
     )
     return added
+
+
+def _audit_from_admin_actions(conn):
+    """Multi-user plan P1-07: P0-04's admin_actions becomes part of audit_log,
+    once -- copied and dropped in init_db's transaction, so a failed start
+    leaves both as they were. A table, not a view kept for old readers: the
+    only writer and reader was application/users_admin.py."""
+    if not _existing_columns(conn, "admin_actions") or not _existing_columns(conn, "audit_log"):
+        return
+    from domain.audit import LEGACY_ACTIONS
+    for action, event in LEGACY_ACTIONS.items():
+        conn.execute("INSERT INTO audit_log (created_at, event, actor_id, target_id, target_email) "
+                     "SELECT created_at, ?, admin_id, target_user_id, target_email "
+                     "FROM admin_actions WHERE action = ? ORDER BY id", (event, action))
+    conn.execute("DROP TABLE admin_actions")
 
 
 # multi-user plan P0-04: every table holding one person's rows, keyed by
