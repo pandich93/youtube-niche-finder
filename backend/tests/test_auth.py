@@ -191,7 +191,8 @@ def test_personal_tables_carry_user_id_defaulting_to_the_local_user(table):
 
 def test_migrating_an_old_database_moves_existing_rows_to_user_1():
     conn = db.get_conn()
-    conn.execute("ALTER TABLE drafts DROP COLUMN user_id")
+    # CASCADE: от user_id зависит политика RLS (P1-02); её вернёт init_db ниже
+    conn.execute("ALTER TABLE drafts DROP COLUMN user_id CASCADE")
     conn.execute("INSERT INTO drafts (title, created_at) VALUES (?, ?)", ("old draft", db.now_iso()))
     conn.commit()
     added = db.migrate(conn)
@@ -200,6 +201,7 @@ def test_migrating_an_old_database_moves_existing_rows_to_user_1():
     conn.execute("DELETE FROM drafts")
     conn.commit()
     conn.close()
+    db.init_db()
     assert "drafts.user_id" in added and row["user_id"] == 1
 
 

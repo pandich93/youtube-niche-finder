@@ -47,8 +47,10 @@ def _build_server():
         return MCPServer("niche-finder", token_verifier=mcp_auth.ApiTokenVerifier(),
                          auth=mcp_auth.auth_settings(),
                          middleware=[mcp_auth.locale_middleware,
-                                     mcp_auth.quota_owner_middleware])
-    return MCPServer("niche-finder", middleware=[mcp_auth.locale_middleware])
+                                     mcp_auth.quota_owner_middleware,
+                                     mcp_auth.rls_middleware])
+    return MCPServer("niche-finder", middleware=[mcp_auth.locale_middleware,
+                                                 mcp_auth.rls_middleware])
 
 
 mcp = _build_server()

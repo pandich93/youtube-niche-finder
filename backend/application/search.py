@@ -411,7 +411,7 @@ def db_stats(*, user_id) -> dict:
         "llm": {
             "provider": os.environ.get("LLM_PROVIDER", "none").strip().lower(),
             "model": llm_factory.display_model(),
-            "today_cost_usd": llm_gateway.spent_today(conn),
+            "today_cost_usd": llm_gateway.installation_spent_today(),
             "budget_usd": llm_gateway.DAILY_BUDGET_USD,
             "blocked": llm_gateway.budget_blocked_today(conn),
         },
