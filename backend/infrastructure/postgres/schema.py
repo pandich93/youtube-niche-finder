@@ -501,7 +501,14 @@ CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     created_at TEXT,
-    expires_at TEXT NOT NULL
+    expires_at TEXT NOT NULL,      -- idle expiry, moved forward by activity
+    -- multi-user plan P1-04: what the profile's session list shows -- an id
+    -- to end one by (never the hash), the last activity, the client address
+    -- (as api.py _client_ip sees it) and the trimmed User-Agent
+    id BIGSERIAL,
+    last_seen_at TEXT,
+    ip TEXT,
+    user_agent TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
@@ -622,6 +629,9 @@ MIGRATIONS = {
     # multi-user plan P1-03: older tokens keep working as before -- no expiry,
     # every scope -- until revoked
     "api_tokens": {"expires_at": "TEXT", "scopes": "TEXT NOT NULL DEFAULT 'read,write,mcp'"},
+    # multi-user plan P1-04: older sessions get an id (BIGSERIAL numbers the
+    # existing rows); their activity, address and browser fill in on next use
+    "sessions": {"id": "BIGSERIAL", "last_seen_at": "TEXT", "ip": "TEXT", "user_agent": "TEXT"},
     "tracked_channels": {"user_id": _USER_ID},
     "saved_items": {"user_id": _USER_ID},
     "alert_deliveries": {"user_id": _USER_ID},

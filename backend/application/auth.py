@@ -11,6 +11,7 @@ sessions. Wrong password and unknown email fail with the same message.
 import base64
 import hashlib
 import hmac
+import os
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -21,7 +22,24 @@ from domain import login_throttle as LT
 from domain import password_policy as PP
 
 MIN_PASSWORD_LEN = PP.MIN_LENGTH
-SESSION_DAYS = 30
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return max(1, int(os.environ.get(name) or default))
+    except ValueError:
+        return default
+
+
+# multi-user plan P1-04: a session lives SESSION_IDLE_DAYS after the last
+# activity (extended at most once per SESSION_TOUCH_MINUTES, so a request does
+# not write to the database), and never longer than SESSION_MAX_DAYS after the
+# sign-in -- a stolen cookie that keeps being used still dies, and the person
+# types the password again about once a quarter.
+SESSION_IDLE_DAYS = _env_int("NF_SESSION_IDLE_DAYS", 14)
+SESSION_MAX_DAYS = _env_int("NF_SESSION_MAX_DAYS", 90)
+SESSION_TOUCH_MINUTES = _env_int("NF_SESSION_TOUCH_MINUTES", 15)
+_USER_AGENT_MAX = 200
 _N, _R, _P, _DKLEN = 2 ** 14, 8, 1, 32
 _FAIL = "wrong email or password"
 # Verified against when the email is unknown, so both failures take the same time.
@@ -220,42 +238,140 @@ def login(email: str, password: str, client_ip: str = None) -> dict:
         conn.close()
 
 
+def _ts(iso):
+    """A stored ISO time as an aware datetime (no zone = UTC); None if unreadable."""
+    try:
+        ts = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
+
+
+def _session_expiry(created: datetime, now: datetime) -> datetime:
+    """The idle expiry counted from now, capped by the absolute limit."""
+    return min(now + timedelta(days=SESSION_IDLE_DAYS), created + timedelta(days=SESSION_MAX_DAYS))
+
+
+def _session_live(created, expires, now) -> bool:
+    """Before the idle expiry and within SESSION_MAX_DAYS of the sign-in; an
+    unreadable time fails closed. The limit is checked here, not only stored,
+    so lowering NF_SESSION_MAX_DAYS applies to sessions that already exist."""
+    return (created is not None and expires is not None and now < expires
+            and now < created + timedelta(days=SESSION_MAX_DAYS))
+
+
+def _user_agent(ua):
+    """The browser's User-Agent on one line, trimmed for the session list."""
+    return " ".join(str(ua or "").split())[:_USER_AGENT_MAX] or None
+
+
 def start_session(conn, user_id: int) -> dict:
     """A new session for user_id on conn (the caller commits): after a
-    sign-in, and after a sign-up or password reset by emailed link (P1-06)."""
+    sign-in, and after a sign-up or password reset by emailed link (P1-06).
+    Always a new token -- a sign-in never takes over an older one. The
+    address and browser are filled by the first session_for_token()."""
     token = secrets.token_urlsafe(32)
-    expires = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
-    conn.execute("DELETE FROM sessions WHERE expires_at::timestamptz < now()")
-    conn.execute("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?,?,?,?)",
-                 (_token_hash(token), user_id, db.now_iso(), expires.isoformat()))
+    now = datetime.now(timezone.utc)
+    expires = _session_expiry(now, now)
+    conn.execute("DELETE FROM sessions WHERE expires_at::timestamptz < now() "
+                 "OR created_at::timestamptz < ?::timestamptz",
+                 ((now - timedelta(days=SESSION_MAX_DAYS)).isoformat(),))
+    conn.execute("INSERT INTO sessions (token_hash, user_id, created_at, expires_at, last_seen_at) "
+                 "VALUES (?,?,?,?,?)",
+                 (_token_hash(token), user_id, now.isoformat(), expires.isoformat(), now.isoformat()))
     return {"token": token, "userId": user_id, "expiresAt": expires.isoformat()}
 
 
-def user_for_token(token: str):
-    """{id, email, isAdmin} for a live session, else None."""
+def session_for_token(token: str, client_ip: str = None, user_agent: str = None):
+    """{id, user: {id, email, isAdmin}} for a live session, else None. At most
+    once per SESSION_TOUCH_MINUTES the idle expiry moves forward and the last
+    activity, address and browser are written (multi-user plan P1-04); the
+    other requests only read."""
     if not token:
         return None
+    th, now = _token_hash(token), datetime.now(timezone.utc)
     conn = db.get_conn()
     try:
         row = conn.execute(
-            "SELECT u.id, u.email, u.is_admin, s.expires_at FROM sessions s "
+            "SELECT s.id AS sid, s.created_at, s.expires_at, s.last_seen_at, s.ip, s.user_agent, "
+            "u.id, u.email, u.is_admin FROM sessions s "
             "JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND u.disabled_at IS NULL",
-            (_token_hash(token),)).fetchone()
+            (th,)).fetchone()
+        created = _ts(row["created_at"]) if row else None
+        if not row or not _session_live(created, _ts(row["expires_at"]), now):
+            return None
+        seen, ua = _ts(row["last_seen_at"]), _user_agent(user_agent)
+        if (seen is None or now - seen >= timedelta(minutes=SESSION_TOUCH_MINUTES)
+                or (client_ip and not row["ip"]) or (ua and not row["user_agent"])):
+            # parallel requests may both get here: they write the same, no harm
+            conn.execute("UPDATE sessions SET last_seen_at = ?, expires_at = ?, "
+                         "ip = COALESCE(?, ip), user_agent = COALESCE(?, user_agent) "
+                         "WHERE token_hash = ?",
+                         (now.isoformat(), _session_expiry(created, now).isoformat(),
+                          client_ip or None, ua, th))
+            conn.commit()
     finally:
         conn.close()
-    if not row or _expired(row["expires_at"]):
-        return None
-    return {"id": row["id"], "email": row["email"], "isAdmin": bool(row["is_admin"])}
+    return {"id": row["sid"],
+            "user": {"id": row["id"], "email": row["email"], "isAdmin": bool(row["is_admin"])}}
 
 
-def _expired(iso) -> bool:
+def user_for_token(token: str, client_ip: str = None, user_agent: str = None):
+    """{id, email, isAdmin} for a live session, else None."""
+    s = session_for_token(token, client_ip=client_ip, user_agent=user_agent)
+    return s["user"] if s else None
+
+
+def list_sessions(user_id: int, current_id=None) -> list:
+    """The user's live sessions, the current one (current_id) first, then the
+    most recently active: when, from which address and browser. Never the
+    token or its hash."""
+    now = datetime.now(timezone.utc)
+    conn = db.get_conn()
     try:
-        ts = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
-    except ValueError:
-        return True
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=timezone.utc)
-    return ts <= datetime.now(timezone.utc)
+        rows = conn.execute("SELECT id, created_at, expires_at, last_seen_at, ip, user_agent "
+                            "FROM sessions WHERE user_id = ?", (user_id,)).fetchall()
+    finally:
+        conn.close()
+    out = []
+    for r in rows:
+        created, expires = _ts(r["created_at"]), _ts(r["expires_at"])
+        if not _session_live(created, expires, now):
+            continue
+        out.append({"id": r["id"], "createdAt": r["created_at"],
+                    "lastSeenAt": r["last_seen_at"] or r["created_at"],
+                    "expiresAt": expires.isoformat(),
+                    "endsBy": (created + timedelta(days=SESSION_MAX_DAYS)).isoformat(),
+                    "ip": r["ip"], "userAgent": r["user_agent"],
+                    "current": current_id is not None and r["id"] == current_id})
+    oldest = datetime.min.replace(tzinfo=timezone.utc)
+    return sorted(out, key=lambda s: (s["current"], _ts(s["lastSeenAt"]) or oldest), reverse=True)
+
+
+def end_session(user_id: int, session_id: int) -> bool:
+    """Sign out one of the user's own sessions; False if there is no such
+    session of theirs (someone else's is not found either)."""
+    conn = db.get_conn()
+    try:
+        row = conn.execute("DELETE FROM sessions WHERE id = ? AND user_id = ? RETURNING id",
+                           (session_id, user_id)).fetchone()
+        conn.commit()
+    finally:
+        conn.close()
+    return row is not None
+
+
+def end_other_sessions(user_id: int, keep_id: int) -> int:
+    """'Sign out on other devices': every session of the user but keep_id.
+    How many ended."""
+    conn = db.get_conn()
+    try:
+        n = len(conn.execute("DELETE FROM sessions WHERE user_id = ? AND id != ? RETURNING id",
+                             (user_id, keep_id)).fetchall())
+        conn.commit()
+    finally:
+        conn.close()
+    return n
 
 
 def logout(token: str) -> None:

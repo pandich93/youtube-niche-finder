@@ -294,7 +294,7 @@ def _feature_block(request, user_id):
 
 @app.middleware("http")
 async def session_guard(request, call_next):
-    request.state.user = None
+    request.state.user = request.state.session_id = None
     if not multi_user_enabled():
         request.state.user_id = LOCAL_USER_ID
         return await call_next(request)
@@ -302,7 +302,13 @@ async def session_guard(request, call_next):
     # must not end up acting as user 1
     request.state.user_id = None
     token = request.cookies.get(AUTH_COOKIE, "")
-    user = await run_in_threadpool(AUTH.user_for_token, token) if token else None
+    # P1-04: the session also learns its address and browser (for the list in
+    # the profile) and slides its idle expiry forward
+    session = await run_in_threadpool(
+        AUTH.session_for_token, token, _client_ip(request),
+        request.headers.get("user-agent")) if token else None
+    user = session["user"] if session else None
+    request.state.session_id = session["id"] if session else None
     request.state.via = "session" if user else None
     if not user:
         # plan 15 (5.7): the extension (and scripts) send a personal API token
@@ -439,12 +445,49 @@ async def local_only_guard(request, call_next):
 # расширение увидело бы вместо честной ошибки непрозрачную ошибку CORS. По той
 # же причине preflight (OPTIONS) CORS отвечает сам и до защиты он не доходит.
 # Расширение для Chrome ходит сюда со своего origin (chrome-extension://...).
-# Service worker с host_permissions обошёлся бы и без CORS, но с заголовками
-# запросы можно отлаживать прямо из консоли страницы. Сервис слушает только
-# 127.0.0.1, поэтому наружу это ничего не открывает.
+# Service worker с host-разрешением обошёлся бы и без CORS, но с заголовками
+# запросы можно отлаживать прямо из консоли страницы.
+#
+# P1-16: какие именно расширения пускать. NF_EXTENSION_IDS -- ID своих
+# расширений через запятую (с chrome://extensions или из Web Store); с ним
+# CORS отвечает только им. Без него:
+#   * локальный режим -- любое chrome-extension://, как раньше: у распакованного
+#     расширения ID свой на каждой машине, а сервис слушает только 127.0.0.1;
+#   * сервер с входом (NF_MULTI_USER=1) -- ни одно: на домене чужое расширение
+#     с CORS могло бы читать API, а своему он не нужен (ходит с
+#     host-разрешением и токеном), так что пустой список -- это запрет.
+_EXTENSION_ORIGIN = "chrome-extension://"
+
+
+def _extension_ids(raw):
+    """ID из NF_EXTENSION_IDS: через запятую, пробелы и регистр не важны."""
+    return frozenset(item.strip().lower() for item in (raw or "").split(",") if item.strip())
+
+
+EXTENSION_IDS = _extension_ids(os.environ.get("NF_EXTENSION_IDS"))
+
+
+def _extension_origin_allowed(origin):
+    if not (origin or "").startswith(_EXTENSION_ORIGIN):
+        return False
+    ext_id = origin[len(_EXTENSION_ORIGIN):]
+    if not ext_id or "/" in ext_id:
+        return False
+    if EXTENSION_IDS:
+        return ext_id.lower() in EXTENSION_IDS
+    return not multi_user_enabled()
+
+
+class _ExtensionCORS(CORSMiddleware):
+    """CORSMiddleware, который решает про origin на каждом запросе: список и
+    режим читаются в момент запроса, поэтому тесты подменяют их на лету."""
+
+    def is_allowed_origin(self, origin):
+        return _extension_origin_allowed(origin)
+
+
 app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"chrome-extension://.*",
+    _ExtensionCORS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1284,10 +1327,14 @@ def auth_login(request: Request, response: Response, payload: dict = Body(...)):
 
 
 def _signed_in(request, response, s) -> dict:
-    """Put a new session into the HttpOnly cookie (never into the body)."""
-    response.set_cookie(AUTH_COOKIE, s["token"], max_age=AUTH.SESSION_DAYS * 86400, path="/",
+    """Put a new session into the HttpOnly cookie (never into the body). The
+    cookie may outlive the idle expiry: the server decides (P1-04), so it is
+    kept up to the absolute limit and never has to be set again."""
+    response.set_cookie(AUTH_COOKIE, s["token"], max_age=AUTH.SESSION_MAX_DAYS * 86400, path="/",
                         httponly=True, samesite="strict", secure=_cookie_secure(request))
-    return {"user": AUTH.user_for_token(s["token"]), "expiresAt": s["expiresAt"]}
+    user = AUTH.user_for_token(s["token"], client_ip=_client_ip(request),
+                               user_agent=request.headers.get("user-agent"))
+    return {"user": user, "expiresAt": s["expiresAt"]}
 
 
 @app.post("/api/auth/logout")
@@ -1408,6 +1455,38 @@ def auth_email_change(request: Request, payload: dict = Body(...)):
                            str(payload.get("password") or ""), str(payload.get("email") or ""),
                            client_ip=_client_ip(request), link=_mail_link(request))
     return {"sentTo": sent_to}
+
+
+# ------------------------------------------- your sessions (P1-04)
+
+@app.get("/api/auth/sessions")
+def auth_sessions(request: Request):
+    """Where you are signed in: when, from which address and browser, the
+    current session marked. Never a token or its hash; a dashboard sign-in
+    only, never an API token."""
+    uid = _own_session(request)
+    return {"sessions": AUTH.list_sessions(uid, current_id=request.state.session_id),
+            "idleDays": AUTH.SESSION_IDLE_DAYS, "maxDays": AUTH.SESSION_MAX_DAYS}
+
+
+@app.delete("/api/auth/sessions/{session_id}")
+def auth_session_end(request: Request, response: Response, session_id: int):
+    """Sign out one of your sessions; ending the current one signs this
+    browser out too."""
+    uid = _own_session(request)
+    if not AUTH.end_session(uid, session_id):
+        raise HTTPException(status_code=404, detail=tr("Такого входа нет: возможно, он уже завершён."))
+    current = session_id == request.state.session_id
+    if current:
+        response.delete_cookie(AUTH_COOKIE, path="/")
+    return {"ended": session_id, "current": current}
+
+
+@app.post("/api/auth/sessions/end-others")
+def auth_sessions_end_others(request: Request):
+    """Sign out on every other device; this browser stays signed in."""
+    uid = _own_session(request)
+    return {"ended": AUTH.end_other_sessions(uid, request.state.session_id)}
 
 
 def _uid(request) -> int:

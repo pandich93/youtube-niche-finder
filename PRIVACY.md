@@ -36,7 +36,14 @@ Everything lives in the Postgres database you point the app at (by default the
   reused when present).
 - **Accounts** (plan 15, only with `NF_MULTI_USER=1`) — each user's email, a
   scrypt hash of the password (never the password), and the SHA-256 of each
-  sign-in session token with its expiry (`users`, `sessions`). Personal rows
+  sign-in session token with its expiry (`users`, `sessions`). Each session
+  also keeps the client address and browser line (User-Agent, cut to 200
+  characters) it was used from and when it was last active, so its owner can
+  see where they are signed in on the "Profile" page; they go when the
+  session ends. With mail set up, a sign-up, reset or email-change link is
+  kept as a SHA-256 with its purpose, the new address for an email change and
+  its expiry (`email_tokens`); it is deleted when used, replaced, or after it
+  expires, when the next link is issued. Personal rows
   carry the owner's `user_id`: the watchlist, swipe file, drafts, transcript
   queue and which alerts each user has read (`event_reads`) are visible only
   to their owner. Personal API tokens (`api_tokens`) are stored as SHA-256
@@ -288,9 +295,27 @@ fuse against a looping client rather than a defence against outside traffic.
 
 ## The Chrome extension
 
-The extension's `host_permissions` are limited to `http://127.0.0.1/*` and
-`http://localhost/*`. It talks only to your own backend. It does not send
-anything to any third party, and it has no permission to.
+The extension talks only to the one service address set in its popup. It does
+not send anything to any third party.
+
+- **Local by default.** Its permanent `host_permissions` are
+  `http://127.0.0.1/*` and `http://localhost/*` only, the default address is
+  `http://127.0.0.1:8080`, and with it nothing leaves your machine.
+- **Your own domain, if you choose.** When you enter another address (a server
+  you or your team runs, see [docs/hosting.md](docs/hosting.md#the-chrome-extension)),
+  the popup asks Chrome for access to that one host (`optional_host_permissions`).
+  You see Chrome's prompt and can refuse; switching to another address gives
+  the old host's access back. You can also revoke it on `chrome://extensions`.
+- **What goes to that service** is what the panels need: the IDs of the videos
+  and channels you open or see in lists, the text you type into the popup's
+  metadata review or "watch this topic", and your personal API token as
+  `Authorization: Bearer`. The token goes to a remote address only over
+  `https`; over plain `http` the extension does not send it.
+- **Where the token lives.** In `chrome.storage.local` (not synced to your other
+  browsers). The popup never shows it back.
+- **The YouTube page itself.** The extension reads the page you are on (video
+  and channel IDs, which video cards are shown) to draw its panels; it does not
+  read your YouTube account, cookies or history.
 
 ## Deleting everything
 
