@@ -36,7 +36,14 @@ Everything lives in the Postgres database you point the app at (by default the
   reused when present).
 - **Accounts** (plan 15, only with `NF_MULTI_USER=1`) — each user's email, a
   scrypt hash of the password (never the password), and the SHA-256 of each
-  sign-in session token with its expiry (`users`, `sessions`). Personal rows
+  sign-in session token with its expiry (`users`, `sessions`). Each session
+  also keeps the client address and browser line (User-Agent, cut to 200
+  characters) it was used from and when it was last active, so its owner can
+  see where they are signed in on the "Profile" page; they go when the
+  session ends. With mail set up, a sign-up, reset or email-change link is
+  kept as a SHA-256 with its purpose, the new address for an email change and
+  its expiry (`email_tokens`); it is deleted when used, replaced, or after it
+  expires, when the next link is issued. Personal rows
   carry the owner's `user_id`: the watchlist, swipe file, drafts, transcript
   queue and which alerts each user has read (`event_reads`) are visible only
   to their owner. Personal API tokens (`api_tokens`) are stored as SHA-256
