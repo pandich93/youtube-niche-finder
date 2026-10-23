@@ -235,6 +235,18 @@ CREATE TABLE IF NOT EXISTS llm_usage (
     PRIMARY KEY (day, model)
 );
 
+-- multi-user plan P1-09: LLM money held for a call in flight, so parallel
+-- calls cannot all pass the budget check before any of them is recorded.
+-- A row goes when its call settles; one left by a crashed process stops
+-- counting after llm_gateway.RESERVATION_TTL_MINUTES.
+CREATE TABLE IF NOT EXISTS llm_reservations (
+    id BIGSERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    day TEXT NOT NULL,
+    usd NUMERIC NOT NULL,
+    created_at TEXT NOT NULL
+);
+
 -- ---------- v5: curated tags (theme/trigger/format...) and their hit rate ----------
 
 CREATE TABLE IF NOT EXISTS video_tags (
@@ -829,7 +841,7 @@ def migrate(conn):
 PERSONAL_TABLES = (
     "sessions", "api_tokens", "user_settings", "user_prefs", "user_plans", "plan_changes",
     "tracked_channels", "saved_items", "drafts", "alert_deliveries", "event_reads", "events",
-    "transcript_requests", "llm_usage", "user_topics", "cost_profiles",
+    "transcript_requests", "llm_usage", "llm_reservations", "user_topics", "cost_profiles",
     "own_channels", "own_channel_daily", "own_video_metrics", "own_oauth_pending",
 )
 

@@ -301,6 +301,18 @@ and each user may spend `NF_USER_DAILY_LLM_USD` (0.25, 0 = no limit) of LLM
 money a day inside the installation-wide `LLM_DAILY_BUDGET_USD`; cached answers
 cost nothing. LLM usage is recorded per user (`llm_usage.user_id`).
 
+The LLM budget holds under parallel calls (multi-user plan P1-09). Before a
+call is sent, the gateway reserves what it can cost at most: the prompt and
+the whole answer at the model's OpenRouter price. Free `:free` models and
+Ollama cost nothing. The reservation is checked together with what was
+already spent and what other calls in flight hold, under one lock. After
+the answer it is replaced by the real cost. Signed-in users share
+`LLM_DAILY_BUDGET_USD` minus `LLM_WORKER_RESERVE_USD` (0.25), which only the
+worker and single-user mode may spend. An answer that comes without a cost
+is priced from its tokens. A model whose price is unknown counts at
+`LLM_FALLBACK_USD_PER_MTOK` (15 USD per million tokens). A reservation left by
+a crashed process stops counting after 15 minutes.
+
 ### Tariffs (SaaS sub-project 1, `NF_MULTI_USER=1`)
 
 Every user is on a tariff. A tariff sets daily limits (YouTube units, search
@@ -707,7 +719,7 @@ required. The optional groups:
 |---|---|
 | Database | `POSTGRES_*`, `NICHE_DATABASE_URL` (host-only DSN, see above), `NICHE_DB_SCHEMA` (default `public`) |
 | Worker schedule | `WORKER_RSS_INTERVAL_MIN`, `WORKER_ALERTS_INTERVAL_MIN`, `WORKER_HOT_*`, `WORKER_EMBED*`, `WORKER_DAILY_INTERVAL_MIN`, `WORKER_FULL_*`, `WORKER_REGIONS`, `WORKER_TRENDING`, `WORKER_QUERIES`, `WORKER_QUERY_*`, `WORKER_ENRICH_*`, `WORKER_CLUSTER_INTERVAL_MIN`, `WORKER_THUMBS` (1), `WORKER_THUMBS_INTERVAL_MIN` (360), `WORKER_THUMBS_LIMIT` (500), `WORKER_SPONSORS` (1), `WORKER_SPONSORS_INTERVAL_MIN` (60), `WORKER_SPONSORS_LIMIT` (5000) |
-| LLM (off by default) | `LLM_PROVIDER` (`none` / `openrouter` / `ollama`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_MODEL_LONG` (long-context model for comment insights), `OPENROUTER_REFERER`, `OPENROUTER_TITLE`, `OLLAMA_URL`, `OLLAMA_MODEL`, `LLM_DAILY_BUDGET_USD`, `LLM_RELABEL_DAYS`, `LLM_MIN_MANUAL_TAGS`, `LLM_INSIGHTS_TTL_DAYS` (7), `LLM_WHY_VIRAL_TTL_DAYS` (14), `LLM_HOOK_TTL_DAYS` (30) |
+| LLM (off by default) | `LLM_PROVIDER` (`none` / `openrouter` / `ollama`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_MODEL_LONG` (long-context model for comment insights), `OPENROUTER_REFERER`, `OPENROUTER_TITLE`, `OLLAMA_URL`, `OLLAMA_MODEL`, `LLM_DAILY_BUDGET_USD`, `LLM_WORKER_RESERVE_USD` (0.25), `LLM_FALLBACK_USD_PER_MTOK` (15), `LLM_RELABEL_DAYS`, `LLM_MIN_MANUAL_TAGS`, `LLM_INSIGHTS_TTL_DAYS` (7), `LLM_WHY_VIRAL_TTL_DAYS` (14), `LLM_HOOK_TTL_DAYS` (30) |
 | Niche clusters | `NICHE_CLUSTERS_MIN_CHANNELS` (10), `NICHE_CLUSTERS_COMPETITION_SUBS` (100000) |
 | Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_WINDOW_DAYS` (7: only events this recent are sent), `NOTIFY_DASHBOARD_URL`, `NOTIFY_MODE` (`instant` / `digest` / `both`), `DIGEST_HOUR` (8, container time zone), `DIGEST_SKIP_EMPTY` (1), `WORKER_DIGEST_CHECK_INTERVAL_MIN` (10) |
 | Servers | `WEB_PORT`, `RATE_LIMIT_PER_MINUTE`, `NF_ALLOWED_HOSTS` (extra `Host` names for the HTTP API), `MCP_TRANSPORT` (`stdio`), `MCP_HOST` (`127.0.0.1`), `MCP_PORT`, `MCP_ALLOW_UNAUTHENTICATED` (`0`; HTTP without `NF_MULTI_USER=1` only on loopback otherwise) |

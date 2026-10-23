@@ -21,6 +21,7 @@ that might be renamed or temporarily rate-limited.
 """
 import json
 import logging
+import os
 import re
 import time
 
@@ -32,6 +33,17 @@ URL = "https://openrouter.ai/api/v1/chat/completions"
 RETRIABLE_STATUS = {429, 500, 502, 503, 524, 529}
 MAX_RETRIES = 2
 BACKOFF_SECONDS = (1, 2)
+
+# multi-user plan P1-09: prices of the models (USD per token), to reserve a
+# paid call's cost before it is sent and to cost an answer that came without
+# usage.cost. Fetched only for a model without the :free suffix, kept for a
+# day; a failed fetch is retried after an hour.
+PRICES_URL = "https://openrouter.ai/api/v1/models"
+PRICES_TTL_SECONDS, PRICES_RETRY_SECONDS = 24 * 3600, 3600
+# a model whose price is unknown counts at this many USD per million tokens
+# either way -- on the high side, so it is over- rather than under-counted
+FALLBACK_USD_PER_MTOK = float(os.environ.get("LLM_FALLBACK_USD_PER_MTOK") or 15)
+_PRICES = {"at": 0.0, "table": None}
 
 FREE_MODEL_FALLBACKS = (
     "nvidia/nemotron-3-super-120b-a12b:free",
@@ -105,13 +117,39 @@ class OpenRouterProvider:
             return None
 
         usage = raw.get("usage") or {}
+        answered_by = raw.get("model", model)
+        prompt_tokens = usage.get("prompt_tokens", 0) or 0
+        completion_tokens = usage.get("completion_tokens", 0) or 0
+        cost = usage.get("cost")
+        if cost is None:
+            # no cost in the answer: price it from the tokens, never as free (P1-09)
+            p_in, p_out = self.price(answered_by)
+            cost = p_in * prompt_tokens + p_out * completion_tokens
         return LLMResult(
             data=data,
-            model=raw.get("model", model),
-            prompt_tokens=usage.get("prompt_tokens", 0),
-            completion_tokens=usage.get("completion_tokens", 0),
-            cost_usd=usage.get("cost"),
+            model=answered_by,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=cost,
         )
+
+    def price(self, model: str) -> tuple:
+        """(USD per prompt token, USD per completion token) for a model."""
+        if not model or str(model).endswith(":free"):
+            return 0.0, 0.0
+        table = _price_table()
+        if table and model in table:
+            return table[model]
+        return FALLBACK_USD_PER_MTOK / 1e6, FALLBACK_USD_PER_MTOK / 1e6
+
+    def max_cost_usd(self, model, system: str, user: str, max_tokens: int = 1024) -> float:
+        """The most one complete_json call can cost: the prompt counted at two
+        characters a token (over, not under), the whole max_tokens answer, on
+        the dearest model the call may try."""
+        candidates = (model,) if model else FREE_MODEL_FALLBACKS
+        prompt = (len(system or "") + len(user or "")) // 2 + 16
+        return max(p_in * prompt + p_out * max_tokens
+                   for p_in, p_out in (self.price(c) for c in candidates))
 
     def _call(self, payload: dict) -> dict | None:
         with httpx.Client(timeout=self.timeout) as client:
@@ -130,6 +168,38 @@ class OpenRouterProvider:
                             _mask(resp.text[:400], self.api_key))
                 return None
         return None
+
+
+def _fetch_prices() -> dict:
+    with httpx.Client(timeout=10.0) as client:
+        resp = client.get(PRICES_URL)
+    resp.raise_for_status()
+    table = {}
+    for m in resp.json().get("data") or []:
+        try:
+            pricing = m.get("pricing") or {}
+            table[m["id"]] = (float(pricing["prompt"]), float(pricing["completion"]))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return table
+
+
+def _price_table() -> dict | None:
+    """OpenRouter's price list, cached in this process; None while it cannot
+    be had (the caller then counts FALLBACK_USD_PER_MTOK)."""
+    age = time.time() - _PRICES["at"]
+    if _PRICES["table"] is not None and age < PRICES_TTL_SECONDS:
+        return _PRICES["table"]
+    if _PRICES["table"] is None and _PRICES["at"] and age < PRICES_RETRY_SECONDS:
+        return None
+    try:
+        _PRICES["table"] = _fetch_prices()
+    except (httpx.HTTPError, ValueError) as e:
+        log.warning("openrouter: price list unavailable (%s) -- unknown models count at "
+                    "%s USD per million tokens", type(e).__name__, FALLBACK_USD_PER_MTOK)
+        _PRICES["table"] = None
+    _PRICES["at"] = time.time()
+    return _PRICES["table"]
 
 
 def _extract_json(text) -> dict | None:
