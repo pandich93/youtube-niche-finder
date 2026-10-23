@@ -199,6 +199,11 @@ services:
       NICHE_DATABASE_URL: ""
       MCP_TRANSPORT: streamable-http
       MCP_HOST: 0.0.0.0
+      # Without NF_MULTI_USER=1 there is no sign-in, and server.py refuses a
+      # non-loopback address unless told it is intended (plan P1-15). Here it
+      # is: this port is not published, only the compose network and
+      # mcp-https (127.0.0.1 only) reach it. docker-compose.prod.yml turns it off.
+      MCP_ALLOW_UNAUTHENTICATED: "1"
       MCP_PORT: "8765"
     # No host port here on purpose -- only mcp-https (below) is published to
     # the host. Plain HTTP stays inside the niche-finder_default network,

@@ -1672,13 +1672,37 @@ from interfaces.mcp import prompts as _prompts  # noqa: E402
 _prompts.register(mcp)
 
 
+_LOOPBACK = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
+def exposure_problem(transport: str, host: str):
+    """Why MCP must not start on this address, else None (multi-user plan
+    P1-15). Over HTTP without NF_MULTI_USER=1 there is no sign-in at all, and
+    every tool acts as user 1 -- fine on loopback, not on an address others
+    can reach, unless MCP_ALLOW_UNAUTHENTICATED=1 says that is intended (the
+    compose mcp-http service: only the compose network and mcp-https, itself
+    on 127.0.0.1, can reach it)."""
+    from interfaces.mcp import auth as mcp_auth
+    if transport == "stdio" or mcp_auth.http_auth_enabled() or host in _LOOPBACK:
+        return None
+    if os.environ.get("MCP_ALLOW_UNAUTHENTICATED", "").strip().lower() in ("1", "true", "yes"):
+        return None
+    return (f"refusing to serve MCP over {transport} on {host} without sign-in: anyone who "
+            "reaches it would act as user 1. Set NF_MULTI_USER=1 (personal API tokens), "
+            "MCP_HOST=127.0.0.1, or MCP_ALLOW_UNAUTHENTICATED=1 if only trusted clients can "
+            "reach this address.")
+
+
 def run():
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport == "stdio":
         mcp.run()
-    else:
-        mcp.run(transport, host=os.environ.get("MCP_HOST", "0.0.0.0"),
-                port=int(os.environ.get("MCP_PORT", "8765")))
+        return
+    host = os.environ.get("MCP_HOST", "127.0.0.1")
+    problem = exposure_problem(transport, host)
+    if problem:
+        raise SystemExit(problem)
+    mcp.run(transport, host=host, port=int(os.environ.get("MCP_PORT", "8765")))
 
 
 if __name__ == "__main__":

@@ -183,8 +183,11 @@ Known limits (by design, worth knowing before you invite anyone):
 - **API tokens do not expire.** Revoke unused ones on the MCP screen. Changing a
   password revokes all of that user's tokens and sessions.
 - **MCP over HTTP needs `NF_MULTI_USER=1` to ask for a token.** Without that
-  flag it is as open as before, so keep it on the compose network behind
-  `mcp-https`, which listens on 127.0.0.1 only.
+  flag anyone who reaches it acts as user 1, so `server.py` refuses to listen
+  on anything but loopback (`MCP_HOST` defaults to `127.0.0.1`) unless
+  `MCP_ALLOW_UNAUTHENTICATED=1` says that is intended. The compose `mcp-http`
+  service sets it: its port is not published, and only `mcp-https`, which
+  listens on 127.0.0.1, reaches it. The production file turns it off.
 - **Some global feeds can hint at what others watch.** Thumbnail fingerprints
   and swaps, and stats refreshes, run for every channel someone tracks, so the
   repackaging feed on the dashboard and the tracked-channel total reflect
