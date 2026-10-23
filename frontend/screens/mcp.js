@@ -154,14 +154,14 @@ async function loadTokens() {
        <select id="tokenDays" aria-label="${esc(t('tokenDaysLabel'))}">
          ${[30, 90, 365, 0].map((n) => `<option value="${n}"${n === 90 ? ' selected' : ''}>${t(n ? 'tokenDaysN' : 'tokenDaysNever', { n })}</option>`).join('')}
        </select>
-       ${SCOPES.map((s) => `<label><input type="checkbox" class="js-token-scope" value="${s}" checked> ${t('tokenScope_' + s)}</label>`).join(' ')}
+       ${SCOPES.map((s) => `<label><input type="checkbox" class="js-token-scope" value="${s}" checked> ${scopeLabel(s)}</label>`).join(' ')}
        <button class="btn btn-sm" id="tokenCreate" type="button">${t('tokenCreate')}</button>`)}
     <div id="tokenFresh"></div>
     ${d.tokens.length ? `<ul class="digest-list">${d.tokens.map((tok) => `<li style="white-space:normal">
         <b>${esc(tok.name || t('tokenUnnamed'))}</b> · ${t('tokenCreated', { ago: esc(ago(tok.createdAt)) })}
         · ${tok.lastUsedAt ? t('tokenUsed', { ago: esc(ago(tok.lastUsedAt)) }) : t('tokenNeverUsed')}
         · ${tok.expired ? `<b>${t('tokenExpired')}</b>` : tok.expiresAt ? t('tokenUntil', { date: esc(fmtDate(tok.expiresAt)) }) : t('tokenNoExpiry')}
-        · ${t('tokenScopes', { scopes: esc((tok.scopes || []).map((s) => t('tokenScope_' + s)).join(', ')) })}
+        · ${t('tokenScopes', { scopes: esc((tok.scopes || []).map(scopeLabel).join(', ')) })}
         <button class="btn btn-ghost btn-sm js-token-off" data-id="${tok.id}" type="button">${t('tokenRevoke')}</button></li>`).join('')}</ul>`
       : empty(t('tokensEmpty'))}
     <div class="section-sub">${t('tokensHelp')}</div>
@@ -184,5 +184,9 @@ async function loadTokens() {
 
 // P1-03: what a token may do (backend/application/auth.py TOKEN_SCOPES)
 const SCOPES = ['read', 'write', 'mcp'];
+
+function scopeLabel(scope) {
+  return { read: t('tokenScope_read'), write: t('tokenScope_write'), mcp: t('tokenScope_mcp') }[scope] || scope;
+}
 
 export { viewMcp };
