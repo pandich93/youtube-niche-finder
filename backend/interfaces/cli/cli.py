@@ -25,6 +25,7 @@ import os
 import sys
 
 import infrastructure.postgres as db
+from domain.i18n import tr
 
 
 def out(obj):
@@ -51,11 +52,16 @@ def _ping_llm(problems):
     data = llm_gateway.run("doctor_ping", "Reply with JSON only.",
                            "Return {\"ok\": true}.", ping_schema)
     if data == {"ok": True}:
-        print("   ОК -- провайдер ответил")
+        _say("ОК -- провайдер ответил")
     else:
-        print("   ОШИБКА или бюджет исчерпан -- см. лог выше")
-        problems.append("Пинг LLM-провайдера не удался -- проверьте ключ/модель/URL "
-                        "и LLM_DAILY_BUDGET_USD")
+        _say("ОШИБКА или бюджет исчерпан -- см. лог выше")
+        problems.append(tr("Пинг LLM-провайдера не удался -- проверьте ключ/модель/URL "
+                           "и LLM_DAILY_BUDGET_USD"))
+
+
+def _say(text, **params):
+    """One indented line of doctor's report, in the CLI's language."""
+    print("   " + tr(text, **params))
 
 
 def cmd_doctor(args):
@@ -65,68 +71,70 @@ def cmd_doctor(args):
     problems = []
     key = _key()
 
-    print("1. Ключ")
+    print(tr("1. Ключ"))
     if not key:
-        print("   ОТСУТСТВУЕТ")
-        problems.append("Впишите YOUTUBE_API_KEY в .env рядом с docker-compose.yml")
+        _say("ОТСУТСТВУЕТ")
+        problems.append(tr("Впишите YOUTUBE_API_KEY в .env рядом с docker-compose.yml"))
     elif not key.startswith("AIza") or len(key) < 35:
-        print(f"   подозрительная форма: длина {len(key)}, начало {key[:4]!r}")
-        problems.append("Ключ Google обычно 39 символов и начинается на AIza -- "
-                        "похоже, скопирован не полностью")
+        _say("подозрительная форма: длина {length}, начало {start}",
+             length=len(key), start=repr(key[:4]))
+        problems.append(tr("Ключ Google обычно 39 символов и начинается на AIza -- "
+                           "похоже, скопирован не полностью"))
     else:
-        print(f"   есть, длина {len(key)}, начинается на {key[:4]}…")
+        _say("есть, длина {length}, начинается на {start}…", length=len(key), start=key[:4])
 
-    print("2. Сеть и сам ключ")
+    print(tr("2. Сеть и сам ключ"))
     if key:
         import infrastructure.youtube.client as yt
         try:
             cats = yt.video_categories(key, region_code="US")
-            print(f"   ОК -- API ответил, {len(cats)} категорий (потрачен 1 unit)")
+            _say("ОК -- API ответил, {count} категорий (потрачен 1 unit)", count=len(cats))
         except Exception as e:
             msg = str(e).replace(key, "<KEY>")
-            print(f"   ОШИБКА: {msg[:400]}")
+            _say("ОШИБКА: {error}", error=msg[:400])
             if "accessNotConfigured" in msg or "has not been used" in msg:
-                problems.append("В этом проекте Google Cloud не включён YouTube Data "
-                                "API v3: APIs & Services -> Library -> YouTube Data "
-                                "API v3 -> Enable")
+                problems.append(tr("В этом проекте Google Cloud не включён YouTube Data "
+                                   "API v3: APIs & Services -> Library -> YouTube Data "
+                                   "API v3 -> Enable"))
             elif "API key not valid" in msg or "keyInvalid" in msg:
-                problems.append("Ключ недействителен -- скопирован не целиком или "
-                                "из другого проекта")
+                problems.append(tr("Ключ недействителен -- скопирован не целиком или "
+                                   "из другого проекта"))
             elif "referer" in msg.lower() or "referrer" in msg.lower() or "ipRefererBlocked" in msg:
-                problems.append("У ключа стоит ограничение по HTTP referrer / IP -- "
-                                "из контейнера так не работает. Credentials -> ключ "
-                                "-> Application restrictions -> None")
+                problems.append(tr("У ключа стоит ограничение по HTTP referrer / IP -- "
+                                   "из контейнера так не работает. Credentials -> ключ "
+                                   "-> Application restrictions -> None"))
             elif "quota" in msg.lower():
-                problems.append("Квота на сегодня исчерпана, сбросится в полночь "
-                                "по тихоокеанскому времени")
+                problems.append(tr("Квота на сегодня исчерпана, сбросится в полночь "
+                                   "по тихоокеанскому времени"))
             else:
-                problems.append("Сеть до googleapis.com не проходит или ключ отклонён "
-                                "-- см. текст ошибки выше")
+                problems.append(tr("Сеть до googleapis.com не проходит или ключ отклонён "
+                                   "-- см. текст ошибки выше"))
     else:
-        print("   пропущено (нет ключа)")
+        _say("пропущено (нет ключа)")
 
-    print("3. База")
+    print(tr("3. База"))
     try:
         db.init_db()
         s = query.db_stats()
         print(f"   {s['db_path']}")
-        print(f"   каналов {s['channels']}, видео {s['videos']}, ниш {s['niches']}, "
-              f"снапшотов {s['video_stat_snapshots']}")
+        _say("каналов {channels}, видео {videos}, ниш {niches}, снапшотов {snapshots}",
+             channels=s["channels"], videos=s["videos"], niches=s["niches"],
+             snapshots=s["video_stat_snapshots"])
         if s["videos"] == 0:
-            problems.append("База пустая -- начните с "
-                            "`python cli.py collect-channel @какой-нибудь-канал`")
+            problems.append(tr("База пустая -- начните с "
+                               "`python cli.py collect-channel @какой-нибудь-канал`"))
         elif not s["history_since"]:
-            problems.append("Истории нет -- запустите воркер "
-                            "(`docker compose up -d worker`), иначе vph24h, "
-                            "ускорение и рост каналов останутся null")
+            problems.append(tr("Истории нет -- запустите воркер "
+                               "(`docker compose up -d worker`), иначе vph24h, "
+                               "ускорение и рост каналов останутся null"))
     except Exception as e:
-        print(f"   ОШИБКА: {e}")
-        problems.append(f"База не открывается: {e}")
+        _say("ОШИБКА: {error}", error=e)
+        problems.append(tr("База не открывается: {error}", error=e))
 
-    print("4. LLM (опционально)")
+    print(tr("4. LLM (опционально)"))
     llm_provider = os.environ.get("LLM_PROVIDER", "none").strip().lower()
     if llm_provider == "none":
-        print("   выключен (LLM_PROVIDER=none) -- это по умолчанию, ничего чинить не нужно")
+        _say("выключен (LLM_PROVIDER=none) -- это по умолчанию, ничего чинить не нужно")
     elif llm_provider == "ollama":
         from infrastructure.llm import factory as llm_factory
         provider = llm_factory.get_provider()  # always an OllamaProvider for this branch
@@ -134,42 +142,42 @@ def cmd_doctor(args):
         ok, msg = provider.available()
         print(f"   {msg}")
         if not ok:
-            problems.append(f"Ollama: {msg} -- запустите `ollama serve` и "
-                            "`ollama pull <модель>`, либо проверьте OLLAMA_URL")
+            problems.append(tr("Ollama: {msg} -- запустите `ollama serve` и "
+                               "`ollama pull <модель>`, либо проверьте OLLAMA_URL", msg=msg))
         elif args.llm:
             _ping_llm(problems)
         else:
-            print("   сервер и модель на месте, пинг пропущен (передайте --llm)")
+            _say("сервер и модель на месте, пинг пропущен (передайте --llm)")
     else:
         from infrastructure.llm import factory as llm_factory
         has_key = bool(os.environ.get("OPENROUTER_API_KEY", "").strip())
         print(f"   provider={llm_provider} model={llm_factory.display_model()} "
-              f"key={'есть' if has_key else 'ОТСУТСТВУЕТ'}")
+              f"key={tr('есть') if has_key else tr('ОТСУТСТВУЕТ')}")
         if not has_key:
-            problems.append("LLM_PROVIDER=openrouter, но OPENROUTER_API_KEY не задан -- "
-                            "используется NullProvider")
+            problems.append(tr("LLM_PROVIDER=openrouter, но OPENROUTER_API_KEY не задан -- "
+                               "используется NullProvider"))
         elif args.llm:
             _ping_llm(problems)
         else:
-            print("   ключ есть, пинг пропущен (передайте --llm, чтобы проверить и "
-                  "потратить немного бюджета)")
+            _say("ключ есть, пинг пропущен (передайте --llm, чтобы проверить и "
+                 "потратить немного бюджета)")
 
-    print("5. Покрытие окна 24h")
+    print(tr("5. Покрытие окна 24h"))
     try:
         c = trends.coverage("24h")
-        print(f"   видео за 24ч: {c['videosPublishedInPeriod']} из "
-              f"{c['videosTotal']}; метрики скорости "
-              f"{'доступны' if c['velocityMetricsAvailable'] else 'НЕТ (нужна история)'}")
+        _say("видео за 24ч: {published} из {total}; метрики скорости {velocity}",
+             published=c["videosPublishedInPeriod"], total=c["videosTotal"],
+             velocity=tr("доступны") if c["velocityMetricsAvailable"] else tr("НЕТ (нужна история)"))
     except Exception as e:
-        print(f"   ОШИБКА: {e}")
+        _say("ОШИБКА: {error}", error=e)
 
     print()
     if problems:
-        print("ЧТО ПОЧИНИТЬ:")
+        print(tr("ЧТО ПОЧИНИТЬ:"))
         for i, p in enumerate(problems, 1):
             print(f"  {i}. {p}")
         return 1
-    print("Всё в порядке.")
+    print(tr("Всё в порядке."))
     return 0
 
 
@@ -253,8 +261,8 @@ def cmd_notify_test(args):
             "hint": "no NOTIFY_TELEGRAM_BOT_TOKEN/NOTIFY_TELEGRAM_CHAT_ID or "
                     "NOTIFY_WEBHOOK_URL set in .env"})
         return
-    ok = notifier.send("\U0001F9EA niche-finder: тестовое сообщение. Если вы это видите, "
-                       "алерты настроены верно.")
+    ok = notifier.send(tr("\U0001F9EA niche-finder: тестовое сообщение. Если вы это видите, "
+                          "алерты настроены верно."))
     out({"sent": ok, "channel": notify_factory.display_target()})
 
 
@@ -330,61 +338,64 @@ def cmd_seed(args):
 
 
 def main():
-    ap = argparse.ArgumentParser(prog="cli.py", description=__doc__,
+    # .env first: NF_DEFAULT_LOCALE there sets the language of help and reports
+    from dotenv import load_dotenv
+    load_dotenv()
+    ap = argparse.ArgumentParser(prog="cli.py", description=tr(__doc__),
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("doctor", help="проверить ключ, сеть, базу")
+    p = sub.add_parser("doctor", help=tr("проверить ключ, сеть, базу"))
     p.add_argument("--llm", action="store_true",
-                   help="дополнительно пингануть настроенный LLM-провайдер (тратит бюджет)")
+                   help=tr("дополнительно пингануть настроенный LLM-провайдер (тратит бюджет)"))
     p.set_defaults(fn=cmd_doctor)
-    sub.add_parser("stats", help="что в базе").set_defaults(fn=cmd_stats)
-    sub.add_parser("notify-test", help="тестовое сообщение в Telegram/webhook").set_defaults(
+    sub.add_parser("stats", help=tr("что в базе")).set_defaults(fn=cmd_stats)
+    sub.add_parser("notify-test", help=tr("тестовое сообщение в Telegram/webhook")).set_defaults(
         fn=cmd_notify_test)
-    sub.add_parser("digest-send", help="отправить дайджест за сутки прямо сейчас").set_defaults(
+    sub.add_parser("digest-send", help=tr("отправить дайджест за сутки прямо сейчас")).set_defaults(
         fn=cmd_digest_send)
-    sub.add_parser("seed", help="залить синтетические данные").set_defaults(fn=cmd_seed)
+    sub.add_parser("seed", help=tr("залить синтетические данные")).set_defaults(fn=cmd_seed)
 
     # plan 15: accounts for NF_MULTI_USER=1 -- by invitation, no sign-up page
-    p = sub.add_parser("create-user", help="создать пользователя (вход при NF_MULTI_USER=1)")
+    p = sub.add_parser("create-user", help=tr("создать пользователя (вход при NF_MULTI_USER=1)"))
     p.add_argument("email")
     p.add_argument("--admin", action="store_true")
-    p.add_argument("--password-stdin", action="store_true", help="читать пароль из stdin")
+    p.add_argument("--password-stdin", action="store_true", help=tr("читать пароль из stdin"))
     p.set_defaults(fn=cmd_create_user)
-    p = sub.add_parser("set-password", help="задать или сменить пароль (local -- ваши данные)")
+    p = sub.add_parser("set-password", help=tr("задать или сменить пароль (local -- ваши данные)"))
     p.add_argument("email")
-    p.add_argument("--password-stdin", action="store_true", help="читать пароль из stdin")
+    p.add_argument("--password-stdin", action="store_true", help=tr("читать пароль из stdin"))
     p.set_defaults(fn=cmd_set_password)
-    sub.add_parser("users", help="список пользователей").set_defaults(fn=cmd_users)
-    p = sub.add_parser("create-token", help="личный токен для расширения и MCP по HTTP")
+    sub.add_parser("users", help=tr("список пользователей")).set_defaults(fn=cmd_users)
+    p = sub.add_parser("create-token", help=tr("личный токен для расширения и MCP по HTTP"))
     p.add_argument("email")
     p.add_argument("--name", default=None)
     p.set_defaults(fn=cmd_create_token)
 
-    p = sub.add_parser("embed-videos", help="досчитать эмбеддинги для уже собранных видео (0 quota)")
+    p = sub.add_parser("embed-videos", help=tr("досчитать эмбеддинги для уже собранных видео (0 quota)"))
     p.add_argument("--limit", type=int, default=1000)
     p.set_defaults(fn=cmd_embed_videos)
 
-    p = sub.add_parser("export-niche", help="экспорт видео ниши в TSV/CSV")
+    p = sub.add_parser("export-niche", help=tr("экспорт видео ниши в TSV/CSV"))
     p.add_argument("slug")
-    p.add_argument("--out", default=None, help="путь файла (по умолчанию <slug>_videos_ДАТА.EXT)")
+    p.add_argument("--out", default=None, help=tr("путь файла (по умолчанию <slug>_videos_ДАТА.EXT)"))
     p.add_argument("--format", choices=["tsv", "csv"], default="tsv")
     p.set_defaults(fn=cmd_export_niche)
 
-    p = sub.add_parser("fix-tracked", help="почистить watchlist от handle/url вместо channel_id")
+    p = sub.add_parser("fix-tracked", help=tr("почистить watchlist от handle/url вместо channel_id"))
     p.add_argument("--apply", action="store_true",
-                   help="применить изменения (по умолчанию — только просмотр)")
+                   help=tr("применить изменения (по умолчанию — только просмотр)"))
     p.set_defaults(fn=cmd_fix_tracked)
 
-    p = sub.add_parser("collect-channel", help="собрать канал (1 unit / 50 видео)")
+    p = sub.add_parser("collect-channel", help=tr("собрать канал (1 unit / 50 видео)"))
     p.add_argument("channel")
     p.add_argument("--max-videos", type=int, default=100)
     p.add_argument("--niche")
     p.add_argument("--embed", action=argparse.BooleanOptionalAction, default=False,
-                   help="считать эмбеддинги сразу (по умолчанию нет)")
+                   help=tr("считать эмбеддинги сразу (по умолчанию нет)"))
     p.set_defaults(fn=cmd_collect_channel)
 
-    p = sub.add_parser("collect", help="собрать нишу поиском (1 из 100 поисков в сутки)")
+    p = sub.add_parser("collect", help=tr("собрать нишу поиском (1 из 100 поисков в сутки)"))
     p.add_argument("query")
     p.add_argument("--label")
     p.add_argument("--language")
@@ -392,10 +403,10 @@ def main():
     p.add_argument("--region")
     p.add_argument("--pages", type=int, default=1)
     p.add_argument("--embed", action=argparse.BooleanOptionalAction, default=True,
-                   help="считать эмбеддинги сразу (по умолчанию да)")
+                   help=tr("считать эмбеддинги сразу (по умолчанию да)"))
     p.set_defaults(fn=cmd_collect)
 
-    p = sub.add_parser("refresh", help="обновить счётчики и дописать историю")
+    p = sub.add_parser("refresh", help=tr("обновить счётчики и дописать историю"))
     p.add_argument("--scope", default="recent", choices=["recent", "tracked", "niche", "all"])
     p.add_argument("--period", default="30d")
     p.add_argument("--limit", type=int, default=1000)
@@ -409,23 +420,23 @@ def main():
         p.add_argument("--limit", type=int, default=25)
         return p
 
-    p = period_args(sub.add_parser("viral", help="вирусные видео у маленьких каналов"))
+    p = period_args(sub.add_parser("viral", help=tr("вирусные видео у маленьких каналов")))
     p.add_argument("--max-subscribers", type=int, default=10000)
     p.add_argument("--min-views", type=int, default=10000)
     p.add_argument("--min-vsr", type=float, default=1.0)
     p.add_argument("--sort-by", default="viral")
     p.set_defaults(fn=cmd_viral)
 
-    p = period_args(sub.add_parser("categories", help="популярные категории"))
+    p = period_args(sub.add_parser("categories", help=tr("популярные категории")))
     p.add_argument("--rank-by", default="views", choices=["views", "channels", "videos"])
     p.set_defaults(fn=cmd_categories)
 
-    p = period_args(sub.add_parser("keywords", help="трендовые ключевые слова"), "24h")
+    p = period_args(sub.add_parser("keywords", help=tr("трендовые ключевые слова")), "24h")
     p.add_argument("--sort-by", default="momentum")
     p.add_argument("--min-videos", type=int, default=3)
     p.set_defaults(fn=cmd_keywords)
 
-    p = period_args(sub.add_parser("channels", help="недавно добавленные outlier-каналы"), "24h")
+    p = period_args(sub.add_parser("channels", help=tr("недавно добавленные outlier-каналы")), "24h")
     p.add_argument("--min-multiplier", type=float, default=2.0)
     p.set_defaults(fn=cmd_channels)
     p.set_defaults(period_by="discovered")

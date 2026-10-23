@@ -100,5 +100,52 @@ def test_optional_arguments_have_defaults():
     assert "pages=1" in t or "1 страниц" in t
 
 
+# ------------------------------------------------- language (i18n plan)
+
+@pytest.mark.parametrize("name", sorted(EXPECTED))
+def test_english_scenarios_have_no_russian_and_name_the_same_tools(name):
+    from domain import i18n
+    ru = text_of(name)
+    with i18n.use_locale("en"):
+        en = text_of(name)
+    assert not re.search("[А-Яа-яЁё]", en), en
+    assert "Quota" in en
+    assert set(re.findall(r"`([a-z_]+)\(", en)) == set(re.findall(r"`([a-z_]+)\(", ru))
+
+
+def test_russian_is_the_default_scenario_language():
+    assert "Квота" in text_of("weekly_review") and "Quota" not in text_of("weekly_review")
+
+
+def run_middleware(saved):
+    """The language a tool or scenario sees behind locale_middleware when the
+    user saved `saved` (None = never chose)."""
+    from domain import i18n
+    from interfaces.mcp import auth as mcp_auth
+
+    async def call_next(_ctx):
+        return i18n.current_locale()
+
+    original = mcp_auth._saved_locale
+    mcp_auth._saved_locale = lambda _uid: saved
+    try:
+        return run(mcp_auth.locale_middleware, None, call_next)
+    finally:
+        mcp_auth._saved_locale = original
+
+
+def test_middleware_uses_the_language_the_user_saved(monkeypatch):
+    monkeypatch.delenv("NF_DEFAULT_LOCALE", raising=False)
+    assert run_middleware("en") == "en"
+    assert run_middleware("ru") == "ru"
+
+
+def test_middleware_falls_back_to_the_installation_default(monkeypatch):
+    monkeypatch.setenv("NF_DEFAULT_LOCALE", "en")
+    assert run_middleware(None) == "en"
+    monkeypatch.setenv("NF_DEFAULT_LOCALE", "ru")
+    assert run_middleware(None) == "ru"
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

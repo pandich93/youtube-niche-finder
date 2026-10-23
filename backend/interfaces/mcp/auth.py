@@ -71,6 +71,27 @@ def blocked_feature(user_id: int, method, params):
     return None
 
 
+def _saved_locale(user_id: int):
+    from application import locale_prefs
+    try:
+        return locale_prefs.get(user_id=user_id)
+    except Exception:
+        return None
+
+
+async def locale_middleware(ctx, call_next):
+    """Scenario texts and tool hints in the language the user chose in the
+    dashboard (i18n plan): the token's user over HTTP, the local user over
+    stdio. Nothing saved -> NF_DEFAULT_LOCALE. Runs outermost, so a tariff
+    refusal from quota_owner_middleware is in that language too."""
+    from domain import i18n
+    saved = await to_thread.run_sync(_saved_locale, current_user_id())
+    if not saved:
+        return await call_next(ctx)
+    with i18n.use_locale(saved):
+        return await call_next(ctx)
+
+
 async def quota_owner_middleware(ctx, call_next):
     """YouTube calls made by a tool count against the token's user (5.5); a
     tool the user's tariff does not include is refused before it runs."""

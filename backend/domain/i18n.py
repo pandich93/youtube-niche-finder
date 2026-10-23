@@ -24,8 +24,11 @@ Accept-Language, the worker per recipient. Nothing set -> NF_DEFAULT_LOCALE,
 "ru" unless the installation says otherwise, so API clients that send no
 header see exactly what they saw before.
 
+MCP scenarios follow the user's saved language (interfaces/mcp/auth.py
+locale_middleware); their titles and the CLI use NF_DEFAULT_LOCALE.
+
 Not for: detection patterns (hook/policy/sponsor regexes match real videos),
-MCP prompts and tool descriptions (Claude reads them), CLI and logs.
+MCP tool descriptions (English, Claude reads them) and logs.
 """
 import importlib
 import os
