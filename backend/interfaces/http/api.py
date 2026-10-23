@@ -278,12 +278,27 @@ def _feature_block(request, user_id):
     return next((f for f in needed if not features[f]), None)
 
 
+async def _rls_call(request, call_next, user_id):
+    """P1-02: соединения этого запроса видят в личных таблицах только строки
+    user_id (Row-Level Security, infrastructure/postgres/connection.py).
+    Открытые маршруты (_PUBLIC_API: вход, выход, OAuth) сами выясняют, чей
+    это запрос, и остаются ролью владельца, как и всё вне /api/."""
+    path = request.url.path
+    if user_id is None or not path.startswith("/api/") or path in _PUBLIC_API:
+        return await call_next(request)
+    token = db.set_rls_user(user_id)
+    try:
+        return await call_next(request)
+    finally:
+        db.reset_rls_user(token)
+
+
 @app.middleware("http")
 async def session_guard(request, call_next):
     request.state.user = None
     if not multi_user_enabled():
         request.state.user_id = LOCAL_USER_ID
-        return await call_next(request)
+        return await _rls_call(request, call_next, LOCAL_USER_ID)
     # with accounts nobody is anybody until signed in (P1-01): a public route
     # must not end up acting as user 1
     request.state.user_id = None
@@ -327,7 +342,7 @@ async def session_guard(request, call_next):
     # signed-in user's daily budget (infrastructure/quota_owner.py)
     owner = quota_owner.set_owner(user["id"]) if user else None
     try:
-        return await call_next(request)
+        return await _rls_call(request, call_next, user["id"] if user else None)
     finally:
         if owner is not None:
             quota_owner.reset(owner)
@@ -1304,6 +1319,14 @@ def require_admin(request):
     does it anyway (multi-user plan P0-02)."""
     if not _is_admin(request):
         raise HTTPException(status_code=403, detail=str(PD.AdminOnly()))
+    _as_system()
+
+
+def _as_system():
+    """P1-02: дальше этот маршрут работает за всех, как worker, -- ролью
+    владельца, без политик RLS. Без reset: синхронный маршрут идёт в потоке
+    со своей копией контекста, и она кончается вместе с ним."""
+    db.set_rls_user(None)
 
 
 def _session_user(request):
@@ -1354,6 +1377,7 @@ def _admin(request) -> int:
     user = getattr(request.state, "user", None)
     if getattr(request.state, "via", None) != "session" or not (user and user.get("isAdmin")):
         raise HTTPException(status_code=403, detail="admins only, signed in to the dashboard")
+    _as_system()
     return user["id"]
 
 

@@ -8,9 +8,12 @@ Schema v3 (iteration 8) adds the swipe file (saved_items), metadata-review
 drafts with their post-publish outcome (drafts), and worker-generated
 alerts (events) -- see docs/plan-iteration-8.md.
 """
+import logging
 from datetime import datetime, timezone
 
 from infrastructure.postgres.connection import get_conn  # noqa: F401  (re-export for callers)
+
+_log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 4
 
@@ -877,8 +880,113 @@ def _owner_keys(conn):
         conn.execute(f"ALTER TABLE {table} ADD PRIMARY KEY ({', '.join(key)})")
 
 
+# multi-user plan P1-02: политика на каждую личную таблицу. app.user_id ставит
+# get_conn() в области пользователя; не задан -- NULL, и строк не видно вовсе.
+# events: NULL в user_id -- общий факт, его видят все (как и без RLS).
+RLS_POLICY = "nf_owner_rows"
+_RLS_UID = "NULLIF(current_setting('app.user_id', true), '')::bigint"
+_RLS_EXPR = {"events": f"(user_id IS NULL OR user_id = {_RLS_UID})"}
+
+
+def _rls_expr(table):
+    return _RLS_EXPR.get(table, f"user_id = {_RLS_UID}")
+
+
+def _savepoint(conn, name, fn):
+    """Шаг, которому можно не получиться (нет прав на CREATE ROLE, гонка двух
+    процессов): ошибка откатывает только его, остальное идёт дальше."""
+    conn.execute(f"SAVEPOINT {name}")
+    try:
+        fn()
+        conn.execute(f"RELEASE SAVEPOINT {name}")
+        return True
+    except Exception as e:
+        conn.execute(f"ROLLBACK TO SAVEPOINT {name}")
+        _log.warning("Row-Level Security setup: %s failed: %s", name, str(e).strip().splitlines()[0])
+        return False
+
+
+def _ensure_app_role(conn, role):
+    """Роль для запросов пользователей: без входа, без BYPASSRLS, не владелец.
+    Логин владельца получает её членство, чтобы get_conn() делал SET ROLE."""
+    if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = ?", (role,)).fetchone():
+        _savepoint(conn, "nf_rls_role", lambda: conn.execute(
+            f'CREATE ROLE "{role}" NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT'))
+    if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = ?", (role,)).fetchone():
+        return False
+    member = conn.execute("SELECT pg_has_role(current_user, ?, 'MEMBER')", (role,)).fetchone()[0]
+    if not member:
+        member = _savepoint(conn, "nf_rls_member",
+                            lambda: conn.execute(f'GRANT "{role}" TO CURRENT_USER'))
+    return member
+
+
+def _grant_app_role(conn, role):
+    """Права роли на таблицы и счётчики этой схемы -- только недостающие:
+    повторный GRANT на каждом старте зря трогал бы каталог."""
+    schema = conn.execute("SELECT current_schema()").fetchone()[0]
+    if not conn.execute("SELECT has_schema_privilege(?, ?, 'USAGE')", (role, schema)).fetchone()[0]:
+        conn.execute(f'GRANT USAGE ON SCHEMA "{schema}" TO "{role}"')
+    for r in conn.execute(
+            "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = current_schema() AND c.relkind IN ('r', 'p') AND NOT ("
+            "has_table_privilege(?, c.oid, 'SELECT') AND has_table_privilege(?, c.oid, 'INSERT') "
+            "AND has_table_privilege(?, c.oid, 'UPDATE') "
+            "AND has_table_privilege(?, c.oid, 'DELETE'))", (role,) * 4).fetchall():
+        conn.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON "{r["relname"]}" TO "{role}"')
+    for r in conn.execute(
+            "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = current_schema() AND c.relkind = 'S' AND NOT ("
+            "has_sequence_privilege(?, c.oid, 'USAGE') "
+            "AND has_sequence_privilege(?, c.oid, 'SELECT') "
+            "AND has_sequence_privilege(?, c.oid, 'UPDATE'))", (role,) * 3).fetchall():
+        conn.execute(f'GRANT USAGE, SELECT, UPDATE ON SEQUENCE "{r["relname"]}" TO "{role}"')
+
+
+def _ensure_policies(conn):
+    """ENABLE ROW LEVEL SECURITY и политика -- только там, где их ещё нет:
+    оба берут ACCESS EXCLUSIVE, и на каждом старте ждали бы worker."""
+    for table in PERSONAL_TABLES:
+        if "user_id" not in _existing_columns(conn, table):
+            continue
+        row = conn.execute(
+            "SELECT c.relrowsecurity FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+            "WHERE n.nspname = current_schema() AND c.relname = ?", (table,)).fetchone()
+        if not row["relrowsecurity"]:
+            conn.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
+        if not conn.execute("SELECT 1 FROM pg_policies WHERE schemaname = current_schema() "
+                            "AND tablename = ? AND policyname = ?", (table, RLS_POLICY)).fetchone():
+            expr = _rls_expr(table)
+            conn.execute(f"CREATE POLICY {RLS_POLICY} ON {table} USING ({expr}) "
+                         f"WITH CHECK ({expr})")
+
+
+def _ensure_rls(conn):
+    """multi-user plan P1-02, на каждом init_db(): политики, роль, её права.
+    Не роняет старт: без прав на CREATE ROLE политики всё равно ставятся, а
+    запросы идут ролью владельца, как раньше (предупреждение в логе). Под
+    advisory-блокировкой схемы: web, worker и MCP стартуют одновременно."""
+    from infrastructure.postgres.connection import app_role, lock_until_commit, rls_enabled
+    try:
+        lock_until_commit(conn, "rls_setup", 0)
+        # первое включение на живой базе ждёт ACCESS EXCLUSIVE; не дождались --
+        # старт идёт дальше, а политики поставит следующий init_db()
+        conn.execute("SET LOCAL lock_timeout = '10s'")
+        _ensure_policies(conn)
+        if rls_enabled():
+            role = app_role()
+            if _ensure_app_role(conn, role):
+                _grant_app_role(conn, role)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        _log.warning("Row-Level Security setup failed, user requests run as the table owner: %s",
+                     str(e).strip().splitlines()[0])
+
+
 def init_db():
     global _pgvector_available
+    from infrastructure.postgres.connection import recheck_app_role
     conn = get_conn()
     conn.executescript(SCHEMA)
     migrate(conn)
@@ -886,4 +994,6 @@ def init_db():
     _pgvector_available = _ensure_pgvector(conn)
     if _pgvector_available:
         _backfill_embedding_v(conn)
+    _ensure_rls(conn)
+    recheck_app_role(conn)
     conn.close()

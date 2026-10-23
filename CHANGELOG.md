@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Row-Level Security in Postgres** (multi-user plan P1-02). Personal tables
+  (`PERSONAL_TABLES`) get the policy `nf_owner_rows`: a dashboard, API or MCP
+  request sees and changes only its user's rows, even if a query forgets
+  `AND user_id = ?`. Such requests run as the role `NF_DB_APP_ROLE`
+  (`<POSTGRES_USER>_app`, no sign-in, no `BYPASSRLS`), entered with
+  `SET ROLE` with the user in `app.user_id`. Without it, personal tables
+  are empty.
+  - The worker, CLI, migrations, sign-in and the admin routes and tools stay
+    on the owner's role: they work for every user.
+  - Set up at start, with the same login and no change to `.env` or the
+    compose files. A login that may not create roles keeps working as before
+    and logs a warning. `NF_DB_RLS=0` turns it off. Details:
+    [docs/hosting.md](docs/hosting.md#row-level-security).
 - **Encryption key rotation** (multi-user plan P1-12). `OWN_TOKENS_KEY` stays
   the key that encrypts. Earlier keys go into `OWN_TOKENS_KEY_OLD`
   (comma-separated) and are only used to read, so changing the key no longer

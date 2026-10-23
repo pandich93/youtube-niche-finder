@@ -265,6 +265,39 @@ make prod-up
 `prod-up` rebuilds the image when the dependencies have changed and restarts
 the services. Schema changes are applied automatically when the services start.
 
+## Row-Level Security
+
+Postgres hides every user's personal rows from the other users' requests
+([SECURITY.md](../SECURITY.md)). Nothing to do on an update: at start, the
+services turn RLS on for the personal tables, create the role
+`<POSTGRES_USER>_app` (`niches_app` by default) and grant it the tables. The
+database login stays the same, and so do `.env` and the compose files.
+
+- **The first start after the update** waits for a moment when no other
+  service writes to these tables (at most 10 seconds per start). If it does
+  not get one, the next start finishes the job.
+- **Check it:** `docker compose logs web worker | grep -i "row-level"` prints
+  nothing when all is well. A line `Row-Level Security is not in effect` means
+  requests run as the table owner, as before the update. The usual reason is
+  that `POSTGRES_USER` may not create roles (a managed Postgres). Create the
+  role once as an administrator, then restart the services:
+
+  ```sql
+  CREATE ROLE niches_app NOLOGIN NOSUPERUSER NOBYPASSRLS;
+  GRANT niches_app TO niches;   -- the POSTGRES_USER the services log in as
+  ```
+
+- **Another name:** set `NF_DB_APP_ROLE` in `.env` (for two installs on one
+  Postgres server with the same login, for example).
+- **Turn it off:** `NF_DB_RLS=0` makes requests run as the owner again. The
+  policies stay in the database and do not affect the owner.
+- **Restore on a new server:** `pg_restore` may print errors about the
+  missing role `niches_app` for the `GRANT` lines. They are harmless: the
+  services create the role and the grants again when they start.
+- **Your own tools** that read the database with another login (a reporting
+  role, for example) see no personal rows now. Use `POSTGRES_USER` or a role
+  with `BYPASSRLS` for them.
+
 ## Moving a local copy to the server
 
 To take a local copy's data along, make a dump on your machine:

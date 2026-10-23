@@ -15,8 +15,11 @@ wrapper that provides exactly that surface on top of psycopg2, translating
 '?' -> '%s' and wrapping rows in a small sqlite3.Row lookalike. This is the
 one module that knows it is talking to Postgres at the connection level.
 """
+import contextlib
+import logging
 import os
 import re
+from contextvars import ContextVar
 
 import psycopg2
 import psycopg2.extensions
@@ -221,12 +224,146 @@ def lock_until_commit(conn, name: str, n: int):
     conn.execute("SELECT pg_advisory_xact_lock(hashtext(?), ?)", (f"{name}:{_schema()}", int(n)))
 
 
+# ------------------------------------------------ Row-Level Security (P1-02)
+#
+# Изоляция пользователей держится на `AND user_id = ?` в каждом запросе;
+# RLS -- вторая стена на случай, когда это условие забыли. Личные таблицы
+# (schema.PERSONAL_TABLES) видят только строки, у которых user_id совпадает с
+# настройкой сессии app.user_id; без неё -- ни одной строки (schema._ensure_rls).
+#
+# Под политики попадает только соединение, взятое внутри области пользователя
+# (user_scope / set_rls_user): HTTP ставит её на запрос (session_guard), MCP --
+# на вызов (interfaces/mcp/auth.py). Такое соединение переключается в роль
+# NF_DB_APP_ROLE (без входа, без BYPASSRLS, не владелец таблиц) и получает
+# app.user_id. Всё остальное -- worker, CLI, миграции, вход и выход, админские
+# маршруты (system_scope) -- работает ролью владельца, которая RLS обходит:
+# это работа сразу по всем пользователям, и user_id там передаётся явно.
+#
+# Роль включается SET ROLE от того же логина, что и раньше: ни нового пароля,
+# ни правки docker-compose. Настройки ставятся на сессию, а не SET LOCAL:
+# многие места делают commit() и продолжают на том же соединении, а SET LOCAL
+# закончился бы вместе с первой транзакцией. Каждый get_conn() выставляет их
+# заново, поэтому чужая область не переживает возврат соединения в пул.
+
+_RLS_USER = ContextVar("nf_rls_user", default=None)
+_log = logging.getLogger(__name__)
+_app_role_ok = None   # None = ещё не проверяли в этом процессе
+
+
+def rls_enabled() -> bool:
+    return os.environ.get("NF_DB_RLS", "1").strip().lower() not in ("0", "false", "no", "off")
+
+
+def app_role() -> str:
+    """Роль, под которой работают запросы пользователей. По умолчанию --
+    <логин владельца>_app, чтобы две установки на одном сервере не делили её."""
+    name = os.environ.get("NF_DB_APP_ROLE", "").strip()
+    if not name:
+        try:
+            owner = psycopg2.extensions.parse_dsn(_dsn()).get("user") or "niches"
+        except Exception:
+            owner = "niches"
+        name = f"{owner}_app"
+    if not _SCHEMA_NAME_RE.match(name):
+        raise ValueError(f"bad NF_DB_APP_ROLE {name!r}: must be a plain identifier")
+    return name
+
+
+def set_rls_user(user_id):
+    """Соединения, взятые дальше в этом контексте, видят только личные строки
+    user_id (None -- снова роль владельца). Возвращает токен для reset_rls_user."""
+    return _RLS_USER.set(None if user_id is None else int(user_id))
+
+
+def reset_rls_user(token):
+    _RLS_USER.reset(token)
+
+
+def rls_user():
+    return _RLS_USER.get()
+
+
+@contextlib.contextmanager
+def user_scope(user_id):
+    token = set_rls_user(user_id)
+    try:
+        yield
+    finally:
+        reset_rls_user(token)
+
+
+@contextlib.contextmanager
+def system_scope():
+    """Работа за всех пользователей посреди запроса одного из них: общий
+    бюджет LLM, рассылка готового транскрипта всем, кто его ждал. Соединение,
+    взятое внутри, -- роль владельца, без политик; user_id -- явно в SQL."""
+    token = set_rls_user(None)
+    try:
+        yield
+    finally:
+        reset_rls_user(token)
+
+
+def recheck_app_role(conn):
+    """После init_db: роль могла только что появиться -- проверить заново
+    сразу, чтобы предупреждение о её отсутствии было в логе старта."""
+    global _app_role_ok
+    _app_role_ok = None
+    if rls_enabled():
+        _use_app_role(conn._conn)
+
+
+def _check_app_role(raw) -> bool:
+    """Можно ли этому логину стать app_role(), и не обходит ли она RLS сама.
+    Нет -- запросы пользователей идут ролью владельца, как до P1-02, а в лог
+    уходит одно предупреждение (docs/hosting.md, «Row-Level Security»)."""
+    role = app_role()
+    cur = raw.cursor()
+    try:
+        cur.execute("SELECT r.rolsuper OR r.rolbypassrls, pg_has_role(current_user, r.oid, 'MEMBER') "
+                    "FROM pg_roles r WHERE r.rolname = %s", (role,))
+        row = cur.fetchone()
+    finally:
+        cur.close()
+        raw.rollback()
+    if row is None:
+        problem = "does not exist"
+    elif row[0]:
+        problem = "is a superuser or has BYPASSRLS"
+    elif not row[1]:
+        problem = "is not granted to the database login"
+    else:
+        return True
+    _log.warning("Row-Level Security is not in effect: database role %s %s -- user requests "
+                 "run as the table owner (see docs/hosting.md, Row-Level Security)", role, problem)
+    return False
+
+
+def _use_app_role(raw) -> bool:
+    global _app_role_ok
+    if not rls_enabled():
+        return False
+    if _app_role_ok is None:
+        _app_role_ok = _check_app_role(raw)
+    return _app_role_ok
+
+
 def get_conn() -> _PGConn:
     raw = _pool().getconn()
     schema = _schema()
+    uid = _RLS_USER.get()
+    role = app_role() if uid is not None and _use_app_role(raw) else None
     cur = raw.cursor()
+    # RESET ROLE первым: схему создаёт владелец, и прошлая область соединения
+    # из пула не должна дожить до этого get_conn()
+    cur.execute("RESET ROLE")
     cur.execute(f'CREATE SCHEMA IF NOT EXISTS "{schema}"')
     cur.execute(f'SET search_path TO "{schema}", public')
+    if role:
+        cur.execute(f'SET ROLE "{role}"')
+        cur.execute("SELECT set_config('app.user_id', %s, false)", (str(uid),))
+    else:
+        cur.execute("SELECT set_config('app.user_id', '', false)")
     cur.close()
     raw.commit()
     return _PGConn(raw)

@@ -44,6 +44,18 @@ def spent_today(conn) -> float:
     return float(row[0] or 0)
 
 
+def installation_spent_today() -> float:
+    """Расход всей установки за день -- для сводки рядом с общим бюджетом.
+    Отдельным соединением ролью владельца: в запросе пользователя под RLS
+    (P1-02) spent_today видел бы только его строки, без worker."""
+    with db.system_scope():
+        conn = db.get_conn()
+    try:
+        return spent_today(conn)
+    finally:
+        conn.close()
+
+
 def user_spent_today(conn, user_id) -> float:
     row = conn.execute(
         "SELECT COALESCE(SUM(cost_usd), 0) FROM llm_usage WHERE day=? AND user_id=?",
@@ -89,8 +101,13 @@ def _reserve(owner, limit, usd: float):
     Spent plus held is checked against the shared budget -- minus the
     worker's reserve for a signed-in user -- and the user's own limit, under
     one lock, so parallel calls see each other's holds. The id of the hold,
-    or None when the budget has no room."""
-    conn = db.get_conn()
+    or None when the budget has no room.
+
+    Budget and holds are the installation's, not one user's: the connection
+    is the owner's, outside Row-Level Security (P1-02) -- the worker's
+    SYSTEM_USER_ID rows count too, and a request may book one."""
+    with db.system_scope():
+        conn = db.get_conn()
     try:
         db.lock_until_commit(conn, "llm_budget", 0)
         total = spent_today(conn) + held_today(conn)
@@ -115,8 +132,10 @@ def _reserve(owner, limit, usd: float):
 
 
 def _settle(hold_id, owner, key, task, private, result):
-    """Drop the hold and, for an answer, record what it really cost."""
-    conn = db.get_conn()
+    """Drop the hold and, for an answer, record what it really cost (owner's
+    connection, like _reserve: the row may be SYSTEM_USER_ID's)."""
+    with db.system_scope():
+        conn = db.get_conn()
     try:
         conn.execute("DELETE FROM llm_reservations WHERE id=?", (hold_id,))
         if result is not None:

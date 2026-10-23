@@ -109,7 +109,10 @@ def save_transcript(video_id: str, raw_text: str, language: str = None,
         # used below in search_transcripts for one query string).
         vecs = emb.embed([c["text"] for c in chunks])
 
-        conn = db.get_conn()
+        # общий транскрипт и запросы всех, кто его ждал: соединение владельца,
+        # мимо Row-Level Security пользователя запроса (P1-02)
+        with db.system_scope():
+            conn = db.get_conn()
         try:
             conn.execute(
                 "INSERT INTO transcripts (video_id, language, text, has_timestamps, "

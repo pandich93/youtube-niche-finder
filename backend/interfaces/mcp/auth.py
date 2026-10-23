@@ -117,6 +117,20 @@ async def locale_middleware(ctx, call_next):
         return await call_next(ctx)
 
 
+async def rls_middleware(ctx, call_next):
+    """P1-02: соединения инструмента видят в личных таблицах только строки
+    его пользователя (Row-Level Security): токена по HTTP, локального по
+    stdio. Админские инструменты (MCP_ADMIN_TOOLS) работают за всех, как
+    worker, -- ролью владельца."""
+    import infrastructure.postgres as db
+    if (getattr(ctx, "method", None) == "tools/call"
+            and (getattr(ctx, "params", None) or {}).get("name") in MCP_ADMIN_TOOLS):
+        with db.system_scope():
+            return await call_next(ctx)
+    with db.user_scope(current_user_id()):
+        return await call_next(ctx)
+
+
 async def quota_owner_middleware(ctx, call_next):
     """YouTube calls made by a tool count against the token's user (5.5); a
     tool the user's tariff does not include is refused before it runs."""

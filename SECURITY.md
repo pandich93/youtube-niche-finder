@@ -95,6 +95,29 @@ What the server does for you:
 
   Public YouTube data (channels, videos, niches, transcripts, alert events) is
   shared. A user sees only the alert events of their own watchlist.
+
+  Two layers keep this apart (multi-user plan P1-02):
+  - every query filters by its user (`AND user_id = ?`);
+  - **Postgres Row-Level Security** catches a query that forgot to. Every
+    personal table (`PERSONAL_TABLES` in
+    `backend/infrastructure/postgres/schema.py`) has the policy
+    `nf_owner_rows`: a row is visible and writable only when its `user_id`
+    equals the session setting `app.user_id`. A dashboard or API request
+    (from its session or token) and an MCP tool call (from its token, user 1
+    over stdio) set it and switch their connections to the role
+    `NF_DB_APP_ROLE` (`<POSTGRES_USER>_app` by default). That role cannot
+    sign in, has no `BYPASSRLS` and owns no tables. Without `app.user_id` it
+    sees no personal rows at all. Shared alert events (`user_id` empty) stay
+    visible to everyone.
+
+  RLS does not apply to the table owner (`POSTGRES_USER`). The worker, the
+  CLI, migrations, sign-in and sign-out, and the admin routes and admin MCP
+  tools work as the owner, because they act for every user; there the
+  `user_id` filter in each query is the only guard. The role is entered with
+  `SET ROLE` from the owner's login, so RLS guards against a missing filter,
+  not against someone who can run arbitrary SQL. If the role cannot be
+  created, requests run as the owner, as before, and the server logs a
+  warning ([docs/hosting.md](docs/hosting.md#row-level-security)).
 - **Limits.**
   - YouTube quota: each user has a daily share of the installation's one key
     (`NF_USER_DAILY_UNITS`, `NF_USER_DAILY_SEARCH_CALLS`). Running out stops
