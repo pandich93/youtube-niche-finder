@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **English interface.** The dashboard, API errors and hints, score tooltips,
+  plan labels, alerts, the digest, `/privacy`, `/terms` and the Chrome
+  extension now come in Russian and English. The dashboard picks the language
+  from your choice, then your saved setting, then the browser; switch it in the
+  sidebar without a reload. Alerts and the digest use each recipient's saved
+  language. The API answers in the language of `X-NF-Locale` or
+  `Accept-Language`, else `NF_DEFAULT_LOCALE` (default `ru`, so existing
+  installs and scripts see the same texts). New route `PUT /api/me/locale`;
+  `/api/auth/me` gains a `locale` field. MCP prompts and the CLI stay Russian
+  for now.
 - **Tariffs, configured by an admin** (SaaS sub-project 1, multi-user mode):
   daily limits, count limits and features per tariff; a base tariff Free that
   everyone starts on; users pick a free tariff themselves on the new "Тариф"
