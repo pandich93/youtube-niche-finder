@@ -179,4 +179,4 @@ def test_freshness_has_its_own_route_and_stays_out_of_health():
     from application import search as Q
     client = TestClient(api.app)
     assert client.get("/api/freshness").json()["videos"]["stale"] == 3
-    assert "freshness" not in Q.db_stats()
+    assert "freshness" not in Q.db_stats(user_id=None)

@@ -79,6 +79,36 @@ def _events(conn, kinds, start, *, user_id) -> list:
     return out
 
 
+# rising channels looked at before keeping only a user's own (multi-user)
+RISING_SCAN = 500
+
+
+def _own_channels(user_id) -> set:
+    """The user's active watchlist plus every channel with a video in a niche
+    one of those channels' videos is in -- "my channels and my niches"."""
+    conn = db.get_conn()
+    try:
+        tracked = {r["channel_id"] for r in conn.execute(
+            "SELECT channel_id FROM tracked_channels WHERE user_id = ? AND active = 1",
+            (user_id,)).fetchall()}
+        if not tracked:
+            return set()
+        marks = ",".join("?" * len(tracked))
+        niches = [r["niche_slug"] for r in conn.execute(
+            "SELECT DISTINCT vn.niche_slug FROM video_niches vn JOIN videos v "
+            f"ON v.video_id = vn.video_id WHERE v.channel_id IN ({marks})",
+            tuple(tracked)).fetchall()]
+        if not niches:
+            return tracked
+        marks = ",".join("?" * len(niches))
+        return tracked | {r["channel_id"] for r in conn.execute(
+            "SELECT DISTINCT v.channel_id FROM video_niches vn JOIN videos v "
+            f"ON v.video_id = vn.video_id WHERE vn.niche_slug IN ({marks})",
+            tuple(niches)).fetchall()}
+    finally:
+        conn.close()
+
+
 def build_digest(period: str = "24h", top_n: int = 5, *, user_id: int) -> dict:
     """Everything worth a morning glance for the last `period`: new outliers
     and accelerating videos on tracked channels, channels that just entered
@@ -99,10 +129,18 @@ def build_digest(period: str = "24h", top_n: int = 5, *, user_id: int) -> dict:
     finally:
         conn.close()
 
-    rc = T.recently_added_outlier_channels(period=period, limit=top_n)
-    rising = rc.get("channels", [])
-    out["risingChannels"] = {"total": rc.get("channelsMatched", len(rising)),
-                             "items": rising[:top_n]}
+    if multi_user_enabled():
+        # P1-05: the corpus also holds what other users collected and track;
+        # a digest names only this user's channels and their niches' channels
+        rc = T.recently_added_outlier_channels(period=period, limit=RISING_SCAN)
+        mine = _own_channels(user_id)
+        rising = [c for c in rc.get("channels", []) if c.get("channelId") in mine]
+        out["risingChannels"] = {"total": len(rising), "items": rising[:top_n]}
+    else:
+        rc = T.recently_added_outlier_channels(period=period, limit=top_n)
+        rising = rc.get("channels", [])
+        out["risingChannels"] = {"total": rc.get("channelsMatched", len(rising)),
+                                 "items": rising[:top_n]}
     # multi-user: only swaps on this user's watchlist, not everyone's
     swaps = PKG.packaging_feed(period=period, limit=top_n,
                                user_id=user_id if multi_user_enabled() else None

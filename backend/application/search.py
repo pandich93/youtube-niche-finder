@@ -359,10 +359,19 @@ def list_niches() -> list:
     return [dict(r) for r in rows]
 
 
-def db_stats() -> dict:
+def db_stats(*, user_id) -> dict:
+    """Corpus totals plus the quota. user_id: the watchlist count and the
+    title/thumbnail change count are that user's own -- both are gathered for
+    every channel someone tracks, so whole-server numbers would show what
+    other users watch (multi-user plan P1-05); None = whole server."""
     conn = db.get_conn()
-    def one(sql):
-        return conn.execute(sql).fetchone()[0]
+    def one(sql, params=()):
+        return conn.execute(sql, params).fetchone()[0]
+    mine = (" AND user_id = ?", (user_id,)) if user_id is not None else ("", ())
+    own_changes = ("" if user_id is None else
+                   " WHERE EXISTS (SELECT 1 FROM videos v JOIN tracked_channels t "
+                   "ON t.channel_id = v.channel_id AND t.active = 1 AND t.user_id = ? "
+                   "WHERE v.video_id = video_changes.video_id)")
     calls_today = collecting.search_calls_today(conn)
     units_today = collecting.units_today(conn)
     curve = maturity_curve.status(conn)
@@ -371,11 +380,12 @@ def db_stats() -> dict:
         "channels": one("SELECT COUNT(*) FROM channels"),
         "videos": one("SELECT COUNT(*) FROM videos"),
         "niches": one("SELECT COUNT(*) FROM niches"),
-        "tracked_channels": one("SELECT COUNT(DISTINCT channel_id) FROM tracked_channels WHERE active=1"),
+        "tracked_channels": one("SELECT COUNT(DISTINCT channel_id) FROM tracked_channels "
+                                "WHERE active=1" + mine[0], mine[1]),
         "video_stat_snapshots": one("SELECT COUNT(*) FROM video_stats_history"),
         "channel_stat_snapshots": one("SELECT COUNT(*) FROM channel_stats_history"),
         "chart_snapshots": one("SELECT COUNT(*) FROM chart_snapshots"),
-        "title_thumbnail_changes": one("SELECT COUNT(*) FROM video_changes"),
+        "title_thumbnail_changes": one("SELECT COUNT(*) FROM video_changes" + own_changes, mine[1]),
         "videos_without_embedding": one("SELECT COUNT(*) FROM videos WHERE embedding IS NULL"),
         "oldest_video": one("SELECT MIN(published_at) FROM videos"),
         "newest_video": one("SELECT MAX(published_at) FROM videos"),

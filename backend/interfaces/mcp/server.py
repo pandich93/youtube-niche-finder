@@ -61,6 +61,14 @@ def _uid() -> int:
     return mcp_auth.current_user_id()
 
 
+def _feed_user():
+    """Whose watchlist scopes a feed gathered for every tracked channel
+    (multi-user plan P1-05): the token's user with accounts on, nobody (the
+    whole feed) without them."""
+    from domain.users import multi_user_enabled
+    return _uid() if multi_user_enabled() else None
+
+
 def _require_key():
     if not API_KEY:
         raise RuntimeError(
@@ -746,7 +754,7 @@ def list_niches() -> list:
     idempotent_hint=True, open_world_hint=False))
 def db_stats() -> dict:
     """What is stored locally: channels, videos, niches, snapshots, DB path."""
-    return q.db_stats()
+    return q.db_stats(user_id=_feed_user())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -850,7 +858,8 @@ def title_changes(period: str = "7d", channel_id: str = None, limit: int = 50) -
     reacting to underperformance, and a useful competitive signal. Thumbnail
     swaps are not visible here (the API's thumbnail URL never changes); use
     packaging_changes for those."""
-    return T.title_changes(period=period, channel_id=channel_id, limit=limit)
+    return T.title_changes(period=period, channel_id=channel_id, limit=limit,
+                           user_id=_feed_user())
 
 
 @mcp.tool(annotations=ToolAnnotations(
@@ -869,7 +878,7 @@ def packaging_changes(period: str = "30d", channel_id: str = None, field: str = 
     if video_id:
         return packaging_mod.packaging_history(video_id)
     return packaging_mod.packaging_feed(period=period, channel_id=channel_id,
-                                        field=field, limit=limit, user_id=None)
+                                        field=field, limit=limit, user_id=_feed_user())
 
 
 @mcp.tool(annotations=ToolAnnotations(

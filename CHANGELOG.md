@@ -63,6 +63,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Feeds no longer show what other users watch** (multi-user plan P1-05).
+  With accounts on, these are now limited to your own watchlist:
+  - title changes and the repackaging feed (dashboard and MCP);
+  - the watchlist and change totals in `/api/stats`, `/api/health` and MCP
+    `db_stats`;
+  - the digest's rising channels, which also keep channels from the niches
+    your channels are in.
+
+  `/api/health` answers `{"ok": true}` to a visitor who has not signed in.
+  Without accounts nothing changes. Collection and refreshes stay shared.
 - **MCP over HTTP without sign-in stays on loopback** (multi-user plan P1-15).
   Without `NF_MULTI_USER=1` there is no sign-in and every tool acts as user 1,
   so `server.py` now refuses to listen on any other address unless

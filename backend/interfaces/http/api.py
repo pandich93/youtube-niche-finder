@@ -462,9 +462,21 @@ async def _unhandled(request, exc):  # pragma: no cover
 
 # ------------------------------------------------------------------ статус
 
+def _feed_user(request):
+    """Whose watchlist scopes a feed gathered for every tracked channel
+    (multi-user plan P1-05): the signed-in user with accounts on, nobody
+    (the whole feed) without them."""
+    return _uid(request) if multi_user_enabled() else None
+
+
 @app.get("/api/health")
-def health():
-    s = Q.db_stats()
+def health(request: Request):
+    # public route: with accounts on, a visitor who did not sign in learns
+    # only that the server is up -- the corpus and watchlist totals are for
+    # signed-in users (P1-05)
+    if multi_user_enabled() and getattr(request.state, "user_id", None) is None:
+        return {"ok": True}
+    s = Q.db_stats(user_id=_feed_user(request))
     conn = db.get_conn()
     try:
         calls_today = collector.search_calls_today(conn)
@@ -492,8 +504,8 @@ def health():
 
 
 @app.get("/api/stats")
-def stats():
-    return Q.db_stats()
+def stats(request: Request):
+    return Q.db_stats(user_id=_feed_user(request))
 
 
 @app.get("/api/coverage")
@@ -604,7 +616,7 @@ def check_ideas(payload: dict = Body(...)):
 
 
 @app.get("/api/overview")
-def overview(period: str = "24h", niche: str = None):
+def overview(request: Request, period: str = "24h", niche: str = None):
     """Всё для главной одним запросом -- иначе страница делает шесть.
 
     Периоды разные намеренно: 24h для того, что действительно обновляется за
@@ -615,7 +627,7 @@ def overview(period: str = "24h", niche: str = None):
         "period": period,
         "widePeriod": wide,
         "coverage": trends.coverage(period),
-        "stats": Q.db_stats(),
+        "stats": Q.db_stats(user_id=_feed_user(request)),
         "outlierChannels": T.recently_added_outlier_channels(
             period=period, period_by="discovered", min_multiplier=1.5,
             niche=niche, limit=6),
@@ -1106,18 +1118,19 @@ def language_gaps_languages():
 
 
 @app.get("/api/title-changes")
-def title_changes(period: str = "7d", channel_id: str = None, limit: int = 50):
-    return T.title_changes(period=period, channel_id=channel_id, limit=limit)
+def title_changes(request: Request, period: str = "7d", channel_id: str = None, limit: int = 50):
+    return T.title_changes(period=period, channel_id=channel_id, limit=limit,
+                           user_id=_feed_user(request))
 
 
 @app.get("/api/packaging")
-def packaging_feed(period: str = "30d", channel_id: str = None, field: str = None,
-                   limit: int = 50):
+def packaging_feed(request: Request, period: str = "30d", channel_id: str = None,
+                   field: str = None, limit: int = 50):
     """Repackaging feed (plan 05): title and thumbnail swaps with before/after
     and the views-per-hour effect. Zero quota."""
     try:
         return PKG.packaging_feed(period=period, channel_id=channel_id, field=field,
-                                  limit=limit, user_id=None)
+                                  limit=limit, user_id=_feed_user(request))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 

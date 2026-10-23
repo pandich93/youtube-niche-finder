@@ -132,7 +132,7 @@ def test_db_stats_exposes_llm_block():
     _clear_llm_tables()
     os.environ.pop("LLM_PROVIDER", None)
 
-    s = query.db_stats()
+    s = query.db_stats(user_id=None)
 
     assert "llm" in s
     assert s["llm"]["provider"] == "none"

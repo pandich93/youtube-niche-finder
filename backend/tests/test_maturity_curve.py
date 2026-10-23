@@ -198,7 +198,7 @@ def test_health_and_db_stats_report_the_curve_in_use():
     body = client.get("/api/health").json()["maturityCurve"]
     assert body["source"] == "calibrated" and body["videosUsed"] == 35
     assert body["calibratedAt"]
-    stats = query.db_stats()["maturity_curve"]
+    stats = query.db_stats(user_id=None)["maturity_curve"]
     assert stats["source"] == "calibrated" and stats["videos_used"] == 35
     M.set_maturity_curve(None)
 
