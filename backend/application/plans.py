@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import infrastructure.postgres as db
+from application import audit as AUD
 from domain import plans as DP
 from domain.i18n import tr
 from domain.users import SYSTEM_USER_ID, multi_user_enabled
@@ -196,6 +197,11 @@ def _log_change(conn, user_id, from_id, to_id, expires_at, by, now):
     conn.execute("INSERT INTO plan_changes (user_id, from_plan_id, to_plan_id, expires_at, "
                  "changed_by, changed_at) VALUES (?,?,?,?,?,?)",
                  (user_id, from_id, to_id, expires_at, by, now.isoformat()))
+    # P1-07: the same fact in the action log; by is self | admin:<id> | system
+    actor = (user_id if by == "self" else int(by.split(":", 1)[1]) if by.startswith("admin:")
+             else AUD.OPERATOR_ID)
+    AUD.record(conn, "plan_change", actor_id=actor, target_id=user_id,
+               details={"from": from_id, "to": to_id, "expiresAt": expires_at, "by": by})
 
 
 def _set_plan(conn, user_id, plan_id, expires_at, by, now):

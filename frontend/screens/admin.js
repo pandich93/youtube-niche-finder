@@ -1,9 +1,10 @@
-/* Экран «Админка» (SaaS, подпроект 1): тарифы и пользователи. Виден только
-   админу; сервер всё равно проверяет права на каждом запросе. */
-import { api, esc, toast, sectionHead, notice, table } from '../ui.js';
+/* Экран «Админка» (SaaS, подпроект 1): тарифы, пользователи и (P1-07) журнал
+   действий. Виден только админу; сервер всё равно проверяет права на каждом
+   запросе. */
+import { api, q, esc, toast, sectionHead, notice, table } from '../ui.js';
 import { view, render } from '../shared.js';
 import { getMe } from '../plan-state.js';
-import { dict, fmtNum } from '../i18n.js';
+import { dict, fmtNum, fmtDateTime } from '../i18n.js';
 import ru from '../i18n/ru/admin.js';
 import en from '../i18n/en/admin.js';
 
@@ -64,6 +65,93 @@ function readForm(form) {
   };
 }
 
+/* ---------------------------------------------- журнал действий (P1-07) */
+
+const AUDIT_PER_PAGE = 50;
+
+// ключи словаря целиком: так их видит проверка словарей во frontend-smoke
+function auditLabels() {
+  return {
+    auth: t('auditGroupAuth'), tokens: t('auditGroupTokens'), plans: t('auditGroupPlans'),
+    accounts: t('auditGroupAccounts'), admin: t('auditGroupAdmin'),
+    login: t('evLogin'), login_failed: t('evLoginFailed'), signup: t('evSignup'),
+    password_change: t('evPasswordChange'), password_reset: t('evPasswordReset'),
+    email_change_requested: t('evEmailChangeRequested'), email_change: t('evEmailChange'),
+    token_create: t('evTokenCreate'), token_revoke: t('evTokenRevoke'),
+    plan_change: t('evPlanChange'), account_create: t('evAccountCreate'),
+    account_disable: t('evAccountDisable'), account_enable: t('evAccountEnable'),
+    account_delete: t('evAccountDelete'), account_self_delete: t('evAccountSelfDelete'),
+    plan_create: t('evPlanCreate'), plan_update: t('evPlanUpdate'),
+    plan_archive: t('evPlanArchive'), plan_restore: t('evPlanRestore'),
+  };
+}
+
+function auditWho(id, email) {
+  if (id == null) return `<span style="color:var(--muted)">${t('auditNobody')}</span>`;
+  if (id === 0) return t('auditOperator');
+  return email ? esc(email) : `#${id} <span style="color:var(--muted)">${t('auditGone')}</span>`;
+}
+
+function auditDetails(d) {
+  const pairs = Object.entries(d || {}).filter(([, v]) => v !== null && v !== '');
+  if (!pairs.length) return '';
+  return pairs.map(([k, v]) => `${esc(k)}: ${esc(Array.isArray(v) ? v.join(', ') : typeof v === 'object' ? JSON.stringify(v) : String(v))}`).join(' · ');
+}
+
+async function loadAudit(box, filters, page) {
+  const labels = auditLabels();
+  box.querySelector('#auditRows').innerHTML = `<p class="row-sub">${t('auditLoading')}</p>`;
+  let out;
+  try {
+    out = await api(`/api/admin/audit${q({ ...filters, page, perPage: AUDIT_PER_PAGE })}`);
+  } catch (e) {
+    box.querySelector('#auditRows').innerHTML = notice(esc(e.message), 'error');
+    return;
+  }
+  const pages = Math.max(1, Math.ceil(out.total / out.perPage));
+  box.querySelector('#auditRows').innerHTML = `${table([
+    { label: t('colWhen'), render: (e) => esc(fmtDateTime(e.at)) },
+    { label: t('colEvent'), render: (e) => esc(labels[e.event] || e.event) },
+    { label: t('colActor'), render: (e) => auditWho(e.actorId, e.actorEmail) },
+    { label: t('colTarget'), render: (e) => (e.targetId == null && !e.targetEmail ? '' : auditWho(e.targetId, e.targetEmail)) },
+    { label: 'IP', render: (e) => esc(e.ip || '') },
+    { label: t('colDetails'), wrap: true, render: (e) => auditDetails(e.details) },
+  ], out.entries)}
+    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <button class="btn btn-ghost btn-sm" id="auditPrev" ${out.page <= 1 ? 'disabled' : ''}>${t('auditPrev')}</button>
+      <span class="row-sub">${t('auditPage', { page: fmtNum(out.page), pages: fmtNum(pages), total: fmtNum(out.total) })}${out.retentionDays ? ` · ${t('auditKept', { days: fmtNum(out.retentionDays) })}` : ''}</span>
+      <button class="btn btn-ghost btn-sm" id="auditNext" ${out.page >= pages ? 'disabled' : ''}>${t('auditNext')}</button>
+    </div>`;
+  box.querySelector('#auditPrev').addEventListener('click', () => loadAudit(box, filters, out.page - 1));
+  box.querySelector('#auditNext').addEventListener('click', () => loadAudit(box, filters, out.page + 1));
+}
+
+function mountAudit(box) {
+  const labels = auditLabels();
+  const groups = ['auth', 'tokens', 'plans', 'accounts', 'admin'];
+  const events = Object.keys(labels).filter((k) => !groups.includes(k));
+  box.innerHTML = `${sectionHead(t('auditTitle'), t('auditSub'))}
+    <form id="auditFilters" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select name="event">
+        <option value="">${t('auditAllEvents')}</option>
+        <optgroup label="${esc(t('auditGroups'))}">${groups.map((g) => `<option value="${g}">${esc(labels[g])}</option>`).join('')}</optgroup>
+        <optgroup label="${esc(t('auditEvents'))}">${events.map((e) => `<option value="${e}">${esc(labels[e])}</option>`).join('')}</optgroup>
+      </select>
+      <input name="user" placeholder="${esc(t('auditUserPlaceholder'))}" style="width:220px">
+      <label>${t('auditSince')} <input type="date" name="since"></label>
+      <label>${t('auditUntil')} <input type="date" name="until"></label>
+      <button class="btn btn-sm" type="submit">${t('auditShow')}</button>
+    </form>
+    <div id="auditRows" style="margin-top:8px"></div>`;
+  const form = box.querySelector('#auditFilters');
+  const filters = () => {
+    const f = new FormData(form);
+    return { event: f.get('event'), user: (f.get('user') || '').trim(), since: f.get('since'), until: f.get('until') };
+  };
+  form.addEventListener('submit', (e) => { e.preventDefault(); loadAudit(box, filters(), 1); });
+  loadAudit(box, filters(), 1);
+}
+
 async function viewAdmin() {
   const me = getMe();
   if (!me.multiUser || !me.user?.isAdmin) {
@@ -117,7 +205,9 @@ async function viewAdmin() {
         <button class="btn btn-sm" type="submit">${t('createUser')}</button>
       </form>
       <div id="userNewResult"></div>
-    </div>`;
+    </div>
+    <div class="card" style="margin-top:12px" id="auditCard"></div>`;
+  mountAudit(view.querySelector('#auditCard'));
 
   const editor = view.querySelector('#planEditor');
   const open = (p) => {

@@ -194,6 +194,7 @@ SUMMARY = {
     "POST /api/admin/users/{user_id}/disable": ("plan", "Admin: block an account; its sessions and API tokens end at once."),
     "POST /api/admin/users/{user_id}/enable": ("plan", "Admin: unblock an account; the person signs in again."),
     "DELETE /api/admin/users/{user_id}": ("plan", "Admin: delete an account and all of its data (`confirmEmail` must match)."),
+    "GET /api/admin/audit": ("plan", "Admin (dashboard sign-in): the action log -- sign-ins, failed sign-ins, password/email changes, API tokens, plans, account actions; filters `event`, `user`, `since`, `until`, pages."),
     "DELETE /api/auth/me": ("auth", "Delete your own account and all of your data; needs your `password` and a dashboard sign-in."),
 }
 

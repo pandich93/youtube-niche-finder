@@ -35,6 +35,7 @@ from datetime import datetime, timezone
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import alerts as alerts_mod
+from application import audit as audit_mod
 from application import collecting as collector
 from application import content_calendar as calendar_mod
 from application import digest as digest_mod
@@ -282,6 +283,8 @@ def cycle():
                 _safe(f"collect '{query}'", lambda query=query: collector.collect_niche(
                     API_KEY, query, period=QUERY_PERIOD, pages=QUERY_PAGES, embed=True))
         _safe("plan expiry", lambda: plans_mod.expire_due())
+        # P1-07: entries older than NF_AUDIT_RETENTION_DAYS leave the action log
+        _safe("audit log retention", lambda: audit_mod.purge_expired())
         _mark("daily")
 
     if _due("clusters", CLUSTER_INTERVAL_MIN):

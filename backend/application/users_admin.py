@@ -6,7 +6,8 @@ the promise of the /privacy page. Deleting is real, not a flag: every row of
 db.PERSONAL_TABLES with that user_id, their meta counters, then the users row.
 The shared corpus stays: a transcript or tag they added passes to the
 operator (created_by = NULL), shared events (user_id NULL) are not theirs.
-Each action is written to admin_actions with the email, which outlives the row.
+Each action goes into the action log (application/audit.py, P1-07) with the
+email, which outlives the row.
 
 Guards: an admin does not block or delete themself here (self-delete is its
 own path), the local user (the data from before accounts) is never deleted,
@@ -15,6 +16,7 @@ and the server always keeps one active admin.
 import secrets
 
 import infrastructure.postgres as db
+from application import audit as AUD
 from application import auth as AUTH
 from application import digest as DG
 from application import own_channels as OWN
@@ -58,8 +60,8 @@ def _local_kept():
 
 
 def _log(conn, admin_id: int, action: str, user_id: int, email: str):
-    conn.execute("INSERT INTO admin_actions (admin_id, action, target_user_id, target_email, "
-                 "created_at) VALUES (?,?,?,?,?)", (admin_id, action, user_id, email, db.now_iso()))
+    AUD.record(conn, f"account_{action}", actor_id=admin_id, target_id=user_id,
+               target_email=email)
 
 
 def _guard(conn, actor_id: int, target, deleting: bool):
@@ -165,7 +167,7 @@ def delete_self(user_id: int, password: str) -> dict:
         conn.close()
     if not AUTH.verify_password(password or "", target["password_hash"]):
         raise UserAdminError(tr("Неверный пароль."))
-    return _erase(user_id, target["email"], user_id, "self-delete")
+    return _erase(user_id, target["email"], user_id, "self_delete")
 
 
 def by_email(email: str) -> int:

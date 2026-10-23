@@ -232,7 +232,21 @@ Known limits (by design, worth knowing before you invite anyone):
   (MCP included) at once, and it cannot sign in until unblocked. An admin
   cannot block or delete themself there, the `local` user (the data from
   before accounts) can be blocked but not deleted, and the server always
-  keeps one active admin. Each action is logged in `admin_actions`.
+  keeps one active admin. Each action goes into the action log.
+- **Action log** (multi-user plan P1-07). `audit_log` records sign-ins, failed
+  sign-ins (also the throttled ones), sign-ups, password changes and resets,
+  email changes, API tokens created and revoked, tariff changes, and admins'
+  actions on accounts and tariffs -- with the time, who acted, on whom and
+  the client address (`NF_TRUSTED_PROXIES` decides it, as for the sign-in
+  throttle). Details pass a filter that drops any key that looks like a
+  credential (password, token, secret, hash, key, cookie, auth), so neither a
+  password nor a token nor a reset link can end up there; an unknown email
+  typed at sign-in is not stored either. Only an admin signed in to the
+  dashboard reads it (`GET /api/admin/audit`, the "Admin" page with filters by
+  event, user and period); an API token cannot, even an admin's. Entries
+  survive a deleted account and leave after `NF_AUDIT_RETENTION_DAYS`
+  (default 180). The rows of P0-04's `admin_actions` were moved into it on
+  the first start, and that table is gone.
 - **Tokens made before expiry existed do not expire.** New tokens live 90 days
   by default (1 to 365 days, or no expiry if you choose it). Older tokens keep
   every scope and no expiry until revoked; the MCP screen marks them

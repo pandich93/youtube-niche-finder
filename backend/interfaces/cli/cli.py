@@ -327,6 +327,9 @@ def cmd_create_user(args):
     except auth.AuthError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
+    from application import audit
+    audit.log("account_create", actor_id=audit.OPERATOR_ID, target_id=uid,
+              target_email=args.email.strip().lower(), details={"isAdmin": bool(args.admin)})
     out({"created": uid, "email": args.email.strip().lower(), "admin": args.admin})
 
 
@@ -337,6 +340,9 @@ def cmd_set_password(args):
     except auth.AuthError as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)
+    from application import audit
+    audit.log("password_change", actor_id=audit.OPERATOR_ID, target_id=uid,
+              details={"via": "cli"})
     out({"updated": uid, "sessionsEnded": True})
 
 
