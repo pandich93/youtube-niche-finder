@@ -85,6 +85,25 @@ What the server does for you:
   - Changing a password ends every session of that user (the profile screen
     keeps the browser it was changed in signed in); a reset by link ends all
     of them.
+  - A session ends 14 days after the last activity (`NF_SESSION_IDLE_DAYS`)
+    and 90 days after the sign-in whatever happens (`NF_SESSION_MAX_DAYS`).
+    The idle expiry moves forward at most once per 15 minutes
+    (`NF_SESSION_TOUCH_MINUTES`), so a request only reads the database. The
+    absolute limit is checked on every request, so lowering it also ends
+    older sessions.
+  - Every sign-in, sign-up, password reset and password change starts a new
+    token; an old one is never taken over. The cookie is not rotated on its
+    own while the session lives: it never reaches JavaScript, a URL or a log,
+    the idle and absolute limits bound a stolen one, and a mid-session swap
+    would race the dashboard's parallel requests (one that left with the old
+    token would get 401) or need a grace window during which both tokens
+    work.
+  - The profile lists your sessions: when they started and were last active,
+    the client address (as `NF_TRUSTED_PROXIES` resolves it) and the browser
+    (User-Agent, cut to 200 characters). You can end one or all but the
+    current. Tokens and hashes are never shown. Only a dashboard sign-in can
+    do this, never an API token. These rows go when the session ends and with
+    the account.
   - Without a session, `/api` answers 401. Only sign-in, sign-up and password
     reset by link, email confirmation, `/api/health` and the Google OAuth
     return are open.

@@ -285,7 +285,7 @@ def _feature_block(request, user_id):
 
 @app.middleware("http")
 async def session_guard(request, call_next):
-    request.state.user = None
+    request.state.user = request.state.session_id = None
     if not multi_user_enabled():
         request.state.user_id = LOCAL_USER_ID
         return await call_next(request)
@@ -293,7 +293,13 @@ async def session_guard(request, call_next):
     # must not end up acting as user 1
     request.state.user_id = None
     token = request.cookies.get(AUTH_COOKIE, "")
-    user = await run_in_threadpool(AUTH.user_for_token, token) if token else None
+    # P1-04: the session also learns its address and browser (for the list in
+    # the profile) and slides its idle expiry forward
+    session = await run_in_threadpool(
+        AUTH.session_for_token, token, _client_ip(request),
+        request.headers.get("user-agent")) if token else None
+    user = session["user"] if session else None
+    request.state.session_id = session["id"] if session else None
     request.state.via = "session" if user else None
     if not user:
         # plan 15 (5.7): the extension (and scripts) send a personal API token
@@ -1275,10 +1281,14 @@ def auth_login(request: Request, response: Response, payload: dict = Body(...)):
 
 
 def _signed_in(request, response, s) -> dict:
-    """Put a new session into the HttpOnly cookie (never into the body)."""
-    response.set_cookie(AUTH_COOKIE, s["token"], max_age=AUTH.SESSION_DAYS * 86400, path="/",
+    """Put a new session into the HttpOnly cookie (never into the body). The
+    cookie may outlive the idle expiry: the server decides (P1-04), so it is
+    kept up to the absolute limit and never has to be set again."""
+    response.set_cookie(AUTH_COOKIE, s["token"], max_age=AUTH.SESSION_MAX_DAYS * 86400, path="/",
                         httponly=True, samesite="strict", secure=_cookie_secure(request))
-    return {"user": AUTH.user_for_token(s["token"]), "expiresAt": s["expiresAt"]}
+    user = AUTH.user_for_token(s["token"], client_ip=_client_ip(request),
+                               user_agent=request.headers.get("user-agent"))
+    return {"user": user, "expiresAt": s["expiresAt"]}
 
 
 @app.post("/api/auth/logout")
@@ -1399,6 +1409,38 @@ def auth_email_change(request: Request, payload: dict = Body(...)):
                            str(payload.get("password") or ""), str(payload.get("email") or ""),
                            client_ip=_client_ip(request), link=_mail_link(request))
     return {"sentTo": sent_to}
+
+
+# ------------------------------------------- your sessions (P1-04)
+
+@app.get("/api/auth/sessions")
+def auth_sessions(request: Request):
+    """Where you are signed in: when, from which address and browser, the
+    current session marked. Never a token or its hash; a dashboard sign-in
+    only, never an API token."""
+    uid = _own_session(request)
+    return {"sessions": AUTH.list_sessions(uid, current_id=request.state.session_id),
+            "idleDays": AUTH.SESSION_IDLE_DAYS, "maxDays": AUTH.SESSION_MAX_DAYS}
+
+
+@app.delete("/api/auth/sessions/{session_id}")
+def auth_session_end(request: Request, response: Response, session_id: int):
+    """Sign out one of your sessions; ending the current one signs this
+    browser out too."""
+    uid = _own_session(request)
+    if not AUTH.end_session(uid, session_id):
+        raise HTTPException(status_code=404, detail=tr("Такого входа нет: возможно, он уже завершён."))
+    current = session_id == request.state.session_id
+    if current:
+        response.delete_cookie(AUTH_COOKIE, path="/")
+    return {"ended": session_id, "current": current}
+
+
+@app.post("/api/auth/sessions/end-others")
+def auth_sessions_end_others(request: Request):
+    """Sign out on every other device; this browser stays signed in."""
+    uid = _own_session(request)
+    return {"ended": AUTH.end_other_sessions(uid, request.state.session_id)}
 
 
 def _uid(request) -> int:
