@@ -808,8 +808,8 @@ def migrate(conn):
                      "GREATEST((SELECT MAX(id) FROM users), 1))")
     if _existing_columns(conn, "plans"):
         # SaaS sub-project 1: the base tariff everyone starts on. Empty limits
-        # and features: the catalog defaults (NF_USER_DAILY_* from .env, no
-        # count limits, every feature on) -- nothing changes for anyone.
+        # and features: the catalog defaults (NF_USER_DAILY_* and, since P1-10,
+        # NF_USER_MAX_TRACKED/OWN_CHANNELS from .env, every feature on).
         conn.execute(
             "INSERT INTO plans (slug, name, description, is_base, is_public, created_at, updated_at) "
             "SELECT 'free', 'Free', 'Базовый тариф', 1, 1, ?, ? "

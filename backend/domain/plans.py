@@ -5,8 +5,9 @@ sets their values per plan (application/plans.py stores them as JSON).
 A limit is a number or None (no limit); 0 means "not at all". A key missing
 from a stored plan takes the catalog default, so a key added to the code later
 never locks existing plans: daily limits default to the NF_USER_DAILY_* values
-from .env (0 there has always meant "no limit"), count limits to None and
-features to on.
+from .env (0 there has always meant "no limit"), tracked and own channels to
+NF_USER_MAX_TRACKED_CHANNELS / NF_USER_MAX_OWN_CHANNELS, other count limits to
+None and features to on.
 """
 import math
 import os
@@ -43,10 +44,14 @@ LIMITS = {
                      "default": lambda: _env_int("NF_USER_DAILY_SEARCH_CALLS", 20)},
     "llm_usd": {"label": "Расход на LLM в день", "unit": "$", "kind": "daily", "type": float,
                 "default": lambda: _env_usd("NF_USER_DAILY_LLM_USD", 0.25)},
+    # multi-user plan P1-10: every tracked channel is refreshed by the worker
+    # from the shared pool, every own channel is synced daily -- so these two
+    # are capped out of the box (0 in .env = no limit)
     "own_channels": {"label": "Свои каналы", "unit": "шт.", "kind": "count", "type": int,
-                     "default": _none},
+                     "default": lambda: _env_int("NF_USER_MAX_OWN_CHANNELS", 5)},
     "tracked_channels": {"label": "Каналы в отслеживании", "unit": "шт.", "kind": "count",
-                         "type": int, "default": _none},
+                         "type": int,
+                         "default": lambda: _env_int("NF_USER_MAX_TRACKED_CHANNELS", 200)},
     "topics": {"label": "Темы для алертов", "unit": "шт.", "kind": "count", "type": int,
                "default": _none},
     "saved_items": {"label": "Сохранённое", "unit": "шт.", "kind": "count", "type": int,

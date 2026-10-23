@@ -179,19 +179,16 @@ def finish_connect(state: str, code: str, today: date = None) -> dict:
     try:
         known = conn.execute("SELECT 1 FROM own_channels WHERE user_id = ? AND channel_id = ?",
                              (user_id, ch["channelId"])).fetchone()
-    finally:
-        conn.close()
-    if not known:              # reconnecting (consent expires) is never blocked
-        try:
-            PL.ensure_room(user_id, "own_channels")
-        except DP.PlanLimitReached as e:
+        if not known:          # reconnecting (consent expires) is never blocked
             try:
-                OA.revoke(refresh)
-            except Exception:
-                pass
-            raise ConnectError(str(e)) from None
-    conn = db.get_conn()
-    try:
+                PL.ensure_room(user_id, "own_channels", conn=conn)
+            except DP.PlanLimitReached as e:
+                conn.rollback()            # let go of the plan lock before calling Google
+                try:
+                    OA.revoke(refresh)
+                except Exception:
+                    pass
+                raise ConnectError(str(e)) from None
         conn.execute(
             "INSERT INTO own_channels (user_id, channel_id, title, published_at, scopes, token_enc, "
             "connected_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT (user_id, channel_id) DO UPDATE SET "

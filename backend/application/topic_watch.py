@@ -63,12 +63,12 @@ def add_topic(text: str, threshold: float = DEFAULT_THRESHOLD,
         raise ValueError("topic text is longer than 300 characters")
     if not 0 < float(threshold) < 1:
         raise ValueError("threshold must be between 0 and 1")
-    PL.ensure_room(user_id, "topics")
     if search_youtube:
         PL.ensure_feature(user_id, "topic_youtube_search")
     vec = np.asarray(_embed(text), dtype=np.float32)
     conn = db.get_conn()
     try:
+        PL.ensure_room(user_id, "topics", conn=conn)
         n = conn.execute("SELECT COUNT(*) FROM user_topics WHERE user_id = ?",
                          (user_id,)).fetchone()[0]
         if n >= MAX_TOPICS_PER_USER:

@@ -3,8 +3,8 @@
 plan_for(user_id) is the one answer every check goes through. No row in
 user_plans = the base plan; an expired row = the base plan at once (the
 worker's expire_due() records it later). Admins and the system user are not
-limited; single-user mode gets the catalog defaults, exactly as before plans
-existed. Nothing here deletes data: a smaller plan only stops new rows.
+limited; single-user mode gets the catalog's daily defaults and no count
+limits, exactly as before plans existed. Nothing here deletes data: a smaller plan only stops new rows.
 """
 import logging
 import math
@@ -44,6 +44,15 @@ def _defaults() -> Entitlements:
     return Entitlements(None, "Free", DP.resolve_limits({}), DP.resolve_features({}))
 
 
+def _single_user() -> Entitlements:
+    """One person on their own machine: the catalog's daily limits as always,
+    but no count limits -- the tracked/own channel caps of P1-10 protect a
+    pool shared between users, which single-user mode does not have."""
+    ent = _defaults()
+    limits = {k: (None if DP.LIMITS[k]["kind"] == "count" else v) for k, v in ent.limits.items()}
+    return Entitlements(None, ent.name, limits, ent.features)
+
+
 def _unlimited() -> Entitlements:
     return Entitlements(None, "Без ограничений", {k: None for k in DP.LIMITS},
                         {k: True for k in DP.FEATURES}, unlimited=True)
@@ -69,7 +78,7 @@ def _usable(plan) -> bool:
 
 def plan_for(user_id) -> Entitlements:
     if not multi_user_enabled():
-        return _defaults()
+        return _single_user()
     if user_id is None or user_id == SYSTEM_USER_ID:
         return _unlimited()
     conn = db.get_conn()
@@ -110,16 +119,16 @@ def _count(conn, key, user_id) -> int:
                         (user_id,)).fetchone()[0]
 
 
-def ensure_room(user_id, key: str) -> None:
+def ensure_room(user_id, key: str, *, conn) -> None:
+    """Refuse one more `key` row when the user's plan is full. Call it on the
+    connection that then inserts the row, before the insert: it holds a lock
+    per user and limit until that transaction ends, so two requests at once
+    cannot both see room for the last row (multi-user plan P1-10)."""
     limit = plan_for(user_id).limits[key]
     if limit is None:
         return
-    conn = db.get_conn()
-    try:
-        n = _count(conn, key, user_id)
-    finally:
-        conn.close()
-    if not DP.has_room(limit, n):
+    db.lock_until_commit(conn, f"plan_room:{key}", user_id)
+    if not DP.has_room(limit, _count(conn, key, user_id)):
         raise DP.PlanLimitReached(key, int(limit))
 
 

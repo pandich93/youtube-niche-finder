@@ -22,17 +22,19 @@ def save_item(kind: str, ref_id: str, payload: dict = None, note: str = None,
         raise ValueError(f"kind must be one of {VALID_KINDS}, got {kind!r}")
     if not ref_id:
         raise ValueError("ref_id is required")
-    PL.ensure_room(user_id, "saved_items")
     conn = db.get_conn()
     now = db.now_iso()
-    row = conn.execute(
-        "INSERT INTO saved_items (user_id, kind, ref_id, folder, note, payload, created_at) "
-        "VALUES (?,?,?,?,?,?,?) RETURNING id",
-        (user_id, kind, ref_id, folder or DEFAULT_FOLDER, note,
-         json.dumps(payload, ensure_ascii=False) if payload else None, now),
-    ).fetchone()
-    conn.commit()
-    conn.close()
+    try:
+        PL.ensure_room(user_id, "saved_items", conn=conn)
+        row = conn.execute(
+            "INSERT INTO saved_items (user_id, kind, ref_id, folder, note, payload, created_at) "
+            "VALUES (?,?,?,?,?,?,?) RETURNING id",
+            (user_id, kind, ref_id, folder or DEFAULT_FOLDER, note,
+             json.dumps(payload, ensure_ascii=False) if payload else None, now),
+        ).fetchone()
+        conn.commit()
+    finally:
+        conn.close()
     return {"id": row["id"], "kind": kind, "refId": ref_id, "folder": folder or DEFAULT_FOLDER,
            "note": note, "createdAt": now}
 
