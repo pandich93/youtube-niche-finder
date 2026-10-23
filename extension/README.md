@@ -2,7 +2,9 @@
 
 A local replacement for the vidIQ / NexLev panels: the same metrics, but the
 data comes from your own `niche-finder` backend, not someone else's cloud.
-The extension never talks to the outside world — only to `127.0.0.1`.
+By default the extension talks only to `127.0.0.1`; it can also work with a
+copy hosted on your own domain ([below](#a-service-on-your-domain)) — and with
+nothing else.
 
 ## What it shows
 
@@ -92,8 +94,35 @@ Besides the settings below, the popup has:
 5. Open any video on YouTube. The panel appears in the right-hand column.
 
 To update, replace the folder's contents and press ⟳ on the extension's card
-in `chrome://extensions`. The extension is not in the Chrome Web Store: it only
-works with a backend running on your own machine.
+in `chrome://extensions`. The extension is not in the Chrome Web Store yet;
+what publishing it takes is in [docs/chrome-web-store.md](../docs/chrome-web-store.md).
+
+## A service on your domain
+
+When niche-finder runs on a server for a group of people
+([docs/hosting.md](../docs/hosting.md)), point the extension at it:
+
+1. On the dashboard's MCP screen ("Personal tokens") create a token with the
+   scopes `read` and `write`. That is the minimum: `read` covers the panels,
+   `write` the POST requests — list badges (`POST /api/inspect/videos`),
+   comments, "collect", "track", "save", "watch this topic", alerts and the
+   metadata review. `mcp` is not needed.
+2. In the popup set the service address to `https://YOUR-DOMAIN`. Chrome asks
+   to allow access to that host — allow it. If you closed the prompt, the popup
+   shows an "Allow access to this address" button.
+3. Paste the token into "Access token".
+
+How it behaves:
+
+* Access is requested for that one host only (`optional_host_permissions`).
+  Changing the address back to localhost or to another host gives the old
+  host's access back; you can also revoke it on `chrome://extensions`.
+* The token is sent as `Authorization: Bearer` only to `127.0.0.1` /
+  `localhost` or over `https`. To a remote `http://` address it is not sent at
+  all, and the popup says so.
+* The popup warns when the service is reachable but no token is saved. A 401
+  from the service (no token, revoked, expired) shows the same hint on the
+  panels; a 403 names the scope the token lacks.
 
 The extension icon's badge tells you the state. A red `!` means the backend
 is unreachable: check that it's running and that the address in the
@@ -105,12 +134,12 @@ blue number is the count of unseen alerts. The badge is refreshed via
 
 | Setting | What it does |
 |---|---|
-| Backend address | if you changed `WEB_PORT`, enter the new address |
+| Service address | your local backend by default (`http://127.0.0.1:8080`); if you changed `WEB_PORT`, enter the new address. Another host — a [service on your domain](#a-service-on-your-domain): Chrome asks for access to it |
 | Fetch from the YouTube API | the video isn't in the database — pull it with one request (1 unit) and save it. Turn off to work strictly from the collected database |
 | Badges on cards | multipliers on thumbnails in lists |
 | Outliers only | the badge appears from ×1.5 and up |
 | Views-per-hour badge | a second, blue badge under the thumbnail with views per hour |
-| Access token | only for a server with sign-in (`NF_MULTI_USER=1`): a personal token from the dashboard's MCP screen ("Personal tokens"). Kept in `chrome.storage.local` (not synced to your other browsers), sent as `Authorization: Bearer` to the backend address only, never shown back in the popup |
+| Access token | only for a server with sign-in (`NF_MULTI_USER=1`): a personal token with `read` + `write` from the dashboard's MCP screen ("Personal tokens"). Kept in `chrome.storage.local` (not synced to your other browsers), sent as `Authorization: Bearer` to the service address only (to a remote one only over `https`), never shown back in the popup |
 
 ## Language
 
@@ -151,7 +180,16 @@ backend/application/inspection.py (and the other use cases)
 Why the network lives only in the service worker: the YouTube page is served
 over https, and a request to `http://127.0.0.1` from the page context is
 treated by the browser as mixed content. The extension has its own origin,
-and with `host_permissions` that request goes through normally.
+and with `host_permissions` that request goes through normally. The same goes
+for a remote service once its host is allowed. `service_url.js` (shared by the
+service worker and the popup) decides what is local and what access is needed.
+
+CORS on the backend: with `NF_EXTENSION_IDS` set (comma-separated extension
+IDs) it answers only those extensions. Without it, a local copy answers any
+`chrome-extension://` origin as before (an unpacked extension gets a different
+ID on every machine, and the service listens on `127.0.0.1` only), and a server
+with sign-in answers none. The extension itself doesn't depend on CORS: host
+access is enough.
 
 Every request carries an `X-NF-Client: extension` header. The backend rejects
 POST/PUT/PATCH/DELETE that have neither this header nor a JSON body (403), so
@@ -160,5 +198,7 @@ LLM-spending actions on your local backend. If you call the API from your own
 scripts, send the same header (any non-empty value).
 
 Permissions: `storage` (settings, synced via `chrome.storage.sync`),
-`alarms` (periodic health/alert checks for the icon badge), and host access
-to `127.0.0.1` / `localhost` only.
+`alarms` (periodic health/alert checks for the icon badge), host access
+to `127.0.0.1` / `localhost`, and optional host access (`https://*/*`,
+`http://*/*`) that Chrome grants only for the one service address you enter,
+after asking you.
