@@ -513,7 +513,11 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     token_hash TEXT NOT NULL UNIQUE,
     name TEXT,
     created_at TEXT,
-    last_used_at TEXT
+    last_used_at TEXT,
+    -- multi-user plan P1-03: NULL = no expiry (tokens made before it);
+    -- scopes, comma-separated: read (GET), write (changes), mcp (MCP over HTTP)
+    expires_at TEXT,
+    scopes TEXT NOT NULL DEFAULT 'read,write,mcp'
 );
 
 CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens(user_id);
@@ -579,6 +583,9 @@ _USER_ID = "BIGINT NOT NULL DEFAULT 1"
 MIGRATIONS = {
     # multi-user plan P0-04: NULL = active; set = blocked (no sign-in, no sessions, no tokens)
     "users": {"disabled_at": "TEXT"},
+    # multi-user plan P1-03: older tokens keep working as before -- no expiry,
+    # every scope -- until revoked
+    "api_tokens": {"expires_at": "TEXT", "scopes": "TEXT NOT NULL DEFAULT 'read,write,mcp'"},
     "tracked_channels": {"user_id": _USER_ID},
     "saved_items": {"user_id": _USER_ID},
     "alert_deliveries": {"user_id": _USER_ID},

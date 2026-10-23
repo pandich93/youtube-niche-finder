@@ -274,9 +274,14 @@ shows what is left; the Admin page adds up users' limits against the pool.
 Personal API tokens (sub-stages 5.7–5.8) sign in clients that cannot hold the
 cookie: the browser extension (its "Токен доступа" setting) and MCP over HTTP
 (`Authorization: Bearer nf_...`). Create one on the dashboard's MCP screen while
-signed in, or `make cli ARGS="create-token ann@example.com --name laptop"`. Only
-the SHA-256 is stored, the plaintext is shown once, a token cannot create or
-list tokens, and it acts as its user — their data and their YouTube budget.
+signed in, or `make cli ARGS="create-token ann@example.com --name laptop"`
+(`--days 30`, `--scopes read,mcp`). Only the SHA-256 is stored, the plaintext
+is shown once, a token cannot create or list tokens, and it acts as its user —
+their data and their YouTube budget. A token lives 90 days unless you choose
+otherwise (1–365, or 0 for no expiry). Its scopes limit it: `read` (GET
+routes), `write` (routes that change something), `mcp` (MCP over HTTP); 403
+`TokenScope` names the missing one. Tokens made before scopes existed keep
+all three and no expiry.
 With `NF_MULTI_USER=1`, the HTTP MCP services (`mcp-http`/`mcp-https`) require
 such a token (401 without one; set `MCP_PUBLIC_URL` to the address clients use);
 MCP over stdio stays local and acts as user 1.

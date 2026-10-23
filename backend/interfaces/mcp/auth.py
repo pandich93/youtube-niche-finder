@@ -31,7 +31,8 @@ class ApiTokenVerifier:
     async def verify_token(self, token: str):
         from application import auth
         user = await to_thread.run_sync(auth.user_for_api_token, token)
-        if not user:
+        # P1-03: expired tokens are already None; MCP also needs the mcp scope
+        if not user or not auth.token_allows(user, "mcp"):
             return None
         return AccessToken(token=token, client_id=str(user["id"]), scopes=[SCOPE],
                            subject=str(user["id"]))

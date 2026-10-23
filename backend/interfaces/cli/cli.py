@@ -320,7 +320,11 @@ def cmd_create_token(args):
     if uid is None:
         print(f"error: no user {args.email}", file=sys.stderr)
         sys.exit(1)
-    out(auth.create_api_token(uid, args.name))
+    try:
+        out(auth.create_api_token(uid, args.name, expires_in_days=args.days, scopes=args.scopes))
+    except auth.AuthError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_users(args):
@@ -413,6 +417,10 @@ def main():
     p = sub.add_parser("create-token", help=tr("личный токен для расширения и MCP по HTTP"))
     p.add_argument("email")
     p.add_argument("--name", default=None)
+    p.add_argument("--days", type=int, default=None,
+                   help=tr("срок жизни в днях, 1..365 (по умолчанию 90); 0 -- бессрочный"))
+    p.add_argument("--scopes", default=None,
+                   help=tr("права через запятую: read, write, mcp (по умолчанию все)"))
     p.set_defaults(fn=cmd_create_token)
 
     p = sub.add_parser("embed-videos", help=tr("досчитать эмбеддинги для уже собранных видео (0 quota)"))

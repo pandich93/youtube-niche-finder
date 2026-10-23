@@ -231,7 +231,7 @@ The dashboard and the Chrome extension talk to the backend through these 143 rou
 | `POST /api/auth/login` | Sign in with email and password; sets the session cookie. | body: `email`, `password` | free | -- |
 | `POST /api/auth/logout` | Sign out and drop the session. | -- | free | -- |
 | `GET /api/auth/tokens` | Your personal API tokens (names and dates, never the secret). | -- | free | -- |
-| `POST /api/auth/tokens` | Create a personal token for the extension or MCP over HTTP; shown once. | body: `name` | free | -- |
+| `POST /api/auth/tokens` | Create a personal token for the extension or MCP over HTTP; shown once. | body: `name`, `expiresInDays`, `scopes` | free | -- |
 | `DELETE /api/auth/tokens/{token_id}` | Revoke a personal token. | -- | free | -- |
 | `DELETE /api/auth/me` | Delete your own account and all of your data; needs your `password` and a dashboard sign-in. | body: `password` | free | -- |
 

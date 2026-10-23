@@ -63,6 +63,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **API tokens expire and have scopes** (multi-user plan P1-03).
+  - A new token lives 90 days by default. You choose the lifetime when you
+    create it (1 to 365 days, or no expiry) on the MCP screen, with
+    `expiresInDays` in the API, or with `create-token --days`.
+  - Each token has scopes: `read` for GET routes, `write` for changes, and
+    `mcp` for MCP over HTTP (`--scopes` in the CLI). The API answers 403
+    `TokenScope` when a scope is missing, and MCP refuses a token without
+    `mcp`.
+  - An expired token is refused like a wrong one.
+  - The MCP screen lists each token's expiry and scopes.
+  - Existing tokens keep every scope and no expiry until revoked.
 - **Feeds no longer show what other users watch** (multi-user plan P1-05).
   With accounts on, these are now limited to your own watchlist:
   - title changes and the repackaging feed (dashboard and MCP);

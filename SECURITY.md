@@ -80,6 +80,11 @@ What the server does for you:
   (`Authorization: Bearer nf_...`).
   - The token is shown once and stored as SHA-256.
   - It can be revoked, and it cannot create or list other tokens.
+  - It expires: 90 days by default, chosen when it is made (1 to 365 days, or
+    none). An expired token is refused like a wrong one.
+  - It does only what it was made for. `read` covers GET routes, `write`
+    covers routes that change something, and `mcp` covers MCP over HTTP. An
+    extension that only reads needs no `write`.
 - **Separated data.** Each user sees and changes only their own:
   - watchlist, swipe file, drafts and transcript queue;
   - alert read marks, connected channels, notification settings and API tokens.
@@ -180,8 +185,11 @@ Known limits (by design, worth knowing before you invite anyone):
   cannot block or delete themself there, the `local` user (the data from
   before accounts) can be blocked but not deleted, and the server always
   keeps one active admin. Each action is logged in `admin_actions`.
-- **API tokens do not expire.** Revoke unused ones on the MCP screen. Changing a
-  password revokes all of that user's tokens and sessions.
+- **Tokens made before expiry existed do not expire.** New tokens live 90 days
+  by default (1 to 365 days, or no expiry if you choose it). Older tokens keep
+  every scope and no expiry until revoked; the MCP screen marks them
+  "no expiry". Changing a password revokes all of that user's tokens and
+  sessions.
 - **MCP over HTTP needs `NF_MULTI_USER=1` to ask for a token.** Without that
   flag anyone who reaches it acts as user 1, so `server.py` refuses to listen
   on anything but loopback (`MCP_HOST` defaults to `127.0.0.1`) unless
