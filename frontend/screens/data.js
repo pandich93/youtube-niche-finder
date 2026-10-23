@@ -1,6 +1,7 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, q, num, esc, toast, tile, sectionHead, notice, state } from '../ui.js';
 import { view, plabel, collectForm, wireCollect, render } from '../shared.js';
+import { isAdmin } from '../plan-state.js';
 import { dict, fmtDate } from '../i18n.js';
 import ru from '../i18n/ru/data.js';
 import en from '../i18n/en/data.js';
@@ -32,10 +33,10 @@ async function viewData() {
     ${freshnessCard(fresh)}
     <div id="costProfiles"></div>
     ${collectForm()}
-    <div class="card">
+    ${isAdmin() ? `<div class="card">
       ${sectionHead(t('refreshTitle'), t('refreshSub'))}
       <button class="btn btn-ghost" id="refreshBtn" type="button">${t('refreshNow')}</button>
-    </div>`;
+    </div>` : ''}`;
   wireCollect(render);
   loadNotifySettings();
   loadCostProfiles();

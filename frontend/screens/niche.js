@@ -1,6 +1,7 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, q, num, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, sponsorBlock, state, nicheTemplateRiskBlock, nichePolicyBlock, outlierTraitsBlock, mountProfit } from '../ui.js';
 import { view, plabel, nicheOverviewBlock, render } from '../shared.js';
+import { isAdmin } from '../plan-state.js';
 import { dict } from '../i18n.js';
 import ru from '../i18n/ru/niche.js';
 import en from '../i18n/en/niche.js';
@@ -194,8 +195,8 @@ function thumbStylesBlock(d, slug) {
   if (!d) return '';
   const head = sectionHead(t('thumbStylesTitle'), t('thumbStylesSub'),
     `<input type="text" id="thumbQuery" placeholder="${esc(t('thumbQueryPlaceholder'))}" style="width:260px">`);
-  const embedBtn = `<button class="btn btn-ghost btn-sm" id="thumbEmbed" data-slug="${esc(slug)}" type="button">
-    ${t('thumbEmbedBtn')}</button>`;
+  const embedBtn = isAdmin() ? `<button class="btn btn-ghost btn-sm" id="thumbEmbed" data-slug="${esc(slug)}" type="button">
+    ${t('thumbEmbedBtn')}</button>` : '';
   const body = d.found
     ? d.styles.map((s) => `<div style="margin-bottom:14px">
         <div class="row-sub">${t('styleLine', {
@@ -311,7 +312,7 @@ function wireNicheTagEditor(slug, tagGroup) {
    через POST /api/tags/proposed/resolve. Не привязана к tagGroup выбранной
    в tagStatsSection: proposed-теги могут быть в любой группе. */
 function proposedTagsSection(proposed) {
-  if (!proposed.length) return '';
+  if (!proposed.length || !isAdmin()) return '';
   return `
     <div class="card">
       ${sectionHead(t('proposedTitle'), t('proposedSub'))}

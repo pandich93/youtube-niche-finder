@@ -781,10 +781,11 @@ def list_video_tags(niche: str = None, video_id: str = None):
 
 
 @app.post("/api/tags")
-def tag_videos(payload: dict = Body(...)):
+def tag_videos(request: Request, payload: dict = Body(...)):
     try:
         return TG.tag_videos(payload.get("items") or [], source=payload.get("source"),
-                             replace=bool(payload.get("replace", False)))
+                             replace=bool(payload.get("replace", False)),
+                             user_id=_uid(request), may_overwrite=_is_admin(request))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -802,21 +803,24 @@ def proposed_tags(niche: str):
 
 
 @app.post("/api/tags/proposed/resolve")
-def resolve_proposed_tag(payload: dict = Body(...)):
+def resolve_proposed_tag(request: Request, payload: dict = Body(...)):
     return TG.resolve_proposed_tag(payload.get("videoId") or payload.get("video_id"),
                                    payload.get("tagGroup") or payload.get("tag_group"),
-                                   payload.get("tag"), bool(payload.get("accept")))
+                                   payload.get("tag"), bool(payload.get("accept")),
+                                   user_id=_uid(request), may_overwrite=_is_admin(request))
 
 
 # ------------------------------------------------------------ AI enrichment (03)
 
 @app.post("/api/enrich/channels")
-def enrich_channels(limit: int = 50):
+def enrich_channels(request: Request, limit: int = 50):
+    require_admin(request)
     return EN.classify_channels(limit=limit)
 
 
 @app.post("/api/enrich/videos")
-def enrich_videos(limit: int = 100):
+def enrich_videos(request: Request, limit: int = 100):
+    require_admin(request)
     return EN.tag_new_videos(limit=limit)
 
 
@@ -911,9 +915,10 @@ def mark_events_seen(request: Request, payload: dict = Body(default={})):
 
 
 @app.post("/api/events/scan")
-def scan_events():
+def scan_events(request: Request):
     """Manual trigger -- the worker already runs this on WORKER_ALERTS_INTERVAL_MIN,
     this is for "check right now" from the dashboard/popup without waiting."""
+    require_admin(request)
     return AL.scan()
 
 
@@ -1244,6 +1249,22 @@ def _uid(request) -> int:
     return getattr(request.state, "user_id", LOCAL_USER_ID)
 
 
+def _is_admin(request) -> bool:
+    """The local operator in single-user mode; with accounts, an admin signed
+    in by session or API token (unlike _admin, which tariffs keep to a session)."""
+    if not multi_user_enabled():
+        return True
+    user = getattr(request.state, "user", None)
+    return bool(user and user.get("isAdmin"))
+
+
+def require_admin(request):
+    """Work on the shared corpus or the server's own schedule -- the worker
+    does it anyway (multi-user plan P0-02)."""
+    if not _is_admin(request):
+        raise HTTPException(status_code=403, detail=str(PD.AdminOnly()))
+
+
 def _session_user(request):
     """Token management needs a real sign-in: a leaked API token must not be
     able to mint more tokens or list them."""
@@ -1493,9 +1514,10 @@ def search_thumbnails(q: str = "", niche: str = None, limit: int = 12):
 
 
 @app.post("/api/thumbnails/embed")
-def embed_thumbnails(limit: int = 200, niche: str = None):
+def embed_thumbnails(request: Request, limit: int = 200, niche: str = None):
     """Plan 13: vectors for thumbnails that have none -- by click, like the
     WORKER_THUMB_EMBED step. Downloads from i.ytimg.com, zero API quota."""
+    require_admin(request)
     return TS.embed_thumbnails(limit=limit, niche=niche)
 
 
@@ -1571,7 +1593,8 @@ def collect_niche(payload: dict = Body(...)):
 
 
 @app.post("/api/refresh")
-def refresh(payload: dict = Body(default={})):
+def refresh(request: Request, payload: dict = Body(default={})):
+    require_admin(request)
     _need_key()
     stats_res = collector.refresh_stats(API_KEY, scope=payload.get("scope", "recent"),
                                         period=payload.get("period", "30d"),
@@ -1649,12 +1672,18 @@ def save_transcript(request: Request, video_id: str, payload: dict = Body(...)):
     if not text.strip():
         raise HTTPException(status_code=400, detail="text is required")
     return TR.save_transcript(video_id, text, language=payload.get("language"),
-                              user_id=_uid(request))
+                              user_id=_uid(request), may_overwrite=_is_admin(request))
 
 
 @app.post("/api/transcripts/{video_id}/reindex")
 def reindex_transcript(request: Request, video_id: str):
-    return TR.reindex_transcript(video_id, user_id=_uid(request))
+    try:
+        return TR.reindex_transcript(video_id, user_id=_uid(request),
+                                     may_overwrite=_is_admin(request))
+    except TR.TranscriptNotYours:
+        raise HTTPException(status_code=403, detail=tr(
+            "Транскрипт этого видео сохранил другой пользователь; пересчитать его может "
+            "он или администратор."))
 
 
 @app.get("/api/transcripts/search")
@@ -1713,7 +1742,8 @@ def niche_clusters():
 
 
 @app.post("/api/niche-clusters/recompute")
-def recompute_niche_clusters(k: int = None):
+def recompute_niche_clusters(request: Request, k: int = None):
+    require_admin(request)
     return NCL.compute_clusters(k=k)
 
 

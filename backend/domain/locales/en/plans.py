@@ -45,4 +45,9 @@ MESSAGES = {
     "limits.{key}: нужно целое число": "limits.{key}: a whole number is required",
     "features.{key}: неизвестная функция": "features.{key}: unknown feature",
     "features.{key}: нужно true или false": "features.{key}: true or false is required",
+    # multi-user plan P0-02: shared corpus and the server's own work
+    "Это делает фоновый сборщик по расписанию; вручную это "
+    "запускает только администратор сервера.":
+        "The background collector does this on schedule; only the server's administrator "
+        "can run it by hand.",
 }

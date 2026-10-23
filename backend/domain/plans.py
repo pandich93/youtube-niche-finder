@@ -141,3 +141,14 @@ class FeatureOff(Exception):
         self.key = key
         super().__init__(tr("«{feature}» не входит в ваш тариф "
                             "-- сменить тариф можно на странице «Тариф»", feature=tr(FEATURES[key])))
+
+
+class AdminOnly(Exception):
+    """An operation on the shared corpus or the server's own work -- not a
+    tariff matter (multi-user plan P0-02)."""
+
+    key = "admin"
+
+    def __init__(self):
+        super().__init__(tr("Это делает фоновый сборщик по расписанию; вручную это "
+                            "запускает только администратор сервера."))

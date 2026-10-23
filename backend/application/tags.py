@@ -12,12 +12,18 @@ from domain import tag_stats as TS
 VALID_SOURCES = ("manual", "claude-mcp", "llm")
 
 
-def tag_videos(items: list, source: str, replace: bool = False) -> dict:
+def tag_videos(items: list, source: str, replace: bool = False, user_id: int = None,
+               may_overwrite: bool = True) -> dict:
     """items: [{"video_id", "tag_group", "tags": [...]}, ...] -- each item
     tags one video in one group; pass several items to cover multiple
     videos/groups in one call. replace=True makes an item's `tags` the full
     set for that (video_id, tag_group), removing anything else already
-    there (subject to the same source protection as a plain upsert)."""
+    there (subject to the same source protection as a plain upsert).
+
+    Tags are shared by everyone (multi-user plan P0-02): new rows record
+    user_id as their author, and with may_overwrite=False (a regular user)
+    only that author's own rows are replaced or re-written; the interfaces
+    pass True for an admin and in single-user mode."""
     if source not in VALID_SOURCES:
         raise ValueError(f"source must be one of {VALID_SOURCES}, got {source!r}")
     if not items:
@@ -33,12 +39,14 @@ def tag_videos(items: list, source: str, replace: bool = False) -> dict:
             if not video_id or not tag_group:
                 raise ValueError("each item needs video_id and tag_group")
             if replace:
-                r = db.replace_video_tags(conn, video_id, tag_group, tags, source)
+                r = db.replace_video_tags(conn, video_id, tag_group, tags, source,
+                                          created_by=user_id, may_overwrite=may_overwrite)
                 written += r["written"]
                 blocked += r["blocked"]
             else:
                 for tag in tags:
-                    if db.upsert_video_tag(conn, video_id, tag_group, tag, source):
+                    if db.upsert_video_tag(conn, video_id, tag_group, tag, source,
+                                           created_by=user_id, may_overwrite=may_overwrite):
                         written += 1
                     else:
                         blocked += 1
@@ -111,22 +119,28 @@ def list_proposed_tags(niche: str) -> list:
             "createdAt": r["created_at"]} for r in rows]
 
 
-def resolve_proposed_tag(video_id: str, tag_group: str, tag: str, accept: bool) -> dict:
+def resolve_proposed_tag(video_id: str, tag_group: str, tag: str, accept: bool,
+                         user_id: int = None, may_overwrite: bool = True) -> dict:
     """accept=True: the tag joins the niche's taxonomy (clears `proposed`, now
     counted by tag_stats). accept=False: the row is deleted outright -- a
-    rejected proposal isn't a real tag."""
+    rejected proposal isn't a real tag. With may_overwrite=False only a
+    proposal user_id created can be resolved (multi-user plan P0-02); the
+    background LLM's proposals belong to the operator, so an admin's."""
+    owned = "AND (? OR created_by = ?)"
     conn = db.get_conn()
     try:
         if accept:
             cur = conn.execute(
                 "UPDATE video_tags SET proposed = 0 "
                 "WHERE video_id = ? AND tag_group = ? AND tag = ? AND source = 'llm' "
-                "AND proposed = 1", (video_id, tag_group, tag))
+                f"AND proposed = 1 {owned}",
+                (video_id, tag_group, tag, bool(may_overwrite), user_id))
         else:
             cur = conn.execute(
                 "DELETE FROM video_tags "
                 "WHERE video_id = ? AND tag_group = ? AND tag = ? AND source = 'llm' "
-                "AND proposed = 1", (video_id, tag_group, tag))
+                f"AND proposed = 1 {owned}",
+                (video_id, tag_group, tag, bool(may_overwrite), user_id))
         found = cur.rowcount > 0
         conn.commit()
     finally:
