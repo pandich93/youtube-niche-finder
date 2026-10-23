@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-24
+
+The closed-beta round of the multi-user plan (P0 and P1, without billing):
+one copy on your own domain can now serve other people safely. People sign
+up and reset passwords by email, see and end their sessions, and get only
+their own rows even if a query forgets its filter (Row-Level Security). The
+admin has an action log, tariffs that cap channels, LLM spend that holds
+under parallel calls, and key rotation that keeps saved secrets readable.
+Hosting comes with HTTPS, backups, JSON logs, metrics and alerts, and the
+extension and MCP work against the domain with expiring, scoped tokens. The
+dashboard speaks English too. 100 MCP tools, 155 HTTP routes.
+
 ### Added
 
 - **Row-Level Security in Postgres** (multi-user plan P1-02). Personal tables
@@ -1336,7 +1348,8 @@ Initial public release.
   coverage badge.
 - MIT license.
 
-[Unreleased]: https://github.com/pandich93/youtube-niche-finder/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/pandich93/youtube-niche-finder/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/pandich93/youtube-niche-finder/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/pandich93/youtube-niche-finder/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/pandich93/youtube-niche-finder/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/pandich93/youtube-niche-finder/compare/v0.1.0...v0.2.0
