@@ -19,6 +19,7 @@ five-minute tour; everything below goes deeper into one part.
 
 | Document | Read it when you want to |
 |---|---|
+| [hosting.md](hosting.md) | put one copy on a server with your domain for a group of people: HTTPS, accounts, MCP over HTTPS, scheduled backups and restoring them |
 | [SECURITY.md](../SECURITY.md) | report a vulnerability, or check what protects single-user and multi-user mode before giving anyone an account |
 | [PRIVACY.md](../PRIVACY.md) | know exactly what is stored, which hosts the app contacts, and how to delete everything |
 

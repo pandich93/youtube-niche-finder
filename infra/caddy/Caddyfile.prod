@@ -1,0 +1,25 @@
+# Public front door for a hosted copy (docker-compose.prod.yml, docs/hosting.md).
+# Caddy gets and renews a Let's Encrypt certificate for NF_DOMAIN by itself:
+# the domain's DNS must point at this server and ports 80 and 443 must be open.
+#
+# One domain serves both entry points:
+#   https://NF_DOMAIN/mcp  -> MCP over streamable HTTP (mcp-http), with the
+#                             OAuth protected-resource metadata it advertises
+#   everything else        -> the dashboard and /api (web)
+{$NF_DOMAIN} {
+	@mcp path /mcp /mcp/* /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/*
+	handle @mcp {
+		# no `encode` here: MCP answers may be an event stream
+		reverse_proxy mcp-http:8765
+	}
+
+	handle {
+		encode zstd gzip
+		reverse_proxy web:8080
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}

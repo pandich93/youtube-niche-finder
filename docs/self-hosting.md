@@ -131,4 +131,6 @@ make cli ARGS="create-user friend@example.com"
 
 Read [SECURITY.md](../SECURITY.md) (HTTPS, `NF_COOKIE_SECURE`,
 `OWN_TOKENS_KEY`, backups, YouTube's 30-day storage rule) before giving
-anyone an account.
+anyone an account. To put the copy on a server with your own domain, follow
+[hosting.md](hosting.md): `make prod-up` sets up HTTPS, accounts, MCP over
+HTTPS and scheduled backups in one go.

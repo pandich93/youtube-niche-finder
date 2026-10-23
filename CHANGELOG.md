@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Hosting on your own domain** (`docker-compose.prod.yml`, `make prod-up`,
+  [docs/hosting.md](docs/hosting.md)). Caddy is the only service published,
+  on ports 80 and 443, and gets a Let's Encrypt certificate for `NF_DOMAIN`.
+  It serves the dashboard and MCP over HTTPS (`/mcp`, personal API tokens) on
+  the same name. Accounts, the Secure cookie, the allowed host and the trusted
+  proxy are set for you. The dashboard and Postgres are not published at all.
+  A `backup` service runs `pg_dump` every `BACKUP_INTERVAL_HOURS`, checks each
+  dump by a trial restore into a scratch database, and keeps the newest
+  `BACKUP_KEEP`. `make prod-backup` makes one right away. Compose refuses to
+  start without `NF_DOMAIN` and `POSTGRES_PASSWORD`.
 - **Blocking and deleting accounts** (multi-user mode). On the Admin page an
   admin creates an account (its one-time password is shown once), blocks or
   unblocks it (sessions and API tokens, MCP included, stop at once) and

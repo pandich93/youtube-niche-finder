@@ -103,7 +103,9 @@ What the server does for you:
 
 What you have to do before you give anyone an account:
 
-1. **Put it behind HTTPS.** Use a reverse proxy (Caddy, nginx) with a real
+1. **Put it behind HTTPS.** `docker-compose.prod.yml` (`make prod-up`, see
+   [docs/hosting.md](docs/hosting.md)) does everything in this point for you.
+   By hand: use a reverse proxy (Caddy, nginx) with a real
    certificate. Set `NF_COOKIE_SECURE=1` and add your domain to
    `NF_ALLOWED_HOSTS`. Do not publish port 8080 or Postgres (5433) to the
    internet. Set `NF_TRUSTED_PROXIES` to the proxy's address or subnet (for
@@ -114,11 +116,13 @@ What you have to do before you give anyone an account:
 2. **Set `OWN_TOKENS_KEY`** (a Fernet key) and keep it only in `.env`. Losing
    it makes stored tokens unreadable. Leaking it exposes them.
 3. **Back up Postgres.** It now holds accounts, sessions and encrypted
-   secrets. Protect the backups like the server itself.
+   secrets. Protect the backups like the server itself. The production setup
+   dumps it on a schedule and checks each dump by a trial restore; copy the
+   dumps off the server ([docs/hosting.md](docs/hosting.md#backups)).
 4. **Give each person their own account.** Admins are marked `--admin`; over
-   HTTP their only extra power is editing tariffs and users' tariffs
-   (`/api/admin/*`, signed-in dashboard sessions only). Accounts themselves are
-   created only from the command line on the server.
+   HTTP their extra powers are tariffs and accounts: creating, disabling and
+   deleting them (`/api/admin/*`, signed-in dashboard sessions only).
+   Otherwise accounts are created from the command line on the server.
 5. **Read YouTube's API policies for a service others use.**
    - III.D.1.c: one API project per application. That is why the installation
      uses one key, and users do not bring their own.
