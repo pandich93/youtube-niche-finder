@@ -254,21 +254,17 @@ def collect_niche(api_key: str, query: str, label: str = None, language: str = N
 
 
 def _record_search_calls(conn, n: int) -> int:
-    """Persist search.list calls against today's Pacific-Time quota day (that is
-    when Google actually resets the 100-calls/day bucket) and return the new
-    running total for the day."""
-    if n <= 0:
-        return search_calls_today(conn)
-    key = f"search_calls_{P.pacific_date_key()}"
-    total = int(db.get_meta(conn, key) or 0) + n
-    db.set_meta(conn, key, total)
-    return total
+    """Today's running total of search.list calls (Pacific-Time day, when
+    Google resets the 100-calls/day bucket). The YouTube client already
+    counted each call, atomically, when it reserved it before sending
+    (multi-user plan P0-05); counting here too would count every search
+    twice, so n is only the callers' note of what they just did."""
+    return search_calls_today(conn)
 
 
 def search_calls_today(conn) -> int:
     """How many search.list calls have already been spent today (Pacific Time)."""
-    key = f"search_calls_{P.pacific_date_key()}"
-    return int(db.get_meta(conn, key) or 0)
+    return int(db.get_meta(conn, yt.search_meta_key()) or 0)
 
 
 def units_today(conn) -> int:

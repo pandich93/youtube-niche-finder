@@ -28,6 +28,7 @@ from infrastructure.postgres.repositories import (  # noqa: F401
     clear_login_failures,
     get_meta,
     incr_meta,
+    incr_meta_capped,
     link_video_niche,
     login_failures,
     mark_alert_delivered,

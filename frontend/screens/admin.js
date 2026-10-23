@@ -70,7 +70,7 @@ async function viewAdmin() {
     view.innerHTML = notice(t('adminOnly'));
     return;
   }
-  const [{ plans, catalog }, { users }] = await Promise.all([
+  const [{ plans, catalog }, { users, pool }] = await Promise.all([
     api('/api/admin/plans'), api('/api/admin/users')]);
   const options = (sel) => plans.filter((p) => !p.archived || p.id === sel).map((p) =>
     `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}${p.archived ? t('archivedSuffix') : ''}</option>`).join('');
@@ -92,6 +92,10 @@ async function viewAdmin() {
     </div>
     <div class="card" style="margin-top:12px">
       ${sectionHead(t('usersTitle'), t('usersSub'))}
+      ${pool ? `<p class="row-sub">${t('poolLine', { open: fmtNum(pool.openToUsers), limit: fmtNum(pool.dailyLimit),
+        reserve: fmtNum(pool.workerReserve), used: fmtNum(pool.usedToday), total: fmtNum(pool.userLimitsTotal),
+        unlimited: fmtNum(pool.unlimitedUsers) })}${pool.overbooked || pool.unlimitedUsers
+        ? ` <span class="chip">${t('poolWarn')}</span>` : ''}</p>` : ''}
       ${table([
         { label: 'Email', render: (u) => `${esc(u.email)}${u.isAdmin ? ` <span class="chip">${t('adminChip')}</span>` : ''}${u.disabled ? ` <span class="chip">${t('disabledChip')}</span>` : ''}` },
         { label: t('colPlan'), render: (u) => (u.isAdmin ? unlimited : `<select class="uplan" data-id="${u.id}">${options(u.plan.id)}</select>`) },

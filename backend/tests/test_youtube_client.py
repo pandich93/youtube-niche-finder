@@ -1,9 +1,9 @@
 """Tests for infrastructure/youtube/client.py's endpoint wrappers: which path
 and parameters each one sends, 50-id batching, paging, and the fallbacks
 (batchGetStats -> videos.list, forHandle -> forUsername, comments disabled).
-requests.get is replaced by a recorder and the units counter by a no-op, so
+requests.get is replaced by a recorder and the budget reserve by a no-op, so
 there is no network and no database. Retries and unit accounting in _get
-itself are covered by test_unit_quota.py.
+itself are covered by test_unit_quota.py and test_quota_concurrency.py.
 Run with pytest, or directly: python3 tests/test_youtube_client.py
 """
 import os
@@ -40,7 +40,8 @@ def api(monkeypatch):
         return replies.pop(0) if replies else _Resp()
 
     monkeypatch.setattr(yt.requests, "get", get)
-    monkeypatch.setattr(yt, "_record_units", lambda path: None)
+    monkeypatch.setattr(yt, "_reserve", lambda path: [])
+    monkeypatch.setattr(yt, "_refund", lambda taken: None)
     return sent, replies
 
 
@@ -84,7 +85,8 @@ def test_a_network_error_carries_no_key(monkeypatch):
             f"Max retries exceeded with url: {url}?part=x&key={headers['X-Goog-Api-Key']}")
 
     monkeypatch.setattr(yt.requests, "get", boom)
-    monkeypatch.setattr(yt, "_record_units", lambda path: None)
+    monkeypatch.setattr(yt, "_reserve", lambda path: [])
+    monkeypatch.setattr(yt, "_refund", lambda taken: None)
     monkeypatch.setattr(yt.time, "sleep", lambda s: None)
     with pytest.raises(yt.YouTubeUnreachable) as e:
         yt._get("channels", secret, id="UC1")

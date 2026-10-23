@@ -16,6 +16,8 @@ import schema_scope  # noqa: F401,E402
 
 import infrastructure.postgres as db  # noqa: E402
 import infrastructure.youtube.client as yt  # noqa: E402
+
+_REAL_SEARCH_VIDEOS = yt.search_videos
 import interfaces.mcp.server as srv  # noqa: E402
 from application import collecting as collector  # noqa: E402
 from application import discovery as trends  # noqa: E402
@@ -33,12 +35,23 @@ def setup_module(_=None):
 
 # --------------------------------------------------- persistent search quota
 
-def test_search_calls_accumulate_across_calls_same_day():
+class _Ok:
+    status_code = 200
+    text = "{}"
+
+    def json(self):
+        return {"items": []}
+
+
+def test_search_calls_accumulate_across_calls_same_day(monkeypatch):
+    # the YouTube client counts every search.list it sends (multi-user plan P0-05)
+    monkeypatch.setattr(yt.requests, "get", lambda *a, **k: _Ok())
     conn = db.get_conn()
     before = collector.search_calls_today(conn)
-    collector._record_search_calls(conn, 3)
-    collector._record_search_calls(conn, 2)
-    conn.commit()
+    conn.close()
+    for _ in range(5):
+        yt._get("search", "KEY")
+    conn = db.get_conn()
     after = collector.search_calls_today(conn)
     conn.close()
     assert after == before + 5
@@ -46,7 +59,7 @@ def test_search_calls_accumulate_across_calls_same_day():
 
 def test_quota_reports_daily_total_not_just_this_call():
     conn = db.get_conn()
-    collector._record_search_calls(conn, 10)
+    db.incr_meta(conn, yt.search_meta_key(), 10)
     conn.commit()
     calls_today = collector.search_calls_today(conn)
     conn.close()
@@ -319,13 +332,25 @@ def test_collect_niche_spends_one_search_call_per_page(monkeypatch):
     cid = "UCcollectniche0000000001"
     pages_served = []
 
-    def fake_search(k, query, page_token=None, **kw):
-        pages_served.append(page_token)
-        n = len(pages_served)
-        return {"items": [{"id": {"videoId": f"vcollectniche{n}"}}],
-                "nextPageToken": "tok" if n < 2 else None}
+    class Page:
+        status_code = 200
+        text = "{}"
 
-    monkeypatch.setattr(yt, "search_videos", fake_search)
+        def __init__(self, n):
+            self.n = n
+
+        def json(self):
+            return {"items": [{"id": {"videoId": f"vcollectniche{self.n}"}}],
+                    "nextPageToken": "tok" if self.n < 2 else None}
+
+    def fake_get(url, params=None, **kw):
+        # search.list through the real client, so each page is charged as in production
+        assert url.endswith("/search")
+        pages_served.append((params or {}).get("pageToken"))
+        return Page(len(pages_served))
+
+    monkeypatch.setattr(yt, "search_videos", _REAL_SEARCH_VIDEOS)      # _no_network stubbed it
+    monkeypatch.setattr(yt.requests, "get", fake_get)
     monkeypatch.setattr(yt, "videos_list",
                         lambda k, ids, **kw: [_api_video(v, cid) for v in ids])
     monkeypatch.setattr(yt, "channels_list", lambda k, ids, **kw: [_api_channel(cid)])
