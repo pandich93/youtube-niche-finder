@@ -40,13 +40,15 @@ C.seed_fallback()
 
 def _build_server():
     """stdio: local, user 1, no sign-in. HTTP with NF_MULTI_USER=1: bearer API
-    tokens required, tools act as the token's user (plan 15, 5.8)."""
+    tokens required, tools act as the token's user (plan 15, 5.8). Either way
+    texts follow the user's saved language (i18n plan)."""
     from interfaces.mcp import auth as mcp_auth
     if mcp_auth.http_auth_enabled():
         return MCPServer("niche-finder", token_verifier=mcp_auth.ApiTokenVerifier(),
                          auth=mcp_auth.auth_settings(),
-                         middleware=[mcp_auth.quota_owner_middleware])
-    return MCPServer("niche-finder")
+                         middleware=[mcp_auth.locale_middleware,
+                                     mcp_auth.quota_owner_middleware])
+    return MCPServer("niche-finder", middleware=[mcp_auth.locale_middleware])
 
 
 mcp = _build_server()
@@ -268,7 +270,7 @@ def request_transcript(video_id: str, reason: str = None, compare_group: str = N
     """Queue a video for a manually-pasted transcript (stage 19) -- we never
     fetch subtitles automatically, someone has to copy the text off
     YouTube's own transcript panel and paste it via the dashboard's
-    Транскрипты screen. Shows up in list_transcript_queue(status='pending')
+    Transcripts screen ("Транскрипты" in Russian). Shows up in list_transcript_queue(status='pending')
     until then."""
     return transcripts_uc.request_transcript(video_id, reason=reason, user_id=_uid(),
                                              compare_group=compare_group,
@@ -1597,8 +1599,8 @@ def embed_thumbnails(limit: int = 200, niche: str = None) -> dict:
     read_only_hint=True, destructive_hint=False,
     idempotent_hint=True, open_world_hint=False))
 def own_channels() -> dict:
-    """Your own channels connected through Google OAuth (dashboard: "Мои
-    каналы" -> connect) with their real last-28-day numbers from YouTube
+    """Your own channels connected through Google OAuth (dashboard: "My
+    channels" / "Мои каналы" -> connect) with their real last-28-day numbers from YouTube
     Analytics: views, revenue, RPM, median retention. `status` says whether
     OAuth is configured and what is missing. Impressions and thumbnail CTR are
     not in the Analytics API. Zero Data API quota."""

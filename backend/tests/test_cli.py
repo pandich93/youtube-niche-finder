@@ -8,6 +8,7 @@ Run with pytest, or directly: python3 tests/test_cli.py
 """
 import json
 import os
+import re
 import sys
 import types
 
@@ -255,6 +256,23 @@ def test_doctor_all_good(run, healthy):
     assert code == 0 and "Всё в порядке." in out
     assert healthy["categories"].calls[0] == ((GOOD_KEY,), {"region_code": "US"})
     assert "потрачен 1 unit" in out
+
+
+def test_doctor_speaks_the_installation_language(run, healthy, monkeypatch):
+    # i18n plan: NF_DEFAULT_LOCALE=en -> the report and its problems in English
+    monkeypatch.setenv("NF_DEFAULT_LOCALE", "en")
+    code, out, _ = run("doctor")
+    assert code == 0 and "All good." in out and "1 unit spent" in out
+    assert not re.search("[А-Яа-яЁё]", out), out
+    code, out, _ = run("doctor", key="")
+    assert code == 1 and "Put YOUTUBE_API_KEY" in out and "skipped (no key)" in out
+
+
+def test_help_speaks_the_installation_language(run, monkeypatch):
+    monkeypatch.setenv("NF_DEFAULT_LOCALE", "en")
+    code, out, _ = run("--help")
+    assert code == 0 and "check the key, network, database" in out
+    assert not re.search("[А-Яа-яЁё]", out), out
 
 
 def test_doctor_without_a_key_skips_the_network_check(run, healthy):

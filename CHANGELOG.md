@@ -17,8 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   language. The API answers in the language of `X-NF-Locale` or
   `Accept-Language`, else `NF_DEFAULT_LOCALE` (default `ru`, so existing
   installs and scripts see the same texts). New route `PUT /api/me/locale`;
-  `/api/auth/me` gains a `locale` field. MCP prompts and the CLI stay Russian
-  for now.
+  `/api/auth/me` gains a `locale` field. MCP scenarios (prompts) are written
+  in the language the user saved in the dashboard, and tool hints over MCP
+  follow it too; scenario titles and the CLI (`--help`, `doctor`) use
+  `NF_DEFAULT_LOCALE`.
 - **Tariffs, configured by an admin** (SaaS sub-project 1, multi-user mode):
   daily limits, count limits and features per tariff; a base tariff Free that
   everyone starts on; users pick a free tariff themselves on the new "Тариф"
