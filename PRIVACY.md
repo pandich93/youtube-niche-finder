@@ -61,9 +61,25 @@ Everything lives in the Postgres database you point the app at (by default the
   and the account itself; the OAuth tokens of their own channels are revoked
   at Google first. What is shared stays: the public YouTube data everyone
   collects, and a transcript or tag they added, which passes to the
-  operator. `admin_actions` keeps who deleted which email and when.
+  operator. The action log (below) keeps who deleted which email and when.
   Blocking an account (Admin page, `cli.py disable-user`) deletes nothing
   but ends its sessions and tokens at once.
+- **Action log** (`audit_log`, multi-user plan P1-07) -- a security record
+  only admins read (the "Admin" page, `GET /api/admin/audit`): sign-ins and
+  failed sign-ins, sign-ups, password changes and resets, email changes (the
+  old and the new address), API tokens created and revoked (id, name, scopes,
+  expiry), tariff changes, and admins' actions on accounts and tariffs. Each
+  entry has the time, the account that acted and the account acted on (as
+  numbers; the email only where the account may disappear: creating and
+  deleting it, an email change), the client address (the same one the
+  sign-in throttle uses) and short details. It **never** holds a password, a
+  token, a reset link or a secret: such fields are dropped before writing. A
+  failed sign-in names the account only if it exists -- whatever was typed
+  for an unknown email is not written down, since it is sometimes a password.
+  The log has no `user_id` column and **outlives a deleted account**: who
+  signed in from where and who deleted what is exactly what a security log is
+  for. Entries are removed by age instead: `NF_AUDIT_RETENTION_DAYS` (180 by
+  default; 0 keeps them forever), checked by the worker once a day.
 - **Your own channels** (plan 14, only if you connect one) — the channel id and
   title, the granted scopes, the OAuth refresh token **encrypted** with
   `OWN_TOKENS_KEY` from your `.env` (Fernet; the key is never in the database),

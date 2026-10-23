@@ -36,6 +36,7 @@ except Exception:  # pragma: no cover
 import infrastructure.postgres as db
 import infrastructure.youtube.client as yt
 from application import alerts as AL
+from application import audit as AUD
 from application import auth as AUTH
 from application import briefs as BR
 from application import channel_tracking as T
@@ -160,6 +161,14 @@ def _client_ip(request) -> str:
         if not _is_trusted(hop, nets):
             return hop
     return hops[0] if hops else host
+
+
+@app.middleware("http")
+async def audit_scope(request, call_next):
+    """Многопользовательский план P1-07: адрес клиента (тот же _client_ip, что
+    у лимитов входа) -- для записей журнала действий, сделанных этим запросом."""
+    with AUD.client_ip_scope(_client_ip(request)):
+        return await call_next(request)
 
 
 @app.middleware("http")
@@ -1513,28 +1522,34 @@ def admin_plans(request: Request):
     return {"plans": PL.list_plans(), "catalog": PL.catalog()}
 
 
+def _plan_logged(admin: int, event: str, plan: dict) -> dict:
+    """P1-07: an admin's change to a tariff goes into the action log."""
+    AUD.log(event, actor_id=admin, details={"id": plan["id"], "slug": plan["slug"]})
+    return plan
+
+
 @app.post("/api/admin/plans")
 def admin_plan_create(request: Request, payload: dict = Body(...)):
-    _admin(request)
-    return _plan_call(PL.create_plan, payload)
+    admin = _admin(request)
+    return _plan_logged(admin, "plan_create", _plan_call(PL.create_plan, payload))
 
 
 @app.put("/api/admin/plans/{plan_id}")
 def admin_plan_update(request: Request, plan_id: int, payload: dict = Body(...)):
-    _admin(request)
-    return _plan_call(PL.update_plan, plan_id, payload)
+    admin = _admin(request)
+    return _plan_logged(admin, "plan_update", _plan_call(PL.update_plan, plan_id, payload))
 
 
 @app.post("/api/admin/plans/{plan_id}/archive")
 def admin_plan_archive(request: Request, plan_id: int):
-    _admin(request)
-    return _plan_call(PL.set_archived, plan_id, True)
+    admin = _admin(request)
+    return _plan_logged(admin, "plan_archive", _plan_call(PL.set_archived, plan_id, True))
 
 
 @app.post("/api/admin/plans/{plan_id}/restore")
 def admin_plan_restore(request: Request, plan_id: int):
-    _admin(request)
-    return _plan_call(PL.set_archived, plan_id, False)
+    admin = _admin(request)
+    return _plan_logged(admin, "plan_restore", _plan_call(PL.set_archived, plan_id, False))
 
 
 @app.get("/api/admin/users")
@@ -1603,6 +1618,28 @@ def auth_delete_me(request: Request, response: Response, payload: dict = Body(de
     result = _users_call(UA.delete_self, request.state.user_id, str(payload.get("password") or ""))
     response.delete_cookie(AUTH_COOKIE, path="/")
     return result
+
+
+# ------------------------------------------------------ action log (P1-07)
+
+@app.get("/api/admin/audit")
+def admin_audit(request: Request, event: str = None, user: str = None, since: str = None,
+                until: str = None, page: int = 1, perPage: int = 50):
+    """Admin: the action log, newest first -- sign-ins and failed ones,
+    password and email changes, sign-ups, API tokens, tariffs, account and
+    tariff actions. Filters: event (a name or a group), user (id or email, as
+    actor or target), since/until (YYYY-MM-DD, both included); page/perPage
+    (at most 200). Never a password or a token. With accounts it needs an
+    admin signed in to the dashboard: an API token does not read client
+    addresses."""
+    require_admin(request)
+    if multi_user_enabled() and getattr(request.state, "via", None) != "session":
+        raise HTTPException(status_code=403, detail="admins only, signed in to the dashboard")
+    try:
+        return AUD.search(event=event, user=user, since=since, until=until, page=page,
+                          per_page=perPage)
+    except AUD.AuditError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 # ------------------------------------------------------ own channels (plan 14)

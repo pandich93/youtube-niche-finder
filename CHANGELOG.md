@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Action log** (multi-user plan P1-07). Sign-ins and failed sign-ins,
+  sign-ups, password changes and resets, email changes, API tokens created
+  and revoked, tariff changes, and what admins do to accounts and tariffs are
+  written to `audit_log` with the time, who acted, on whom, the client
+  address and short details -- never a password, a token or a secret.
+  - The **Admin** page has a new "Action log" card with filters by event (or
+    group), user (email or number) and period, and pages; the route is
+    `GET /api/admin/audit`, for admins signed in to the dashboard only.
+  - The log outlives a deleted account and is cleared by age:
+    `NF_AUDIT_RETENTION_DAYS` (180 by default, 0 = forever), by the worker.
+  - The rows of `admin_actions` (P0-04) move into it on the first start, and
+    that table is dropped.
 - **Sign-up, password reset and a profile page** (multi-user plan P1-06).
   - With mail set up (`SMTP_HOST`, `SMTP_FROM`, see `.env.example`), the
     sign-in screen offers "Create an account" and "Forgot password". Both mail

@@ -37,7 +37,7 @@ def _clean(monkeypatch):
     conn = db.get_conn()
     for table in db.PERSONAL_TABLES:
         conn.execute(f"DELETE FROM {table} WHERE user_id <> 1")
-    conn.execute("DELETE FROM admin_actions")
+    conn.execute("DELETE FROM audit_log")
     conn.execute("DELETE FROM login_attempts")
     conn.execute("DELETE FROM users WHERE id != 1")
     conn.execute("UPDATE users SET is_admin = 1, disabled_at = NULL WHERE id = 1")
@@ -144,9 +144,11 @@ def test_delete_removes_only_that_users_rows(monkeypatch):
         counters = {r["key"] for r in conn.execute(
             "SELECT key FROM login_attempts WHERE kind = 'email'").fetchall()}
         assert "ann@example.com" not in counters and "bob@example.com" in counters
-        log = conn.execute("SELECT admin_id, action, target_email FROM admin_actions").fetchall()
-        assert [(r["admin_id"], r["action"], r["target_email"]) for r in log] == [
-            (boss, "delete", "ann@example.com")]
+        # P1-07: the action log outlives the account -- it is not in PERSONAL_TABLES
+        log = conn.execute("SELECT actor_id, event, target_id, target_email FROM audit_log "
+                           "WHERE event LIKE 'account%'").fetchall()
+        assert [(r["actor_id"], r["event"], r["target_id"], r["target_email"]) for r in log] == [
+            (boss, "account_delete", ann, "ann@example.com")]
     finally:
         conn.close()
 

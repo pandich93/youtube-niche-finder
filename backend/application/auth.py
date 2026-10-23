@@ -15,6 +15,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 import infrastructure.postgres as db
+from application import audit as AUD
 from application import plans as PL
 from domain import login_throttle as LT
 from domain import password_policy as PP
@@ -187,21 +188,32 @@ def login(email: str, password: str, client_ip: str = None) -> dict:
     conn = db.get_conn()
     try:
         wait = max(_wait(conn, kind, key, now) for kind, key in keys)
-        if wait:
-            raise LoginThrottled(wait)
         # a blocked account fails like a wrong password (multi-user plan P0-04)
         row = conn.execute("SELECT id, password_hash FROM users WHERE email = ? "
                            "AND disabled_at IS NULL", (_norm(email),)).fetchone()
+        # P1-07: a failure names the account only when it exists -- an unknown
+        # "email" is not written down (it may be a password typed in the wrong box)
+        target = row["id"] if row else None
+        if wait:
+            AUD.record(conn, "login_failed", target_id=target, ip=client_ip,
+                       details={"reason": "throttled"})
+            conn.commit()
+            raise LoginThrottled(wait)
         if not row or not row["password_hash"]:
             _DUMMY_HASH = _DUMMY_HASH or hash_password(secrets.token_hex(8))
             verify_password(password or "", _DUMMY_HASH)
+            AUD.record(conn, "login_failed", target_id=target, ip=client_ip,
+                       details={"reason": "no password" if row else "unknown or blocked"})
             _failed(conn, keys, now)
             raise AuthError(_FAIL)
         if not verify_password(password or "", row["password_hash"]):
+            AUD.record(conn, "login_failed", target_id=target, ip=client_ip,
+                       details={"reason": "wrong password"})
             _failed(conn, keys, now)
             raise AuthError(_FAIL)
         db.clear_login_failures(conn, "email", _norm(email))
         s = start_session(conn, row["id"])
+        AUD.record(conn, "login", actor_id=row["id"], target_id=row["id"], ip=client_ip)
         conn.commit()
         return s
     finally:
@@ -321,6 +333,9 @@ def create_api_token(user_id: int, name: str = None, expires_in_days=None, scope
                            "expires_at, scopes) VALUES (?,?,?,?,?,?) RETURNING id",
                            (user_id, _token_hash(token), (name or "").strip()[:80] or None,
                             db.now_iso(), expires_at, ",".join(picked))).fetchone()
+        AUD.record(conn, "token_create", actor_id=user_id, target_id=user_id,
+                   details={"id": row["id"], "name": (name or "").strip()[:80] or None,
+                            "scopes": picked, "expiresAt": expires_at})
         conn.commit()
     finally:
         conn.close()
@@ -345,8 +360,11 @@ def list_api_tokens(user_id: int) -> list:
 def revoke_api_token(user_id: int, token_id: int) -> bool:
     conn = db.get_conn()
     try:
-        row = conn.execute("DELETE FROM api_tokens WHERE id = ? AND user_id = ? RETURNING id",
+        row = conn.execute("DELETE FROM api_tokens WHERE id = ? AND user_id = ? RETURNING id, name",
                            (token_id, user_id)).fetchone()
+        if row:
+            AUD.record(conn, "token_revoke", actor_id=user_id, target_id=user_id,
+                       details={"id": token_id, "name": row["name"]})
         conn.commit()
         return bool(row)
     finally:
