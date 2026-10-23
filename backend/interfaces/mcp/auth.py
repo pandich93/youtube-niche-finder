@@ -44,10 +44,14 @@ def auth_settings() -> AuthSettings:
 
 
 def current_user_id() -> int:
-    """The token's user on HTTP, the local user on stdio (no token)."""
+    """The token's user on HTTP, the local user on stdio (no token). With
+    sign-in on, a call without a token is nobody, not user 1 (multi-user
+    plan P1-01): the SDK refuses such requests first, this is the backstop."""
     tok = get_access_token()
     if tok and tok.client_id and tok.client_id.isdigit():
         return int(tok.client_id)
+    if http_auth_enabled():
+        raise PermissionError("no API token: MCP over HTTP needs Authorization: Bearer nf_...")
     return LOCAL_USER_ID
 
 
@@ -69,7 +73,7 @@ def may_overwrite() -> bool:
     operator)."""
     tok = get_access_token()
     if not (tok and tok.client_id and tok.client_id.isdigit()):
-        return True
+        return not http_auth_enabled()
     from application import auth
     return auth.is_admin(int(tok.client_id))
 

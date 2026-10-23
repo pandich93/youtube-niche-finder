@@ -11,14 +11,13 @@ import json
 
 import infrastructure.postgres as db
 from application import plans as PL
-from domain.users import LOCAL_USER_ID
 
 VALID_KINDS = ("video", "channel")
 DEFAULT_FOLDER = "default"
 
 
 def save_item(kind: str, ref_id: str, payload: dict = None, note: str = None,
-              folder: str = None, user_id: int = LOCAL_USER_ID) -> dict:
+              folder: str = None, *, user_id: int) -> dict:
     if kind not in VALID_KINDS:
         raise ValueError(f"kind must be one of {VALID_KINDS}, got {kind!r}")
     if not ref_id:
@@ -52,7 +51,7 @@ def _shape(r) -> dict:
 
 
 def list_items(kind: str = None, folder: str = None, limit: int = 200,
-               user_id: int = LOCAL_USER_ID) -> list:
+               *, user_id: int) -> list:
     where, params = ["user_id = ?"], [user_id]
     if kind:
         where.append("kind = ?")
@@ -71,7 +70,7 @@ def list_items(kind: str = None, folder: str = None, limit: int = 200,
     return [_shape(r) for r in rows]
 
 
-def list_folders(user_id: int = LOCAL_USER_ID) -> list:
+def list_folders(*, user_id: int) -> list:
     conn = db.get_conn()
     rows = conn.execute(
         "SELECT folder, COUNT(*) AS n FROM saved_items WHERE user_id = ? GROUP BY folder "
@@ -80,7 +79,7 @@ def list_folders(user_id: int = LOCAL_USER_ID) -> list:
     return [{"folder": r["folder"], "count": r["n"]} for r in rows]
 
 
-def delete_item(item_id: int, user_id: int = LOCAL_USER_ID) -> dict:
+def delete_item(item_id: int, *, user_id: int) -> dict:
     """Only the owner's item goes; someone else's id deletes nothing
     (deleted: None)."""
     conn = db.get_conn()
@@ -91,7 +90,7 @@ def delete_item(item_id: int, user_id: int = LOCAL_USER_ID) -> dict:
     return {"deleted": row["id"] if row else None}
 
 
-def is_saved(kind: str, ref_id: str, user_id: int = LOCAL_USER_ID) -> bool:
+def is_saved(kind: str, ref_id: str, *, user_id: int) -> bool:
     conn = db.get_conn()
     row = conn.execute(
         "SELECT 1 FROM saved_items WHERE kind=? AND ref_id=? AND user_id=? LIMIT 1",

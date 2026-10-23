@@ -47,25 +47,25 @@ def _world():
 
 
 def test_profiles_are_created_changed_listed_and_removed():
-    p = PF.save_profile("All AI", per_video_usd=5, per_minute_usd=0.5, monthly_usd=20)
+    p = PF.save_profile("All AI", per_video_usd=5, per_minute_usd=0.5, monthly_usd=20, user_id=1)
     assert p["name"] == "All AI" and p["per_minute_usd"] == 0.5
-    same = PF.save_profile("All AI", per_video_usd=7)                      # same name: an edit
+    same = PF.save_profile("All AI", per_video_usd=7, user_id=1)                      # same name: an edit
     assert same["id"] == p["id"] and same["per_video_usd"] == 7.0 and same["monthly_usd"] == 0.0
-    renamed = PF.save_profile("Voice + edit", per_video_usd=40, profile_id=p["id"])
-    assert renamed["id"] == p["id"] and [x["name"] for x in PF.list_profiles()] == ["Voice + edit"]
-    assert PF.delete_profile(p["id"])["removed"] and PF.list_profiles() == []
-    assert not PF.delete_profile(p["id"])["removed"]
+    renamed = PF.save_profile("Voice + edit", per_video_usd=40, profile_id=p["id"], user_id=1)
+    assert renamed["id"] == p["id"] and [x["name"] for x in PF.list_profiles(user_id=1)] == ["Voice + edit"]
+    assert PF.delete_profile(p["id"], user_id=1)["removed"] and PF.list_profiles(user_id=1) == []
+    assert not PF.delete_profile(p["id"], user_id=1)["removed"]
 
 
 def test_bad_profiles_are_refused():
     for kw in ({"name": ""}, {"name": "x", "per_video_usd": -1}, {"name": "x", "monthly_usd": "abc"},
                {"name": "x", "per_minute_usd": float("nan")}, {"name": "x", "profile_id": 999}):
         with pytest.raises(ValueError):
-            PF.save_profile(**kw)
-    PF.save_profile("a")
-    b = PF.save_profile("b")
+            PF.save_profile(**kw, user_id=1)
+    PF.save_profile("a", user_id=1)
+    b = PF.save_profile("b", user_id=1)
     with pytest.raises(ValueError):
-        PF.save_profile("a", profile_id=b["id"])                         # name taken
+        PF.save_profile("a", profile_id=b["id"], user_id=1)                         # name taken
 
 
 def test_profiles_are_personal():
@@ -79,8 +79,8 @@ def test_profiles_are_personal():
 
 
 def test_a_video_s_profit_uses_its_category_rpm_and_lifetime_views():
-    PF.save_profile("p", per_video_usd=10, per_minute_usd=1)               # 10 + 10 min = 20
-    r = PF.profit_estimate(video_id="pv0")
+    PF.save_profile("p", per_video_usd=10, per_minute_usd=1, user_id=1)               # 10 + 10 min = 20
+    r = PF.profit_estimate(video_id="pv0", user_id=1)
     v = r["video"]
     assert r["found"] and r["profile"]["name"] == "p" and v["cost"] == 20.0 and v["views"] == 10_000
     assert v["revenue"]["mid"] == round(10 * r["rpm"]["mid"], 2)
@@ -89,42 +89,42 @@ def test_a_video_s_profit_uses_its_category_rpm_and_lifetime_views():
 
 
 def test_a_channel_s_month_counts_its_recent_long_uploads():
-    PF.save_profile("p", per_video_usd=10, monthly_usd=50)
-    r = PF.profit_estimate(channel_id=CH)
+    PF.save_profile("p", per_video_usd=10, monthly_usd=50, user_id=1)
+    r = PF.profit_estimate(channel_id=CH, user_id=1)
     m = r["month"]
     assert r["found"] and r["target"]["title"] == "Profit channel"
     assert m["uploads"] == 3 and m["costPerVideo"] == 10.0 and m["cost"] == 80.0   # 5, 15, 25 days old
     assert r["uploadsBasis"].startswith("long videos")
-    assert PF.profit_estimate(channel_id=CH, videos_per_month=10)["month"]["uploads"] == 10
+    assert PF.profit_estimate(channel_id=CH, videos_per_month=10, user_id=1)["month"]["uploads"] == 10
 
 
 def test_a_small_channel_is_warned_that_ad_revenue_may_be_zero():
-    assert PF.profit_estimate(channel_id=CH)["yppWarning"]
+    assert PF.profit_estimate(channel_id=CH, user_id=1)["yppWarning"]
     conn = db.get_conn()
     conn.execute("UPDATE channels SET subscriber_count = 5000 WHERE channel_id = ?", (CH,))
     conn.commit()
     conn.close()
-    assert PF.profit_estimate(channel_id=CH)["yppWarning"] is None
+    assert PF.profit_estimate(channel_id=CH, user_id=1)["yppWarning"] is None
 
 
 def test_a_connected_channel_uses_its_real_rpm(monkeypatch):
     monkeypatch.setattr(PF, "_real_rpm", lambda cid, uid: 3.5)
-    r = PF.profit_estimate(channel_id=CH)
+    r = PF.profit_estimate(channel_id=CH, user_id=1)
     assert r["rpm"] == {"low": 3.5, "mid": 3.5, "high": 3.5} and "real" in r["rpmBasis"]
     assert r["yppWarning"] is None
 
 
 def test_a_niche_s_typical_video_and_a_month_of_them():
-    PF.save_profile("p", per_video_usd=10)
-    r = PF.profit_estimate(niche=NICHE)
+    PF.save_profile("p", per_video_usd=10, user_id=1)
+    r = PF.profit_estimate(niche=NICHE, user_id=1)
     assert r["found"] and r["target"]["format"] == "long" and r["video"]["views"] == 10_000
     assert r["month"]["uploads"] == PF.DEFAULT_VIDEOS_PER_MONTH
     assert r["month"]["monthlyViews"] == 10_000 * PF.DEFAULT_VIDEOS_PER_MONTH
-    assert PF.profit_estimate(niche=NICHE, videos_per_month=2)["month"]["uploads"] == 2
+    assert PF.profit_estimate(niche=NICHE, videos_per_month=2, user_id=1)["month"]["uploads"] == 2
 
 
 def test_without_a_profile_the_costs_are_zero_and_the_result_says_so():
-    r = PF.profit_estimate(video_id="pv0")
+    r = PF.profit_estimate(video_id="pv0", user_id=1)
     assert r["video"]["cost"] == 0.0 and r["profile"]["id"] is None and "cost profile" in r["hint"]
 
 
@@ -132,10 +132,10 @@ def test_targets_and_inputs_are_checked():
     for kw in ({}, {"channel_id": CH, "video_id": "pv0"}, {"video_id": "pv0", "videos_per_month": -1},
                {"video_id": "pv0", "profile": "nope"}):
         with pytest.raises(ValueError):
-            PF.profit_estimate(**kw)
-    assert PF.profit_estimate(video_id="nope")["found"] is False
-    assert PF.profit_estimate(channel_id="UCnope")["found"] is False
-    assert PF.profit_estimate(niche="nope")["found"] is False
+            PF.profit_estimate(**kw, user_id=1)
+    assert PF.profit_estimate(video_id="nope", user_id=1)["found"] is False
+    assert PF.profit_estimate(channel_id="UCnope", user_id=1)["found"] is False
+    assert PF.profit_estimate(niche="nope", user_id=1)["found"] is False
 
 
 def test_http_and_mcp_doors():

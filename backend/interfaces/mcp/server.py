@@ -869,7 +869,7 @@ def packaging_changes(period: str = "30d", channel_id: str = None, field: str = 
     if video_id:
         return packaging_mod.packaging_history(video_id)
     return packaging_mod.packaging_feed(period=period, channel_id=channel_id,
-                                        field=field, limit=limit)
+                                        field=field, limit=limit, user_id=None)
 
 
 @mcp.tool(annotations=ToolAnnotations(

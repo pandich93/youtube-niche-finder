@@ -203,8 +203,9 @@ async def rate_limit(request, call_next):
 @app.middleware("http")
 async def locale_scope(request, call_next):
     loc = i18n.normalize(request.headers.get("x-nf-locale"))
-    if loc is None and request.url.path.startswith("/api/"):
-        loc = await run_in_threadpool(_saved_locale, getattr(request.state, "user_id", LOCAL_USER_ID))
+    uid = getattr(request.state, "user_id", None)
+    if loc is None and uid is not None and request.url.path.startswith("/api/"):
+        loc = await run_in_threadpool(_saved_locale, uid)
     if loc is None:
         loc = i18n.from_accept_language(request.headers.get("accept-language"))
     token = i18n.set_locale(loc)
@@ -275,10 +276,13 @@ def _feature_block(request, user_id):
 
 @app.middleware("http")
 async def session_guard(request, call_next):
-    request.state.user_id = LOCAL_USER_ID
     request.state.user = None
     if not multi_user_enabled():
+        request.state.user_id = LOCAL_USER_ID
         return await call_next(request)
+    # with accounts nobody is anybody until signed in (P1-01): a public route
+    # must not end up acting as user 1
+    request.state.user_id = None
     token = request.cookies.get(AUTH_COOKIE, "")
     user = await run_in_threadpool(AUTH.user_for_token, token) if token else None
     request.state.via = "session" if user else None
@@ -1110,7 +1114,7 @@ def packaging_feed(period: str = "30d", channel_id: str = None, field: str = Non
     and the views-per-hour effect. Zero quota."""
     try:
         return PKG.packaging_feed(period=period, channel_id=channel_id, field=field,
-                                  limit=limit)
+                                  limit=limit, user_id=None)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -1133,7 +1137,7 @@ def digest_send(request: Request):
 @app.get("/api/settings/notifications")
 def notification_settings(request: Request):
     """Whether Telegram/webhook are set and the mode -- never the secrets."""
-    return NS.get(_uid(request))
+    return NS.get(user_id=_uid(request))
 
 
 @app.put("/api/settings/notifications")
@@ -1150,8 +1154,8 @@ def save_notification_settings(request: Request, payload: dict = Body(...)):
 
 @app.post("/api/settings/notifications/test")
 def test_notification(request: Request):
-    notifier = NS.notifier_for(_uid(request))
-    if NS.target_name(_uid(request)) == "none":
+    notifier = NS.notifier_for(user_id=_uid(request))
+    if NS.target_name(user_id=_uid(request)) == "none":
         raise HTTPException(status_code=409, detail="no Telegram or webhook set up yet")
     return {"sent": bool(notifier.send(tr("\U0001F9EA niche-finder: тестовое сообщение. "
                                           "Если вы это видите, уведомления настроены верно.")))}
@@ -1247,7 +1251,17 @@ def auth_logout(request: Request, response: Response):
 
 
 def _uid(request) -> int:
-    return getattr(request.state, "user_id", LOCAL_USER_ID)
+    """Whose personal data this request works on (multi-user plan P1-01): the
+    local user without accounts, else whoever signed in -- never user 1 by
+    default. session_guard already answers 401 off the public routes; this
+    keeps a public route that asks for a user from acting as the admin."""
+    if not multi_user_enabled():
+        return LOCAL_USER_ID
+    uid = getattr(request.state, "user_id", None)
+    if uid is None:
+        raise HTTPException(status_code=401,
+                            detail=tr("Sign in first: NF_MULTI_USER is on -- войдите в дашборде."))
+    return uid
 
 
 def _is_admin(request) -> bool:

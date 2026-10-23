@@ -74,7 +74,7 @@ def test_channel_analytics_carries_ypp_eligibility():
 
 
 def test_inspect_channel_carries_ypp_eligibility_without_fetching():
-    out = I.inspect_channel(None, CH, fetch=False)
+    out = I.inspect_channel(None, CH, fetch=False, user_id=1)
     assert out["found"] is True
     assert out["yppEligibility"]["status"] == "shorts-path-met"
 

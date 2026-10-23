@@ -17,7 +17,6 @@ from application import search as Q
 from application import transcripts as TR
 from domain import idea_verdicts as IV
 from domain.i18n import tr
-from domain.users import LOCAL_USER_ID
 
 HOOK_WORDS = 75          # ~30 seconds of speech
 SIMILAR_LIMIT = 5
@@ -83,7 +82,7 @@ def _references(conn, video_id):
 
 
 def build_brief(video_id: str, niche: str = None, use_llm: bool = True,
-                save: bool = True, gap_topic: str = None, user_id: int = LOCAL_USER_ID) -> dict:
+                save: bool = True, gap_topic: str = None, *, user_id: int) -> dict:
     """Brief for a video of your own, built from one outlier: its numbers and
     hook, why it worked and title patterns of the niche, whether the topic is
     already covered (source excluded), title candidates, and similar videos as

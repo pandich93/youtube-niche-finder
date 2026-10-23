@@ -201,7 +201,7 @@ def test_vph_matches_nexlev_definition():
 
 
 def test_channel_analytics_and_compare():
-    T.track("UC0000000000000000000b", "test")
+    T.track("UC0000000000000000000b", "test", user_id=1)
     a = T.channel_analytics("UC0000000000000000000b")
     assert a["found"] and a["profile"]["subscribers"] == 9400
     assert a["growthAvailable"] and a["growth"]["30d"]["views"]["delta"] > 0

@@ -46,6 +46,7 @@ from application import sponsors as sponsors_mod
 from application import thumbnail_search as thumbsearch_mod
 from application import topic_watch as topic_mod
 from domain import periods as P
+from domain.users import LOCAL_USER_ID
 from infrastructure.llm import factory as llm_factory
 from infrastructure.llm.null import NullProvider
 from infrastructure.redact import redact
@@ -280,7 +281,7 @@ def cycle():
         _mark("freshness")
 
     if DO_OWN_SYNC and _due("own_sync", OWN_SYNC_INTERVAL_MIN):
-        st = _safe("own channels status", own_mod.status) or {}
+        st = _safe("own channels status", lambda: own_mod.status(user_id=LOCAL_USER_ID)) or {}
         # plan 25: a sync needs the client and the key, not the redirect -- a
         # wrong web-mode redirect blocks connecting only, never the numbers
         if st and not st.get("missing", ["?"]):

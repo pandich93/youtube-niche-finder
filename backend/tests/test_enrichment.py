@@ -308,7 +308,7 @@ def test_resolve_proposed_tag_accept_makes_it_count_in_tag_stats():
     conn.commit()
     conn.close()
 
-    out = T.resolve_proposed_tag("v-enr-accept", "theme", "new-angle", accept=True)
+    out = T.resolve_proposed_tag("v-enr-accept", "theme", "new-angle", accept=True, user_id=None)
     assert out["found"] is True
 
     assert T.list_proposed_tags("n-enr-accept") == []
@@ -330,7 +330,7 @@ def test_resolve_proposed_tag_reject_deletes_it():
     conn.commit()
     conn.close()
 
-    out = T.resolve_proposed_tag("v-enr-reject", "theme", "bad-angle", accept=False)
+    out = T.resolve_proposed_tag("v-enr-reject", "theme", "bad-angle", accept=False, user_id=None)
     assert out["found"] is True
 
     tags = [t["tag"] for t in T.list_video_tags(video_id="v-enr-reject")]

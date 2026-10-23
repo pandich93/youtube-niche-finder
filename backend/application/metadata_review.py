@@ -16,7 +16,6 @@ from domain import keywords as K
 from domain import metadata as MD
 from domain import periods as P
 from domain.i18n import tr
-from domain.users import LOCAL_USER_ID
 
 OUTLIER_THRESHOLD_DEFAULT = 3.0
 
@@ -204,7 +203,7 @@ def _shape_draft(r) -> dict:
 
 def save_draft(title: str, description: str = "", tags=None, niche: str = None,
               channel_id: str = None, is_short: bool = False, review: dict = None,
-              source_video_id: str = None, user_id: int = LOCAL_USER_ID) -> dict:
+              source_video_id: str = None, *, user_id: int) -> dict:
     PL.ensure_room(user_id, "drafts")
     conn = db.get_conn()
     now = db.now_iso()
@@ -222,7 +221,7 @@ def save_draft(title: str, description: str = "", tags=None, niche: str = None,
 
 
 def list_drafts(channel_id: str = None, unpublished_only: bool = False,
-                limit: int = 100, user_id: int = LOCAL_USER_ID) -> list:
+                limit: int = 100, *, user_id: int) -> list:
     where, params = ["user_id = ?"], [user_id]
     if channel_id:
         where.append("channel_id = ?")
@@ -240,7 +239,7 @@ def list_drafts(channel_id: str = None, unpublished_only: bool = False,
     return [_shape_draft(r) for r in rows]
 
 
-def link_draft(draft_id: int, video_id: str, user_id: int = LOCAL_USER_ID) -> dict:
+def link_draft(draft_id: int, video_id: str, *, user_id: int) -> dict:
     """Call once the draft has actually been published, so draft_outcomes()
     can compare prediction to reality later. Only the owner can link it:
     someone else's draft id raises LookupError."""
@@ -254,7 +253,7 @@ def link_draft(draft_id: int, video_id: str, user_id: int = LOCAL_USER_ID) -> di
     return {"id": draft_id, "videoId": video_id}
 
 
-def draft_outcomes(min_age_days: float = 7.0, user_id: int = LOCAL_USER_ID) -> list:
+def draft_outcomes(min_age_days: float = 7.0, *, user_id: int) -> list:
     """For linked drafts old enough to have real numbers, surface what the
     review predicted next to what actually happened -- the only honest way
     to learn whether these signals are worth anything for THIS channel and

@@ -219,7 +219,7 @@ def test_digest_send_forces_todays_digest_out(run, monkeypatch):
                         lambda **kw: calls.append(kw) or {"sent": True, "events": 3})
     code, out, _ = run("digest-send")
     assert json.loads(out) == {"sent": True, "events": 3}
-    assert calls == [{"force": True}]
+    assert calls == [{"force": True, "user_id": 1}]
 
 
 def test_seed_runs_the_demo_seeder(run, monkeypatch):

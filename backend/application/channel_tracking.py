@@ -29,7 +29,6 @@ from domain import metrics as M
 from domain import monetization as MZ
 from domain import periods as P
 from domain.i18n import tr
-from domain.users import LOCAL_USER_ID
 from infrastructure.categories import repository as C
 
 
@@ -46,7 +45,7 @@ def _dt(iso):
 # ------------------------------------------------------------- watchlist
 
 def list_tracked(faceless: bool = None, content_format: str = None, topic: str = None,
-                 user_id: int = LOCAL_USER_ID) -> list:
+                 *, user_id: int) -> list:
     """This user's watchlist. faceless/content_format/topic (stage 03) filter on
     channels.llm_labels -- a channel never AI-labeled simply doesn't match."""
     conn = db.get_conn()
@@ -117,7 +116,7 @@ def resolve_channel_id(conn, api_key: str, raw: str) -> str:
     return ch["id"]
 
 
-def track(channel_id: str, note: str = None, user_id: int = LOCAL_USER_ID) -> dict:
+def track(channel_id: str, note: str = None, *, user_id: int) -> dict:
     conn = db.get_conn()
     try:
         already = conn.execute("SELECT 1 FROM tracked_channels WHERE user_id = ? AND channel_id = ?",
@@ -131,7 +130,7 @@ def track(channel_id: str, note: str = None, user_id: int = LOCAL_USER_ID) -> di
     return {"channelId": channel_id, "tracked": True, "note": note}
 
 
-def untrack(channel_id: str, user_id: int = LOCAL_USER_ID) -> dict:
+def untrack(channel_id: str, *, user_id: int) -> dict:
     conn = db.get_conn()
     db.untrack_channel(conn, channel_id, user_id=user_id)
     conn.commit()

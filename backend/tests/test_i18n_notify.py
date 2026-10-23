@@ -56,10 +56,10 @@ def _prepare(monkeypatch, mode):
                      "VALUES (?, ?, ?, 1) ON CONFLICT DO NOTHING", (uid, CHANNEL, db.now_iso()))
     alerts._emit(conn, "outlier", "vi18n", {"videoId": "vi18n", "channelId": CHANNEL,
                                             "title": "Some <video>", "outlierScore": 7.5,
-                                            "views": 12000})
+                                            "views": 12000}, user_id=None)
     alerts._emit(conn, "channel_gone", CHANNEL, {"channelId": CHANNEL, "title": "Gone ch",
                                                  "subscribers": 10, "views": 20, "videoCount": 3,
-                                                 "goneSince": "2026-10-01T00:00:00Z"})
+                                                 "goneSince": "2026-10-01T00:00:00Z"}, user_id=None)
     conn.commit()
     conn.close()
     locale_prefs.save("ru", user_id=RU_USER)
@@ -67,9 +67,9 @@ def _prepare(monkeypatch, mode):
 
     stubs = {RU_USER: _Stub(), EN_USER: _Stub()}
     monkeypatch.setattr(NS, "recipients", lambda: [RU_USER, EN_USER])
-    monkeypatch.setattr(NS, "mode_for", lambda uid=RU_USER: mode)
-    monkeypatch.setattr(NS, "notifier_for", lambda uid=RU_USER: stubs[uid])
-    monkeypatch.setattr(NS, "target_name", lambda uid=RU_USER: "webhook")
+    monkeypatch.setattr(NS, "mode_for", lambda user_id: mode)
+    monkeypatch.setattr(NS, "notifier_for", lambda user_id: stubs[user_id])
+    monkeypatch.setattr(NS, "target_name", lambda user_id: "webhook")
     return stubs
 
 

@@ -199,33 +199,33 @@ def test_draft_save_list_and_link_roundtrip():
     reset(); seed_channel(); seed_corpus()
     review = MR.review_metadata("Черновик заголовка", niche=NICHE)
     saved = MR.save_draft("Черновик заголовка", description="", tags=["ai"],
-                          niche=NICHE, channel_id=CH, review=review)
+                          niche=NICHE, channel_id=CH, review=review, user_id=1)
     assert saved["id"]
-    drafts = MR.list_drafts(channel_id=CH)
+    drafts = MR.list_drafts(channel_id=CH, user_id=1)
     assert len(drafts) == 1 and drafts[0]["title"] == "Черновик заголовка"
     assert drafts[0]["videoId"] is None
 
-    MR.link_draft(saved["id"], "outlier0000")  # pretend it got published as this video
-    drafts = MR.list_drafts(channel_id=CH)
+    MR.link_draft(saved["id"], "outlier0000", user_id=1)  # pretend it got published as this video
+    drafts = MR.list_drafts(channel_id=CH, user_id=1)
     assert drafts[0]["videoId"] == "outlier0000"
 
 
 def test_draft_outcomes_only_surfaces_old_enough_links():
     reset(); seed_channel(); seed_corpus()
     review = MR.review_metadata("Черновик", niche=NICHE)
-    saved = MR.save_draft("Черновик", niche=NICHE, channel_id=CH, review=review)
+    saved = MR.save_draft("Черновик", niche=NICHE, channel_id=CH, review=review, user_id=1)
     # outlier0000 was seeded 10 days ago -- old enough for the default 7-day check
-    MR.link_draft(saved["id"], "outlier0000")
-    outcomes = MR.draft_outcomes(min_age_days=7.0)
+    MR.link_draft(saved["id"], "outlier0000", user_id=1)
+    outcomes = MR.draft_outcomes(min_age_days=7.0, user_id=1)
     assert len(outcomes) == 1
     assert outcomes[0]["videoId"] == "outlier0000"
     assert outcomes[0]["views"] == 2_000_000
 
     # a link to a just-published video (0 days old) must NOT show up yet
     RAW.execute("UPDATE videos SET published_at=? WHERE video_id='outlier0001'", (iso(NOW),))
-    saved2 = MR.save_draft("Другой черновик", niche=NICHE, channel_id=CH)
-    MR.link_draft(saved2["id"], "outlier0001")
-    outcomes2 = MR.draft_outcomes(min_age_days=7.0)
+    saved2 = MR.save_draft("Другой черновик", niche=NICHE, channel_id=CH, user_id=1)
+    MR.link_draft(saved2["id"], "outlier0001", user_id=1)
+    outcomes2 = MR.draft_outcomes(min_age_days=7.0, user_id=1)
     assert len(outcomes2) == 1  # still only the old one
 
 

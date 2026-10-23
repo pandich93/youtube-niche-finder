@@ -159,7 +159,7 @@ def test_feed_lists_title_and_thumbnail_changes_with_images_and_effect(monkeypat
     _title_change("pv_new2", 10, "Old title", "New title")
     _history("pv_new2", [(20, 1000), (10, 2000), (0, 7000)])
 
-    feed = PKG.packaging_feed(period="30d")
+    feed = PKG.packaging_feed(period="30d", user_id=None)
     assert feed["count"] == 2
     by_field = {c["field"]: c for c in feed["changes"]}
     thumb, title = by_field["thumbnail_image"], by_field["title"]
@@ -171,9 +171,9 @@ def test_feed_lists_title_and_thumbnail_changes_with_images_and_effect(monkeypat
     assert title["effect"]["vphBefore"] == 100.0 and title["effect"]["vphAfter"] == 500.0
     assert "note" in feed
 
-    only_titles = PKG.packaging_feed(period="30d", field="title")
+    only_titles = PKG.packaging_feed(period="30d", field="title", user_id=None)
     assert [c["field"] for c in only_titles["changes"]] == ["title"]
-    other = PKG.packaging_feed(period="30d", channel_id=CH_OTHER)
+    other = PKG.packaging_feed(period="30d", channel_id=CH_OTHER, user_id=None)
     assert other["count"] == 0
 
 
@@ -191,7 +191,7 @@ def test_feed_for_a_user_lists_only_channels_on_their_active_watchlist():
     conn.commit()
     conn.close()
 
-    assert PKG.packaging_feed(period="30d")["count"] == 2
+    assert PKG.packaging_feed(period="30d", user_id=None)["count"] == 2
     mine = PKG.packaging_feed(period="30d", user_id=1)["changes"]
     theirs = PKG.packaging_feed(period="30d", user_id=2)["changes"]
     assert [c["videoId"] for c in mine] == ["pv_new2"]
@@ -214,7 +214,7 @@ def test_feed_ignores_url_based_thumbnail_rows():
                                         "https://a/hq.jpg", "https://a/maxres.jpg"))
     conn.commit()
     conn.close()
-    assert PKG.packaging_feed(period="30d")["count"] == 0
+    assert PKG.packaging_feed(period="30d", user_id=None)["count"] == 0
 
 
 def test_history_lists_versions_and_changes_for_one_video(monkeypatch):

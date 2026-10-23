@@ -64,24 +64,24 @@ def _seed(video_id, channel_id, title, niche_slug=None):
 def test_request_transcript_queues_it_as_pending():
     _seed("vtr1", "UCtr0000000000000000001", "car wash channel")
 
-    out = TR.request_transcript("vtr1", reason="checking car wash niche")
+    out = TR.request_transcript("vtr1", reason="checking car wash niche", user_id=1)
 
     assert out["status"] == "pending"
-    queue = TR.list_transcript_queue(status="pending")
+    queue = TR.list_transcript_queue(status="pending", user_id=1)
     assert any(q["videoId"] == "vtr1" for q in queue)
 
 
 def test_save_transcript_parses_chunks_embeds_and_marks_ready():
     _seed("vtr2", "UCtr0000000000000000002", "car wash channel 2")
-    TR.request_transcript("vtr2", reason="r", compare_group="cars")
+    TR.request_transcript("vtr2", reason="r", compare_group="cars", user_id=1)
 
-    out = TR.save_transcript("vtr2", TIMED_TRANSCRIPT)
+    out = TR.save_transcript("vtr2", TIMED_TRANSCRIPT, user_id=1)
 
     assert out["status"] == "ready"
     assert out["chunks"] >= 1
     assert out["hasTimestamps"] is True
 
-    queue = TR.list_transcript_queue(status="ready")
+    queue = TR.list_transcript_queue(status="ready", user_id=1)
     assert any(q["videoId"] == "vtr2" for q in queue)
 
     conn = db.get_conn()
@@ -94,34 +94,34 @@ def test_save_transcript_parses_chunks_embeds_and_marks_ready():
 def test_save_transcript_with_empty_text_marks_error_not_a_crash():
     _seed("vtr3", "UCtr0000000000000000003", "empty transcript video")
 
-    out = TR.save_transcript("vtr3", "   \n\n  ")
+    out = TR.save_transcript("vtr3", "   \n\n  ", user_id=1)
 
     assert out["status"] == "error"
     assert "error" in out
-    queue = TR.list_transcript_queue(status="error")
+    queue = TR.list_transcript_queue(status="error", user_id=1)
     assert any(q["videoId"] == "vtr3" for q in queue)
 
 
 def test_reindex_transcript_reuses_the_stored_raw_text():
     _seed("vtr4", "UCtr0000000000000000004", "reindex me")
-    TR.save_transcript("vtr4", TIMED_TRANSCRIPT)
+    TR.save_transcript("vtr4", TIMED_TRANSCRIPT, user_id=1)
 
-    out = TR.reindex_transcript("vtr4")
+    out = TR.reindex_transcript("vtr4", user_id=1)
 
     assert out["status"] == "ready"
     assert out["chunks"] >= 1
 
 
 def test_reindex_transcript_without_a_saved_transcript_is_a_clear_error():
-    out = TR.reindex_transcript("v-never-saved")
+    out = TR.reindex_transcript("v-never-saved", user_id=1)
     assert out["status"] == "error"
 
 
 def test_search_transcripts_finds_the_saved_chunk_by_topic(monkeypatch):
     _seed("vtr5", "UCtr0000000000000000005", "car wash business")
-    TR.save_transcript("vtr5", TIMED_TRANSCRIPT)
+    TR.save_transcript("vtr5", TIMED_TRANSCRIPT, user_id=1)
 
-    out = TR.search_transcripts("how much money can you make")
+    out = TR.search_transcripts("how much money can you make", user_id=1)
 
     assert out["results"]
     assert any(r["videoId"] == "vtr5" for r in out["results"])
@@ -132,10 +132,10 @@ def test_search_transcripts_finds_the_saved_chunk_by_topic(monkeypatch):
 def test_search_transcripts_niche_filter_excludes_other_niches():
     _seed("vtr6", "UCtr0000000000000000006", "in niche a", niche_slug="n-tr-a")
     _seed("vtr7", "UCtr0000000000000000007", "in niche b", niche_slug="n-tr-b")
-    TR.save_transcript("vtr6", "0:00\ncar wash startup costs and equipment")
-    TR.save_transcript("vtr7", "0:00\ncar wash startup costs and equipment")
+    TR.save_transcript("vtr6", "0:00\ncar wash startup costs and equipment", user_id=1)
+    TR.save_transcript("vtr7", "0:00\ncar wash startup costs and equipment", user_id=1)
 
-    out = TR.search_transcripts("startup costs", niche="n-tr-a")
+    out = TR.search_transcripts("startup costs", niche="n-tr-a", user_id=1)
 
     video_ids = {r["videoId"] for r in out["results"]}
     assert "vtr6" in video_ids
@@ -144,7 +144,7 @@ def test_search_transcripts_niche_filter_excludes_other_niches():
 
 def test_search_transcripts_requires_a_query():
     try:
-        TR.search_transcripts("")
+        TR.search_transcripts("", user_id=1)
         assert False, "expected ValueError"
     except ValueError:
         pass
@@ -156,7 +156,7 @@ def test_search_transcripts_with_nothing_saved_gives_a_hint():
     conn.commit()
     conn.close()
 
-    out = TR.search_transcripts("anything at all")
+    out = TR.search_transcripts("anything at all", user_id=1)
 
     assert out["results"] == []
     assert "hint" in out
