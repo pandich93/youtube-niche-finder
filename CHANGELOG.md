@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Sessions you can see and end** (multi-user plan P1-04).
+  - A sign-in now lasts 14 days after the last activity and 90 days at most,
+    instead of a fixed 30 days (`NF_SESSION_IDLE_DAYS`, `NF_SESSION_MAX_DAYS`).
+    Activity extends it at most once per 15 minutes
+    (`NF_SESSION_TOUCH_MINUTES`), so requests do not write to the database.
+  - The **Profile** page lists where you are signed in: browser, address,
+    when it started and was last active, this device marked. You can end one
+    session or sign out on all other devices.
+  - Sessions from before the update keep working; their address and browser
+    fill in on their next request.
 - **The Chrome extension works with a service on your domain** (multi-user
   plan P1-16, [extension/README.md](extension/README.md#a-service-on-your-domain)).
   Localhost stays the default.
