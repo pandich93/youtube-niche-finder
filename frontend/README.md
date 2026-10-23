@@ -399,7 +399,26 @@ or edited with its price, period, daily limits, count limits and features, and
 can be archived and restored (`/api/admin/plans`). Each user has their tariff
 and an end date that an admin can change (`PUT /api/admin/users/{id}/plan`).
 Admins are not limited by tariffs. Moving a user to a smaller tariff deletes
-nothing: existing rows stay, only new ones are refused.
+nothing: existing rows stay, only new ones are refused. "Журнал действий"
+lists sign-ins and failed sign-ins, password and email changes, API tokens,
+tariff changes and admin actions, filtered by event, user and period and paged
+(`GET /api/admin/audit`, only from a dashboard session, never with an API
+token). A notice counts stored secrets the current encryption keys cannot read.
+
+### Profile (`#/profile`)
+
+Only in multi-user mode, for whoever is signed in. "Пароль" changes the
+password with the current one (`POST /api/auth/password`): other sessions and
+API tokens end, this browser stays signed in. "Email" sends a confirmation
+link to the new address (`POST /api/auth/email`) and is disabled when the
+server has no mail set up. "Где выполнен вход" lists the account's sessions
+with browser, address and last activity, the current one marked, and ends one
+or all others (`/api/auth/sessions`).
+
+Signed out, the sign-in screen also offers "Создать аккаунт" and "Забыли
+пароль?" when the server has mail (`signup` in `/api/auth/me`); the links in
+those emails open `#/signup/<token>`, `#/reset/<token>` and `#/email/<token>`
+(`account.js`), which drop the token from the address bar once read.
 
 ### Data
 

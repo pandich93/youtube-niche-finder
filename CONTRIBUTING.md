@@ -1,7 +1,9 @@
 # Contributing to niche-finder
 
 Thanks for considering a contribution. This project is a small, self-hosted
-tool, so the bar is low and the process is simple.
+tool, so the bar is low and the process is simple. Taking part means following
+the [code of conduct](CODE_OF_CONDUCT.md); security problems go to a private
+advisory, not an issue ([SECURITY.md](SECURITY.md)).
 
 ## Ways to contribute
 

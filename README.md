@@ -9,8 +9,9 @@
 [![MCP](https://img.shields.io/badge/MCP-100%20tools-8A2BE2?style=flat-square)](backend/README.md#tools)
 [![Stars](https://img.shields.io/github/stars/pandich93/youtube-niche-finder?style=flat-square)](https://github.com/pandich93/youtube-niche-finder/stargazers)
 
-> **Status: the hosted version is coming soon.** We are preparing the online
-> service — sign-up, tariffs and connecting your own channel. Want early
+> **Status: the hosted version is coming soon.** Accounts with sign-up,
+> tariffs and connecting your own channel are built; the online service is
+> being prepared for its first users. Want early
 > access? [Open an issue titled "Early access"](https://github.com/pandich93/youtube-niche-finder/issues/new?title=Early%20access)
 > or star the repository to follow the launch. Can't wait?
 > [Run your own copy today](docs/self-hosting.md) — it is free and open source.
@@ -81,7 +82,7 @@
 
 ### Wherever you work
 
-- **A web dashboard** with 26 sections plus niche, channel and brief pages.
+- **A web dashboard** with 27 sections plus niche, channel and brief pages.
 - **A Chrome extension** that puts the numbers on top of YouTube itself.
 - **Claude Desktop or any MCP client:** 100 tools and 7 ready-made scenarios,
   so you can ask for a niche in plain words.
@@ -155,7 +156,7 @@ git clone https://github.com/pandich93/youtube-niche-finder.git
 cd youtube-niche-finder
 cp .env.example .env          # put your key into YOUTUBE_API_KEY
 docker compose build && make up
-open http://localhost:8080
+# then open http://localhost:8080 in your browser
 ```
 
 The full guide — Claude Desktop, the extension, running without Docker, how
@@ -167,12 +168,13 @@ it works, giving accounts to other people — is in
 | Document | What's inside |
 |---|---|
 | [docs/self-hosting.md](docs/self-hosting.md) | install and run your own copy |
+| [docs/hosting.md](docs/hosting.md) | run one copy on your domain for other people: HTTPS, accounts, mail, backups, monitoring |
 | [backend/README.md](backend/README.md) | YouTube quota, the CLI, all 100 MCP tools and 7 scenarios, tariffs, configuration, formulas, code structure |
 | [frontend/README.md](frontend/README.md) | every dashboard screen, where its data comes from, what costs quota |
 | [extension/README.md](extension/README.md) | what the extension shows on each YouTube page |
-| [docs/http-api.md](docs/http-api.md) | all 137 HTTP routes with parameters, costs and MCP twins (generated from the code) |
+| [docs/http-api.md](docs/http-api.md) | all 155 HTTP routes with parameters, costs and MCP twins (generated from the code) |
 | [`.env.example`](.env.example) | every setting, commented in place |
-| [CONTRIBUTING.md](CONTRIBUTING.md) · [CHANGELOG.md](CHANGELOG.md) | dev setup and tests; what changed in each release |
+| [CONTRIBUTING.md](CONTRIBUTING.md) · [CHANGELOG.md](CHANGELOG.md) · [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) | dev setup and tests; what changed in each release; how we treat each other |
 
 | Path | What's inside |
 |---|---|
@@ -181,7 +183,7 @@ it works, giving accounts to other people — is in
 | [`extension/`](extension/README.md) | Chrome extension (Manifest V3): panels and badges on top of YouTube |
 | [`docs/`](docs/README.md) | documentation map, self-hosting guide and the HTTP API reference |
 | [`scripts/`](scripts) | MCP-in-Docker launcher, diagnostics, the API-docs generator, benchmarks |
-| [`infra/caddy/`](infra/caddy) | HTTPS reverse proxy for MCP over HTTP |
+| [`infra/`](infra) | Caddy HTTPS proxy (MCP over HTTP, and the production site), the scheduled Postgres backup |
 
 Bug reports, fixes and documentation PRs are welcome. For anything bigger —
 a new MCP tool, API route or dashboard screen — please open an issue first.
