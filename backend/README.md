@@ -109,7 +109,9 @@ name `web` (any port) -- anything else gets `400`, which stops DNS rebinding;
 add your own names with `NF_ALLOWED_HOSTS` (comma-separated). Every `POST`,
 `PUT`, `PATCH` and `DELETE` must carry `Content-Type: application/json` or an
 `X-NF-Client` header (any value), otherwise `403`: both force the browser into
-a CORS preflight, which only `chrome-extension://` origins pass. The dashboard
+a CORS preflight, which only `chrome-extension://` origins pass (only the IDs
+in `NF_EXTENSION_IDS` when it is set; with `NF_MULTI_USER=1` and no IDs, none).
+The dashboard
 sends `Content-Type: application/json` on every request; a script needs one too:
 `curl -X POST -H 'X-NF-Client: script' http://127.0.0.1:8080/api/events/scan`.
 The built-in Swagger UI at `/api/docs` sends neither header on routes without

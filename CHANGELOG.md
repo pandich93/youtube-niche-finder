@@ -19,6 +19,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     session or sign out on all other devices.
   - Sessions from before the update keep working; their address and browser
     fill in on their next request.
+- **The Chrome extension works with a service on your domain** (multi-user
+  plan P1-16, [extension/README.md](extension/README.md#a-service-on-your-domain)).
+  Localhost stays the default.
+  - Enter `https://YOUR-DOMAIN` as the service address and Chrome asks for
+    access to that one host (`optional_host_permissions`). Switching the
+    address away gives the old host's access back.
+  - The extension signs in with a personal API token (`read` + `write`, from
+    the MCP screen). It sends the token to a remote address only over `https`,
+    and the popup says when a token is missing.
+  - `NF_EXTENSION_IDS` (comma-separated) limits CORS to your own extensions.
+    Without it a local copy answers any extension as before, and a server with
+    sign-in answers none.
+  - What publishing in the Chrome Web Store takes:
+    [docs/chrome-web-store.md](docs/chrome-web-store.md).
 - **Sign-up, password reset and a profile page** (multi-user plan P1-06).
   - With mail set up (`SMTP_HOST`, `SMTP_FROM`, see `.env.example`), the
     sign-in screen offers "Create an account" and "Forgot password". Both mail

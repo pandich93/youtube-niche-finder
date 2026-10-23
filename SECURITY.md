@@ -23,7 +23,8 @@ and `main` are supported.
 - **Hostile web pages are blocked.** Every request must carry an allow-listed
   `Host` header, which stops DNS rebinding. Every POST, PUT, PATCH or DELETE
   must be JSON or carry `X-NF-Client`, so a cross-site form or a simple
-  cross-origin POST is refused. CORS answers only `chrome-extension://`.
+  cross-origin POST is refused. CORS answers only `chrome-extension://`
+  origins: the IDs in `NF_EXTENSION_IDS`, or any extension when it is unset.
 - **Secrets stay local.** Your YouTube key lives in `.env`. The OAuth refresh
   tokens of your own channels are encrypted with `OWN_TOKENS_KEY` and never
   returned or logged. The key can be rotated: earlier keys go into
@@ -111,9 +112,11 @@ What the server does for you:
   - The browser never sends the `SameSite=Strict` session cookie on a request
     that starts on another site.
   - Every POST, PUT, PATCH or DELETE must be JSON or carry `X-NF-Client`. Both
-    force a CORS preflight, and CORS allows only `chrome-extension://`, so
-    another site cannot send such a request even if a browser mishandled the
-    cookie.
+    force a CORS preflight, and CORS allows only the extension IDs listed in
+    `NF_EXTENSION_IDS` (none when it is unset), so another site or another
+    extension cannot send such a request even if a browser mishandled the
+    cookie. The project's own extension does not need CORS: it has host
+    access to the service the user set.
 
   A token would guard against the same thing a third time. The API token
   (`Authorization: Bearer`) is never sent by a browser on its own, so it
@@ -126,8 +129,10 @@ What the server does for you:
   - It expires: 90 days by default, chosen when it is made (1 to 365 days, or
     none). An expired token is refused like a wrong one.
   - It does only what it was made for. `read` covers GET routes, `write`
-    covers routes that change something, and `mcp` covers MCP over HTTP. An
-    extension that only reads needs no `write`.
+    covers routes that change something, and `mcp` covers MCP over HTTP. A
+    script that only reads needs no `write`; the Chrome extension needs
+    `read` + `write` (its list badges are POST requests) and no `mcp`.
+  - The extension sends its token to a remote service only over `https`.
 - **Separated data.** Each user sees and changes only their own:
   - watchlist, swipe file, drafts and transcript queue;
   - alert read marks, connected channels, notification settings and API tokens.

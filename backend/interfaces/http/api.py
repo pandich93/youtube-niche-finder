@@ -436,12 +436,49 @@ async def local_only_guard(request, call_next):
 # расширение увидело бы вместо честной ошибки непрозрачную ошибку CORS. По той
 # же причине preflight (OPTIONS) CORS отвечает сам и до защиты он не доходит.
 # Расширение для Chrome ходит сюда со своего origin (chrome-extension://...).
-# Service worker с host_permissions обошёлся бы и без CORS, но с заголовками
-# запросы можно отлаживать прямо из консоли страницы. Сервис слушает только
-# 127.0.0.1, поэтому наружу это ничего не открывает.
+# Service worker с host-разрешением обошёлся бы и без CORS, но с заголовками
+# запросы можно отлаживать прямо из консоли страницы.
+#
+# P1-16: какие именно расширения пускать. NF_EXTENSION_IDS -- ID своих
+# расширений через запятую (с chrome://extensions или из Web Store); с ним
+# CORS отвечает только им. Без него:
+#   * локальный режим -- любое chrome-extension://, как раньше: у распакованного
+#     расширения ID свой на каждой машине, а сервис слушает только 127.0.0.1;
+#   * сервер с входом (NF_MULTI_USER=1) -- ни одно: на домене чужое расширение
+#     с CORS могло бы читать API, а своему он не нужен (ходит с
+#     host-разрешением и токеном), так что пустой список -- это запрет.
+_EXTENSION_ORIGIN = "chrome-extension://"
+
+
+def _extension_ids(raw):
+    """ID из NF_EXTENSION_IDS: через запятую, пробелы и регистр не важны."""
+    return frozenset(item.strip().lower() for item in (raw or "").split(",") if item.strip())
+
+
+EXTENSION_IDS = _extension_ids(os.environ.get("NF_EXTENSION_IDS"))
+
+
+def _extension_origin_allowed(origin):
+    if not (origin or "").startswith(_EXTENSION_ORIGIN):
+        return False
+    ext_id = origin[len(_EXTENSION_ORIGIN):]
+    if not ext_id or "/" in ext_id:
+        return False
+    if EXTENSION_IDS:
+        return ext_id.lower() in EXTENSION_IDS
+    return not multi_user_enabled()
+
+
+class _ExtensionCORS(CORSMiddleware):
+    """CORSMiddleware, который решает про origin на каждом запросе: список и
+    режим читаются в момент запроса, поэтому тесты подменяют их на лету."""
+
+    def is_allowed_origin(self, origin):
+        return _extension_origin_allowed(origin)
+
+
 app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"chrome-extension://.*",
+    _ExtensionCORS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

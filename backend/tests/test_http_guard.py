@@ -35,6 +35,9 @@ def setup_module(_=None):
 def _no_rate_limit_no_real_key(monkeypatch):
     monkeypatch.setattr(api, "RATE_LIMIT_PER_MINUTE", 0)
     monkeypatch.setattr(api, "API_KEY", None)
+    # CORS по умолчанию -- локальный режим без NF_EXTENSION_IDS (любое расширение)
+    monkeypatch.setattr(api, "EXTENSION_IDS", frozenset())
+    monkeypatch.delenv("NF_MULTI_USER", raising=False)
 
 
 class _Stub:
@@ -216,6 +219,59 @@ def test_extra_allowed_host_passes(stub, monkeypatch):
     monkeypatch.setattr(api, "ALLOWED_HOSTS", api._allowed_hosts("nas.local"))
     assert client.get("/api/stats", headers={"Host": "nas.local:8080"}).status_code == 200
     assert client.get("/api/stats", headers={"Host": "evil.example"}).status_code == 400
+
+
+# ------------------------------------------------------------ CORS: чьи расширения (P1-16)
+
+OWN_ID = "abcdefghijklmnopabcdefghijklmnop"
+OTHER_ID = "ponmlkjihgfedcbaponmlkjihgfedcba"
+
+
+def _preflight(origin):
+    return client.options("/api/events/scan", headers={
+        "Origin": origin,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "x-nf-client,authorization",
+    })
+
+
+def test_nf_extension_ids_parsing():
+    assert api._extension_ids(f" {OWN_ID.upper()} , {OTHER_ID},,") == {OWN_ID, OTHER_ID}
+    assert api._extension_ids("") == api._extension_ids(None) == frozenset()
+
+
+@pytest.mark.parametrize("multi_user", ["0", "1"])
+def test_listed_extension_passes_and_a_foreign_one_does_not(monkeypatch, multi_user):
+    monkeypatch.setenv("NF_MULTI_USER", multi_user)
+    monkeypatch.setattr(api, "EXTENSION_IDS", api._extension_ids(OWN_ID))
+    own = _preflight("chrome-extension://" + OWN_ID)
+    assert own.status_code == 200
+    assert own.headers.get("access-control-allow-origin") == "chrome-extension://" + OWN_ID
+    foreign = _preflight("chrome-extension://" + OTHER_ID)
+    assert foreign.status_code == 400
+    assert foreign.headers.get("access-control-allow-origin") is None
+    # обычный запрос чужого расширения тоже уходит без разрешающего заголовка
+    resp = client.get("/api/health", headers={"Origin": "chrome-extension://" + OTHER_ID})
+    assert resp.headers.get("access-control-allow-origin") is None
+
+
+def test_without_ids_local_mode_lets_any_extension_in():
+    resp = _preflight("chrome-extension://" + OTHER_ID)
+    assert resp.headers.get("access-control-allow-origin") == "chrome-extension://" + OTHER_ID
+
+
+def test_without_ids_multi_user_lets_no_extension_in(monkeypatch):
+    monkeypatch.setenv("NF_MULTI_USER", "1")
+    resp = _preflight("chrome-extension://" + OWN_ID)
+    assert resp.headers.get("access-control-allow-origin") is None
+
+
+@pytest.mark.parametrize("origin", [
+    "chrome-extension://", "chrome-extension://abc/evil", "https://evil.example",
+    "moz-extension://abc", "null",
+])
+def test_malformed_or_foreign_origins_never_pass(origin):
+    assert _preflight(origin).headers.get("access-control-allow-origin") is None
 
 
 if __name__ == "__main__":

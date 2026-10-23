@@ -7,7 +7,12 @@
  *
  * Здесь же кэш: YouTube — SPA, и панель перерисовывается по несколько раз на
  * одно видео. Без кэша это были бы лишние запросы к базе на каждую перерисовку.
+ *
+ * Сервис может быть и удалённым (P1-16, свой домен): тогда доступ к хосту
+ * выдаёт пользователь в попапе, а запросы несут личный API-токен (Bearer).
  */
+
+importScripts('service_url.js');   // nfServiceTarget, nfHasHostAccess
 
 const DEFAULTS = {
   baseUrl: 'http://127.0.0.1:8080',
@@ -63,6 +68,14 @@ function cacheDropVideo(id) { cache.delete('video:' + id); cache.delete('card:' 
 async function api(path, { method = 'GET', body = null } = {}) {
   const s = await getSettings();
   const base = (s.baseUrl || DEFAULTS.baseUrl).replace(/\/+$/, '');
+  const target = nfServiceTarget(base);
+  if (!target) throw new Error(t('errBadServiceUrl', base));
+  // P1-16: на удалённый сервис -- только с доступом, который пользователь выдал
+  // в попапе; без него Chrome запрос не пустит, а ошибка была бы непонятной
+  if (!(await nfHasHostAccess(target))) throw new Error(t('errNoHostAccess', base));
+  // токен -- на локальный адрес или по https; по голому http через сеть он
+  // ушёл бы открытым текстом
+  const sendToken = s.apiToken && (target.local || target.secure);
   let res;
   try {
     res = await fetch(base + path, {
@@ -73,13 +86,13 @@ async function api(path, { method = 'GET', body = null } = {}) {
         'X-NF-Client': 'extension',
         'X-NF-Locale': NF_LOCALE,
         ...(body ? { 'Content-Type': 'application/json' } : {}),
-        ...(s.apiToken ? { Authorization: `Bearer ${s.apiToken}` } : {}),
+        ...(sendToken ? { Authorization: `Bearer ${s.apiToken}` } : {}),
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(s.timeoutMs),
     });
   } catch (e) {
-    const err = new Error(t('errBackendOffline', base));
+    const err = new Error(t(target.local ? 'errBackendOffline' : 'errServiceOffline', base));
     err.offline = true;
     throw err;
   }
@@ -87,7 +100,10 @@ async function api(path, { method = 'GET', body = null } = {}) {
   let data;
   try { data = JSON.parse(text); } catch { data = { detail: text.slice(0, 300) }; }
   if (!res.ok) {
-    const err = new Error(data.detail || data.error || `HTTP ${res.status}`);
+    // 401 удалённого сервиса -- это «нет токена, или он отозван / истёк»: его
+    // собственный текст про вход в дашборде расширению не подсказка
+    const err = new Error(res.status === 401 && !target.local
+      ? t('errTokenRequired') : (data.detail || data.error || `HTTP ${res.status}`));
     err.status = res.status;
     throw err;
   }
@@ -289,6 +305,10 @@ chrome.runtime.onInstalled.addListener(() => {
   chrome.alarms.create('events', { periodInMinutes: 10 });
 });
 chrome.runtime.onStartup.addListener(refreshActionBadge);
+// доступ к удалённому сервису выдали или отозвали (попап, chrome://extensions)
+const onHostAccessChanged = () => { cache.clear(); refreshActionBadge(); };
+chrome.permissions.onAdded.addListener(onHostAccessChanged);
+chrome.permissions.onRemoved.addListener(onHostAccessChanged);
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === 'health' || a.name === 'events') refreshActionBadge();
 });

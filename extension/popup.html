@@ -9,12 +9,13 @@
   <div id="status" class="status" data-i18n="popupStatusChecking">Checking connection…</div>
 
   <label class="field">
-    <span data-i18n="popupBaseUrlLabel">Local backend address</span>
+    <span data-i18n="popupBaseUrlLabel">Service address (your local backend by default)</span>
     <input id="baseUrl" type="text" spellcheck="false" placeholder="http://127.0.0.1:8080">
   </label>
+  <button id="grant" class="btn" type="button" hidden data-i18n="popupGrantAccess">Allow access to this address</button>
 
   <label class="field">
-    <span data-i18n="popupTokenLabel">Access token (only if sign-in is enabled on the server)</span>
+    <span data-i18n="popupTokenLabel">Access token (for a service with sign-in: read + write, from the MCP screen)</span>
     <input id="apiToken" type="password" spellcheck="false" autocomplete="off" placeholder="nf_…">
   </label>
 
@@ -87,6 +88,7 @@
     <button id="check" class="btn" data-i18n="popupCheck">Check connection</button>
     <a id="dash" class="btn ghost" target="_blank" rel="noopener" data-i18n="dashboard">Dashboard</a>
   </div>
-  <div class="foot" data-i18n="popupFoot">Your data stays on your computer: the extension only talks to localhost.</div>
+  <div class="foot" data-i18n="popupFoot">The extension talks only to the service address above (localhost by default) and to nobody else.</div>
 </div>
+<script src="service_url.js"></script>
 <script src="popup.js"></script>
