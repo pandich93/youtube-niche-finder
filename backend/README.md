@@ -231,8 +231,10 @@ quota, an empty database, no history. One check costs 1 quota unit.
 Checklist before you give anyone an account: [SECURITY.md](../SECURITY.md).
 Per-user limits and features are set by tariffs, see [Tariffs](#tariffs-saas-sub-project-1-nf_multi_user1).
 
-`NF_MULTI_USER=1` turns on sign-in. Accounts are by invitation — there is no
-sign-up page:
+`NF_MULTI_USER=1` turns on sign-in. Without mail, accounts are by invitation;
+with `SMTP_HOST` and `SMTP_FROM` set, people can also sign up and reset a
+forgotten password by an emailed link (`NF_REGISTRATION=closed` keeps only the
+reset; see `.env.example`). Accounts from the command line:
 
 ```bash
 make cli ARGS="create-user ann@example.com --admin"   # asks for the password twice
@@ -242,10 +244,11 @@ make cli ARGS="users"
 
 Passwords are scrypt hashes (standard library), at least 10 characters. A
 session is a random token in the `nf_session` cookie (HttpOnly,
-SameSite=Strict, `Secure` with `NF_COOKIE_SECURE=1` or over HTTPS, 30 days);
-the database keeps only its SHA-256, and changing a password ends every
-session. Without a session `/api` answers 401 except sign-in, `/api/health` and
-the Google OAuth return. Every personal table has a `user_id` (existing rows
+SameSite=Strict, `Secure` with `NF_COOKIE_SECURE=1` or over HTTPS). It lasts
+`NF_SESSION_IDLE_DAYS` (14) after the last activity and `NF_SESSION_MAX_DAYS`
+(90) at most; the database keeps only its SHA-256, and changing a password
+ends every other session. Without a session `/api` answers 401 except sign-in,
+sign-up and reset by link, `/api/health` and the Google OAuth return. Every personal table has a `user_id` (existing rows
 moved to user 1, "local").
 
 Per user (sub-stage 5.4): the watchlist, the swipe file, drafts, the

@@ -5,6 +5,17 @@ on:
     branches: [main]
   pull_request:
 
+# Read-only token by default; smoke-test asks for write itself to push the
+# coverage badge data.
+permissions:
+  contents: read
+
+# A new push to the same PR cancels the run still going for the old one; runs
+# on main always finish (each one may push the badge).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Fast, no database: runs first so a lint error fails the build before the
   # test job spins up Postgres. Same pinned ruff as `make lint`; the config is

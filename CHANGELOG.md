@@ -181,6 +181,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Repository housekeeping.** `docs/chrome-web-store.md` was linked from four
+  pages but never committed (`.gitignore` skips `docs/*` except listed pages);
+  it is tracked now. The README's route and section counts, the backend and
+  dashboard READMEs (sign-up, sessions, profile, action log) are current. Added
+  a code of conduct, `.editorconfig` and Dependabot updates; CI runs with a
+  read-only token by default and cancels superseded PR runs.
 - **The LLM budget holds under parallel calls** (multi-user plan P1-09).
   - Before, the gateway checked the day's spend, called the model and only
     then recorded the cost. Parallel calls all passed the check and spent
