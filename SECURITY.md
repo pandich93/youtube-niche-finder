@@ -143,7 +143,9 @@ What you have to do before you give anyone an account:
    and `NF_CONTACT_EMAIL` so `/privacy` and `/terms` name you and a contact.
    Pass Google's OAuth app verification before inviting more than 100 people,
    and answer deletion requests sent to that contact (the privacy page promises
-   7 days).
+   7 days): `cli.py delete-user EMAIL --yes`, or Delete on the Admin page.
+   People can also delete their own account on the Plan page. Back up first
+   if you delete many at once: deleting cannot be undone.
 7. **Keep MCP over HTTP behind the TLS front door (`mcp-https`)** and set
    `MCP_PUBLIC_URL` to the address clients use. MCP over stdio is local only.
 
@@ -166,9 +168,14 @@ Known limits (by design, worth knowing before you invite anyone):
   token. The first author of a transcript can still paste junk or a prompt
   injection into it, and the LLM hook review of that text is cached for
   everyone; an admin can replace it.
-- **Admins.** `users.is_admin` guards `/api/admin/*` (tariffs and users'
-  tariffs): only an admin signed in to the dashboard, never an API token.
-  Admins are not limited by tariffs.
+- **Admins.** `users.is_admin` guards `/api/admin/*` (tariffs, users'
+  tariffs, creating, blocking and deleting accounts): only an admin signed in
+  to the dashboard, never an API token. Admins are not limited by tariffs.
+  Blocking an account (`users.disabled_at`) ends its sessions and API tokens
+  (MCP included) at once, and it cannot sign in until unblocked. An admin
+  cannot block or delete themself there, the `local` user (the data from
+  before accounts) can be blocked but not deleted, and the server always
+  keeps one active admin. Each action is logged in `admin_actions`.
 - **API tokens do not expire.** Revoke unused ones on the MCP screen. Changing a
   password revokes all of that user's tokens and sessions.
 - **MCP over HTTP needs `NF_MULTI_USER=1` to ask for a token.** Without that

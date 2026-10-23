@@ -17,4 +17,10 @@ export default {
   searches: 'Searches: {used} / {limit}',
   llm: 'LLM: ${used} / {limit}',
   changed: 'Plan changed',
+  deleteTitle: 'Delete account',
+  deleteSub: 'together with tracked channels, drafts, alerts, settings and connected channels; this cannot be undone',
+  passwordPlaceholder: 'your password',
+  deleteMe: 'Delete account',
+  deleteConfirm: 'Delete your account and all of your data? This cannot be undone.',
+  deleted: 'Account deleted',
 };

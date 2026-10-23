@@ -113,10 +113,37 @@ def list_users() -> list:
     conn = db.get_conn()
     try:
         return [{"id": r["id"], "email": r["email"], "isAdmin": bool(r["is_admin"]),
-                 "hasPassword": r["password_hash"] is not None, "createdAt": r["created_at"]}
+                 "hasPassword": r["password_hash"] is not None, "createdAt": r["created_at"],
+                 "disabled": r["disabled_at"] is not None}
                 for r in conn.execute("SELECT * FROM users ORDER BY id").fetchall()]
     finally:
         conn.close()
+
+
+def user_id_for_email(email: str):
+    conn = db.get_conn()
+    try:
+        row = conn.execute("SELECT id FROM users WHERE email = ?", (_norm(email),)).fetchone()
+    finally:
+        conn.close()
+    return row["id"] if row else None
+
+
+def set_disabled(user_id: int, disabled: bool) -> bool:
+    """Block or unblock an account (multi-user plan P0-04). Blocking ends
+    every session and revokes every API token at once, like a password
+    change; unblocking lets the person sign in again. False: no such user."""
+    conn = db.get_conn()
+    try:
+        row = conn.execute("UPDATE users SET disabled_at = ? WHERE id = ? RETURNING id",
+                           (db.now_iso() if disabled else None, user_id)).fetchone()
+        if row and disabled:
+            conn.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            conn.execute("DELETE FROM api_tokens WHERE user_id = ?", (user_id,))
+        conn.commit()
+    finally:
+        conn.close()
+    return row is not None
 
 
 def is_admin(user_id: int) -> bool:
@@ -161,8 +188,9 @@ def login(email: str, password: str, client_ip: str = None) -> dict:
         wait = max(_wait(conn, kind, key, now) for kind, key in keys)
         if wait:
             raise LoginThrottled(wait)
-        row = conn.execute("SELECT id, password_hash FROM users WHERE email = ?",
-                           (_norm(email),)).fetchone()
+        # a blocked account fails like a wrong password (multi-user plan P0-04)
+        row = conn.execute("SELECT id, password_hash FROM users WHERE email = ? "
+                           "AND disabled_at IS NULL", (_norm(email),)).fetchone()
         if not row or not row["password_hash"]:
             _DUMMY_HASH = _DUMMY_HASH or hash_password(secrets.token_hex(8))
             verify_password(password or "", _DUMMY_HASH)
@@ -191,7 +219,8 @@ def user_for_token(token: str):
     try:
         row = conn.execute(
             "SELECT u.id, u.email, u.is_admin, s.expires_at FROM sessions s "
-            "JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?", (_token_hash(token),)).fetchone()
+            "JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND u.disabled_at IS NULL",
+            (_token_hash(token),)).fetchone()
     finally:
         conn.close()
     if not row or _expired(row["expires_at"]):
@@ -276,8 +305,8 @@ def user_for_api_token(token: str):
             (db.now_iso(), _token_hash(token))).fetchone()
         if not row:
             return None
-        u = conn.execute("SELECT id, email, is_admin FROM users WHERE id = ?",
-                         (row["user_id"],)).fetchone()
+        u = conn.execute("SELECT id, email, is_admin FROM users WHERE id = ? "
+                         "AND disabled_at IS NULL", (row["user_id"],)).fetchone()
         conn.commit()
     finally:
         conn.close()

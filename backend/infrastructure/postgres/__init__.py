@@ -50,6 +50,7 @@ from infrastructure.postgres.repositories import (  # noqa: F401
 from infrastructure.postgres.schema import (  # noqa: F401
     EMBEDDING_DIM,
     MIGRATIONS,
+    PERSONAL_TABLES,
     SCHEMA,
     SCHEMA_VERSION,
     _existing_columns,

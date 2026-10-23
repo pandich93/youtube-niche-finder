@@ -72,6 +72,7 @@ from application import thumbnail_search as TS
 from application import topic_watch as TW
 from application import trajectory as TJ
 from application import transcripts as TR
+from application import users_admin as UA
 from domain import i18n
 from domain import plans as PD
 from domain.i18n import tr
@@ -1379,6 +1380,55 @@ def admin_user_plan(request: Request, user_id: int, payload: dict = Body(...)):
         raise HTTPException(status_code=400, detail=tr("planId: нужен номер тарифа"))
     _plan_call(PL.assign, admin, user_id, plan_id, payload.get("expiresAt"))
     return {"userId": user_id, **PL.summary(user_id)}
+
+
+# ------------------------------------------- accounts: block and delete (P0-04)
+# Admin actions need an admin signed in to the dashboard, like tariffs: a leaked
+# API token must not be able to delete accounts.
+
+def _users_call(fn, *args):
+    try:
+        return fn(*args)
+    except UA.UserNotFound:
+        raise HTTPException(status_code=404, detail="user not found")
+    except (UA.UserAdminError, AUTH.AuthError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/admin/users")
+def admin_user_create(request: Request, payload: dict = Body(...)):
+    """A new account; its one-time password is in this answer only."""
+    admin = _admin(request)
+    return _users_call(UA.create, admin, str(payload.get("email") or ""),
+                       bool(payload.get("isAdmin")))
+
+
+@app.post("/api/admin/users/{user_id}/disable")
+def admin_user_disable(request: Request, user_id: int):
+    return _users_call(UA.set_disabled, _admin(request), user_id, True)
+
+
+@app.post("/api/admin/users/{user_id}/enable")
+def admin_user_enable(request: Request, user_id: int):
+    return _users_call(UA.set_disabled, _admin(request), user_id, False)
+
+
+@app.delete("/api/admin/users/{user_id}")
+def admin_user_delete(request: Request, user_id: int, payload: dict = Body(default={})):
+    return _users_call(UA.delete, _admin(request), user_id, str(payload.get("confirmEmail") or ""))
+
+
+@app.delete("/api/auth/me")
+def auth_delete_me(request: Request, response: Response, payload: dict = Body(default={})):
+    """Delete your own account and everything that is yours; needs your password
+    and a dashboard sign-in, never an API token."""
+    if not multi_user_enabled():
+        raise HTTPException(status_code=409, detail="accounts exist only with NF_MULTI_USER=1")
+    if getattr(request.state, "via", None) != "session":
+        raise HTTPException(status_code=403, detail="sign in to the dashboard to delete your account")
+    result = _users_call(UA.delete_self, request.state.user_id, str(payload.get("password") or ""))
+    response.delete_cookie(AUTH_COOKIE, path="/")
+    return result
 
 
 # ------------------------------------------------------ own channels (plan 14)

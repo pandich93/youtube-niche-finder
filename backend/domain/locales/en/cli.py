@@ -60,6 +60,14 @@ In Docker:  docker compose run --rm mcp python cli.py doctor
     "задать или сменить пароль (local -- ваши данные)":
         "set or change a password (local -- your own data)",
     "список пользователей": "list users",
+    # multi-user plan P0-04: blocking and deleting accounts
+    "заблокировать: сессии и токены перестают работать":
+        "block: sessions and tokens stop working at once",
+    "разблокировать": "unblock",
+    "удалить учётную запись и все её данные": "delete an account and all of its data",
+    "подтвердить: удаление необратимо": "confirm: deleting cannot be undone",
+    "Удаление необратимо: учётная запись и все её данные. Повторите с --yes.":
+        "Deleting cannot be undone: the account and all of its data. Repeat with --yes.",
     "личный токен для расширения и MCP по HTTP": "personal token for the extension and MCP over HTTP",
     "досчитать эмбеддинги для уже собранных видео (0 quota)":
         "compute embeddings for videos already collected (0 quota)",

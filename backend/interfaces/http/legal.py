@@ -100,7 +100,8 @@ access at Google and deletes everything stored for that channel at once.</p>
 <ul>
 <li>Revoke {c['name']}'s access to your Google account at any time at
 <a href="{PERMISSIONS}">{PERMISSIONS}</a>.</li>
-<li>Ask us to delete your account and all your data: write to {c['contact']}. We do it within 7 days.</li>
+<li>Delete your account and all your data yourself: "Delete account" on the Plan page.
+Or ask us: write to {c['contact']}. We do it within 7 days.</li>
 </ul>
 
 <h2>Contact</h2>
@@ -148,8 +149,9 @@ YouTube регулярно обновляются из YouTube. Отключен
 <ul>
 <li>Отозвать доступ {c['name']} к вашему аккаунту Google можно в любой момент на странице
 <a href="{PERMISSIONS}">{PERMISSIONS}</a>.</li>
-<li>Попросить нас удалить вашу учётную запись и все ваши данные: напишите на {c['contact']}. Мы
-сделаем это в течение 7 дней.</li>
+<li>Удалить учётную запись и все ваши данные самостоятельно: «Удалить учётную запись» на
+странице «Тариф». Или попросить нас: напишите на {c['contact']}. Мы сделаем это в течение
+7 дней.</li>
 </ul>
 
 <h2>Контакты</h2>

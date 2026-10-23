@@ -49,9 +49,21 @@ Everything lives in the Postgres database you point the app at (by default the
   anyone. Per user, `user_plans` keeps the user's tariff, its start and end
   date and who assigned it (the user, an admin or the system), and
   `plan_changes` is a log of every tariff change with the same facts. Both
-  are personal rows with the owner's `user_id`. The app has no account
-  deletion yet, so they are removed only by deleting the database (see
-  "Deleting everything" below).
+  are personal rows with the owner's `user_id`. They go with the account
+  (see "Deleting an account" below).
+- **Deleting an account** (only with `NF_MULTI_USER=1`) -- a person deletes
+  their own account on the "Plan" page with their password; an admin does it
+  on the "Admin" page (typing the email back) or with
+  `cli.py delete-user EMAIL --yes`. It removes every row with that user's
+  `user_id` (watchlist, saved items, drafts, alerts and their delivery log,
+  topics, settings and notification secrets, tariff rows, usage, sessions and
+  API tokens, own channels with their metrics), their daily quota counters,
+  and the account itself; the OAuth tokens of their own channels are revoked
+  at Google first. What is shared stays: the public YouTube data everyone
+  collects, and a transcript or tag they added, which passes to the
+  operator. `admin_actions` keeps who deleted which email and when.
+  Blocking an account (Admin page, `cli.py disable-user`) deletes nothing
+  but ends its sessions and tokens at once.
 - **Your own channels** (plan 14, only if you connect one) — the channel id and
   title, the granted scopes, the OAuth refresh token **encrypted** with
   `OWN_TOKENS_KEY` from your `.env` (Fernet; the key is never in the database),

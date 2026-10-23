@@ -450,6 +450,17 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT
 );
 
+-- multi-user plan P0-04: what admins did to accounts (create, disable, enable,
+-- delete, self-delete). The email is kept: the users row is gone after a delete.
+CREATE TABLE IF NOT EXISTS admin_actions (
+    id BIGSERIAL PRIMARY KEY,
+    admin_id BIGINT NOT NULL,      -- 0 = the operator (CLI); the user themself for self-delete
+    action TEXT NOT NULL,
+    target_user_id BIGINT NOT NULL,
+    target_email TEXT,
+    created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
     user_id BIGINT NOT NULL,
@@ -566,6 +577,8 @@ CREATE TABLE IF NOT EXISTS plan_changes (
 _USER_ID = "BIGINT NOT NULL DEFAULT 1"
 
 MIGRATIONS = {
+    # multi-user plan P0-04: NULL = active; set = blocked (no sign-in, no sessions, no tokens)
+    "users": {"disabled_at": "TEXT"},
     "tracked_channels": {"user_id": _USER_ID},
     "saved_items": {"user_id": _USER_ID},
     "alert_deliveries": {"user_id": _USER_ID},
@@ -800,6 +813,18 @@ def migrate(conn):
         (str(SCHEMA_VERSION),),
     )
     return added
+
+
+# multi-user plan P0-04: every table holding one person's rows, keyed by
+# user_id -- deleting an account empties exactly these (application/users_admin.py).
+# events: only rows with user_id = the person (NULL = a shared fact, kept).
+# tests/test_user_deletion.py fails when a table with user_id is missing here.
+PERSONAL_TABLES = (
+    "sessions", "api_tokens", "user_settings", "user_prefs", "user_plans", "plan_changes",
+    "tracked_channels", "saved_items", "drafts", "alert_deliveries", "event_reads", "events",
+    "transcript_requests", "llm_usage", "user_topics", "cost_profiles",
+    "own_channels", "own_channel_daily", "own_video_metrics", "own_oauth_pending",
+)
 
 
 # plan 15 (5.4): a row is unique per owner, so two users can track the same
