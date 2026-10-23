@@ -37,6 +37,8 @@ export default {
   archive: 'archive',
   usersTitle: 'Users',
   usersSub: 'plan, expiry date and today\'s usage',
+  poolLine: 'Shared YouTube pool: {open} of {limit} units open to users ({reserve} kept for the background collector), {used} spent today. Users\' daily limits add up to {total}; {unlimited} without a limit.',
+  poolWarn: 'limits exceed the pool: users may hit the shared ceiling before their own',
   adminChip: 'admin',
   colUntil: 'Until',
   colToday: 'Today',

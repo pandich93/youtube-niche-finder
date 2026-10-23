@@ -59,6 +59,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   counters in Postgres). New and changed passwords refuse common long ones,
   keyboard runs and the email's own name. Behind a reverse proxy set
   `NF_TRUSTED_PROXIES` so limits count each real client, not the proxy.
+- **The shared YouTube quota is guarded.** Every call reserves its cost
+  atomically before it is sent, from the user's share and from the shared
+  pool. Parallel requests can no longer overshoot either, and the
+  100-searches-a-day counter no longer loses updates. Signed-in users share
+  the pool minus `WORKER_RESERVE_UNITS` (1500), kept for the worker's stats
+  snapshots and alerts. A spent pool answers 429 to users while the worker
+  goes on. A call that never reached Google is refunded, and a failure to
+  record the budget stops the call instead of letting it through uncounted.
+  The Admin page adds up users' daily limits against the pool.
 
 ## [0.4.0] - 2026-10-04
 

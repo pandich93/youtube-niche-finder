@@ -18,6 +18,7 @@ ALSO NOTE: since 21 July 2025 chart=mostPopular no longer mirrors the retired
 "Trending Now" tab -- it returns the Trending Music / Movies / Gaming charts
 only. General-interest trends must be computed from your own corpus.
 """
+import logging
 import os
 import re
 import time
@@ -25,6 +26,8 @@ import time
 import requests
 
 from domain import periods as P
+
+log = logging.getLogger(__name__)
 
 BASE = "https://www.googleapis.com/youtube/v3"
 
@@ -39,6 +42,10 @@ COST = {
 }
 SEARCH_DAILY_CALL_LIMIT = 100
 DAILY_UNIT_LIMIT = int(os.environ.get("YOUTUBE_DAILY_UNIT_LIMIT") or 10000)
+# multi-user plan P0-05: units of the shared pool only the worker (and the
+# operator, with no signed-in owner) may spend -- stats snapshots, alerts and
+# acceleration keep coming when users have used up the rest
+WORKER_RESERVE_UNITS = int(os.environ.get("WORKER_RESERVE_UNITS") or 1500)
 
 
 def user_units_key(user_id) -> str:
@@ -87,54 +94,101 @@ def user_usage(user_id) -> dict:
             "resetsAt": "midnight Pacific Time"}
 
 
-def _check_user_budget(path: str):
-    """Refuse the call before it is sent when the signed-in user who asked for
-    it has spent their daily share. No owner (worker, single-user) -- no check."""
-    from infrastructure import quota_owner
-    uid = quota_owner.current()
-    if uid is None:
-        return
-    usage = user_usage(uid)
-    limits = usage["limits"]
-    if limits["units"] is not None and usage["units"] + COST.get(path, 1) > limits["units"]:
-        raise UserQuotaExceeded(
-            f"your daily YouTube budget on this server is spent ({usage['units']} of "
-            f"{limits['units']} units); it resets at midnight Pacific Time")
-    if (path == "search" and limits["searchCalls"] is not None
-            and usage["searchCalls"] >= limits["searchCalls"]):
-        raise UserQuotaExceeded(
-            f"your daily search budget on this server is spent ({usage['searchCalls']} of "
-            f"{limits['searchCalls']} searches); it resets at midnight Pacific Time")
-
-
 def units_meta_key() -> str:
     """meta key of today's shared-pool counter -- per Pacific-Time day, when
     Google resets the 10,000 units."""
     return f"yt_units_{P.pacific_date_key()}"
 
 
-def _record_units(path: str):
-    """Add one sent request's cost to today's counter. Google charges every
-    request, failed ones included, so this runs after each requests.get.
-    Accounting must never break collection: any DB error is swallowed."""
+def search_meta_key() -> str:
+    """meta key of today's search.list calls, the 100-a-day bucket."""
+    return f"search_calls_{P.pacific_date_key()}"
+
+
+def _charges(path: str, uid) -> list:
+    """What one request takes: [(meta key, amount, ceiling or None, kind)].
+    Personal counters first, so a user over their own share hears about that.
+    A signed-in user's request may not eat into the worker's reserve of the
+    shared pool (multi-user plan P0-05); the worker and single-user mode
+    (no owner) may use all of it."""
+    cost = COST.get(path, 1)
+    out = []
+    if uid is not None:
+        limits = user_limits(uid)
+        out.append((user_units_key(uid), cost, limits["units"], "user-units"))
+        if path == "search":
+            out.append((user_search_key(uid), 1, limits["searchCalls"], "user-search"))
+    reserve = WORKER_RESERVE_UNITS if uid is not None else 0
+    out.append((units_meta_key(), cost, max(0, DAILY_UNIT_LIMIT - reserve), "pool"))
+    if path == "search":
+        out.append((search_meta_key(), 1, SEARCH_DAILY_CALL_LIMIT, "search-pool"))
+    return out
+
+
+def _refusal(kind: str, used: int, limit: int, for_users: bool):
+    if kind == "user-units":
+        return UserQuotaExceeded(
+            f"your daily YouTube budget on this server is spent ({used} of {limit} units); "
+            "it resets at midnight Pacific Time")
+    if kind == "user-search":
+        return UserQuotaExceeded(
+            f"your daily search budget on this server is spent ({used} of {limit} searches); "
+            "it resets at midnight Pacific Time")
+    if kind == "search-pool":
+        return SharedPoolExhausted(
+            f"the server's {limit} YouTube searches for today are spent; "
+            "they reset at midnight Pacific Time")
+    return SharedPoolExhausted(
+        f"the server's shared YouTube budget for today is spent ({used} of {limit} units"
+        f"{' open to users' if for_users else ''}); it resets at midnight Pacific Time")
+
+
+def _reserve(path: str) -> list:
+    """Take this request's cost from every counter before it is sent, all or
+    nothing, in one transaction: each counter goes up only if it stays within
+    its ceiling (multi-user plan P0-05). Returns [(key, amount)] for _refund.
+    A database failure is not swallowed: no reserve, no request."""
+    # resolved at call time, so tests that swap infrastructure.postgres
+    # for a double in sys.modules are honoured
+    import infrastructure.postgres as db
+    from infrastructure import quota_owner
+    uid = quota_owner.current()
+    charges = _charges(path, uid)
+    conn = db.get_conn()
     try:
-        # resolved at call time, so tests that swap infrastructure.postgres
-        # for a double in sys.modules are honoured
+        for key, n, limit, kind in charges:
+            if limit is None:
+                db.incr_meta(conn, key, n)
+            elif not db.incr_meta_capped(conn, key, n, limit):
+                conn.rollback()
+                raise _refusal(kind, int(db.get_meta(conn, key) or 0), limit, uid is not None)
+        conn.commit()
+    except QuotaExceeded:
+        raise
+    except Exception:
+        log.warning("YouTube budget could not be reserved; the request is not sent",
+                    exc_info=True)
+        raise
+    finally:
+        conn.close()
+    return [(key, n) for key, n, _limit, _kind in charges]
+
+
+def _refund(taken: list):
+    """Give back a reserve whose request never reached Google (network error
+    before an answer): Google charged nothing. Best effort -- a failed refund
+    over-counts, the safe side."""
+    try:
         import infrastructure.postgres as db
-        from infrastructure import quota_owner
         conn = db.get_conn()
         try:
-            db.incr_meta(conn, units_meta_key(), COST.get(path, 1))
-            uid = quota_owner.current()
-            if uid is not None:
-                db.incr_meta(conn, user_units_key(uid), COST.get(path, 1))
-                if path == "search":
-                    db.incr_meta(conn, user_search_key(uid), 1)
+            for key, n in taken:
+                db.incr_meta(conn, key, -n)
             conn.commit()
         finally:
             conn.close()
     except Exception:
-        pass
+        log.warning("YouTube budget reserve could not be refunded", exc_info=True)
 
 
 class QuotaExceeded(RuntimeError):
@@ -143,6 +197,11 @@ class QuotaExceeded(RuntimeError):
 
 class UserQuotaExceeded(QuotaExceeded):
     """One signed-in user's daily share is spent; everyone else can go on."""
+
+
+class SharedPoolExhausted(QuotaExceeded):
+    """The server's shared daily budget is spent -- for signed-in users the
+    pool minus the worker's reserve, or the 100 searches a day (P0-05)."""
 
 
 class YouTubeUnreachable(RuntimeError):
@@ -167,18 +226,20 @@ def _get(path: str, api_key: str, retries: int = 3, **params):
     # puts the full URL into its exception text, and on 2026-10-18 that
     # printed the key into the worker log.
     headers = {"X-Goog-Api-Key": api_key}
-    _check_user_budget(path)
     last = None
     for attempt in range(retries):
+        # reserved before every attempt: Google charges each answered one,
+        # failed answers included; an attempt that never got an answer is refunded
+        taken = _reserve(path)
         try:
             resp = requests.get(f"{BASE}/{path}", params=params, timeout=30, headers=headers)
         except requests.RequestException as e:
+            _refund(taken)
             if attempt + 1 < retries:
                 time.sleep(1.5 * (attempt + 1))
                 continue
             # only the error's type: its text carries the URL
             raise YouTubeUnreachable(f"cannot reach YouTube: {type(e).__name__}") from None
-        _record_units(path)
         if resp.status_code == 200:
             return resp.json()
         last = resp
