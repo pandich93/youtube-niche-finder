@@ -1,7 +1,7 @@
 """Per-user isolation through HTTP (plan 15, sub-stage 5.4; multi-user P1-17):
 with NF_MULTI_USER=1, two signed-in users each get their own watchlist, swipe
 file, drafts and briefs, content calendar, transcript queue, alert read marks,
-topics, notification settings and own channels with their synced numbers, and
+topics, notification settings, cost profiles and own channels with their synced numbers, and
 B cannot read or change A's through any of those routes. Own channels are
 written straight into the tables: Google is never called. Throwaway schema;
 no network.
@@ -38,7 +38,7 @@ def ab(monkeypatch):
     conn = db.get_conn()
     for t in ("tracked_channels", "saved_items", "drafts", "transcript_requests", "event_reads",
               "events", "sessions", "own_video_metrics", "own_channel_daily", "own_channels",
-              "user_topics", "user_settings", "transcripts", "videos", "channels"):
+              "user_topics", "user_settings", "cost_profiles", "transcripts", "videos", "channels"):
         conn.execute(f"DELETE FROM {t}")
     conn.execute("DELETE FROM users WHERE id != 1")
     conn.execute("INSERT INTO channels (channel_id, title, subscriber_count) VALUES (?,?,?)",
@@ -130,7 +130,7 @@ def test_a_signed_out_client_sees_nothing(ab):
     a.post("/api/drafts", json={"title": "A's draft"})
     anon = TestClient(api.app, headers={"X-NF-Client": "tests"})
     for path in ("/api/drafts", "/api/saved", "/api/channels/tracked", "/api/events",
-                 "/api/transcripts/queue", "/api/own/channels"):
+                 "/api/transcripts/queue", "/api/own/channels", "/api/cost-profiles"):
         assert anon.get(path).status_code == 401, path
 
 
@@ -354,6 +354,51 @@ def test_briefs_are_saved_for_their_author_only(ab, monkeypatch):
     assert _rows("SELECT id FROM drafts WHERE user_id = ?", (b.uid,)) == []
     d = _rows("SELECT video_id, planned_at, source_video_id FROM drafts WHERE id = ?", (did,))
     assert d == [{"video_id": None, "planned_at": None, "source_video_id": "httpisov1"}]
+
+
+def _profiles(uid):
+    return _rows("SELECT * FROM cost_profiles WHERE user_id = ? ORDER BY id", (uid,))
+
+
+def test_cost_profiles_are_separate(ab):
+    a, b = ab
+    pa = a.post("/api/cost-profiles", json={"name": "Studio", "perVideoUsd": 50,
+                                            "perMinuteUsd": 2, "monthlyUsd": 30}).json()
+    before = _profiles(a.uid)
+    assert [p["id"] for p in a.get("/api/cost-profiles").json()["profiles"]] == [pa["id"]]
+    assert b.get("/api/cost-profiles").json()["profiles"] == []
+
+    # by id or name: the profit estimate is the one route that reads a single profile
+    mine = a.get("/api/profit", params={"video_id": "httpisov1", "profile": pa["id"]})
+    assert mine.status_code == 200 and mine.json()["profile"]["id"] == pa["id"]
+    for ref in (pa["id"], "Studio"):
+        r = b.get("/api/profit", params={"video_id": "httpisov1", "profile": ref})
+        assert r.status_code == 400 and r.json()["detail"] == "cost profile not found", ref
+    # with no profile named B gets zero costs, not A's first profile
+    own = b.get("/api/profit", params={"video_id": "httpisov1"}).json()["profile"]
+    assert own == {"id": None, "name": None, "per_video_usd": 0.0, "per_minute_usd": 0.0,
+                   "monthly_usd": 0.0}
+
+    # B changes A's profile by id: refused exactly like an id that does not exist
+    change = {"id": pa["id"], "name": "Hijacked", "perVideoUsd": 0}
+    r = b.post("/api/cost-profiles", json=change)
+    missing = b.post("/api/cost-profiles", json={**change, "id": pa["id"] + 10_000})
+    assert r.status_code == 400 and r.json() == missing.json() == {"detail": "profile not found"}
+    assert b.delete(f"/api/cost-profiles/{pa['id']}").status_code == 404
+    assert _profiles(a.uid) == before
+
+    # the same name is B's own profile, not an edit of A's
+    pb = b.post("/api/cost-profiles", json={"name": "Studio", "perVideoUsd": 5}).json()
+    assert pb["id"] != pa["id"]
+    assert [(p["id"], p["per_video_usd"]) for p in b.get("/api/cost-profiles").json()["profiles"]] \
+        == [(pb["id"], 5.0)]
+    assert b.get("/api/profit", params={"video_id": "httpisov1"}).json()["profile"]["id"] == pb["id"]
+    assert b.post("/api/cost-profiles", json={"id": pb["id"], "name": "Studio",
+                                              "perVideoUsd": 7}).json()["per_video_usd"] == 7.0
+    assert b.delete(f"/api/cost-profiles/{pb['id']}").status_code == 200
+    assert b.get("/api/cost-profiles").json()["profiles"] == []
+    assert _profiles(a.uid) == before
+    assert a.get("/api/cost-profiles").json()["profiles"][0]["per_video_usd"] == 50.0
 
 
 if __name__ == "__main__":
