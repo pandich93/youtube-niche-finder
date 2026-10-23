@@ -214,6 +214,13 @@ def release_lock(name: str):
         raw.close()
 
 
+def lock_until_commit(conn, name: str, n: int):
+    """Take a Postgres advisory lock on (name, n) inside conn's transaction:
+    another caller with the same pair waits until this one commits or rolls
+    back. Per schema, like hold_lock (multi-user plan P1-10)."""
+    conn.execute("SELECT pg_advisory_xact_lock(hashtext(?), ?)", (f"{name}:{_schema()}", int(n)))
+
+
 def get_conn() -> _PGConn:
     raw = _pool().getconn()
     schema = _schema()

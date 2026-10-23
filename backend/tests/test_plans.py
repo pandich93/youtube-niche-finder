@@ -56,7 +56,7 @@ def pro(**over):
 def test_new_user_is_on_free_with_env_defaults():
     ent = PL.plan_for(user())
     assert ent.name == "Free" and ent.limits["yt_units"] == 2000
-    assert ent.limits["tracked_channels"] is None and ent.features["export"] is True
+    assert ent.limits["tracked_channels"] == 200 and ent.features["export"] is True
 
 
 def test_single_user_mode_gets_defaults(monkeypatch):
@@ -168,10 +168,14 @@ def test_ensure_room_counts_rows():
         db.track_channel(conn, ch, None, user_id=uid)
     conn.commit()
     conn.close()
-    with pytest.raises(DP.PlanLimitReached) as e:
-        PL.ensure_room(uid, "tracked_channels")
-    assert e.value.max == 2
-    PL.ensure_room(uid, "saved_items")                       # no limit on this one
+    conn = db.get_conn()
+    try:
+        with pytest.raises(DP.PlanLimitReached) as e:
+            PL.ensure_room(uid, "tracked_channels", conn=conn)
+        assert e.value.max == 2
+        PL.ensure_room(uid, "saved_items", conn=conn)        # no limit on this one
+    finally:
+        conn.close()
 
 
 def test_ensure_feature():

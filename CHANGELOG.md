@@ -63,6 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **The base tariff caps channels out of the box** (multi-user plan P1-10).
+  Tracked channels stop at `NF_USER_MAX_TRACKED_CHANNELS` (200) and own
+  channels at `NF_USER_MAX_OWN_CHANNELS` (5), because the worker refreshes
+  every tracked channel from the shared quota pool. A tariff with no value of
+  its own takes these; 0 in `.env` or an empty value in the tariff means no
+  limit. Rows already there are kept. Single-user mode has no count limits.
 - **API tokens expire and have scopes** (multi-user plan P1-03).
   - A new token lives 90 days by default. You choose the lifetime when you
     create it (1 to 365 days, or no expiry) on the MCP screen, with
@@ -102,6 +108,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- Two requests at once can no longer both take the last free row of a count
+  limit (tracked or own channels, topics, saved items, drafts, API tokens).
+  The count and the insert now run in one transaction under a lock per user
+  and limit (multi-user plan P1-10).
 - A pooled database connection whose caller raised before `close()` is now
   rolled back and returned to the pool. Before, it stayed "idle in
   transaction" and held its locks. On 2026-10-18 a network error during the

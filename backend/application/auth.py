@@ -305,10 +305,10 @@ def create_api_token(user_id: int, name: str = None, expires_in_days=None, scope
     """A new personal token, shown once. expires_in_days: 1..365, default 90,
     0 = no expiry; scopes: any of read, write, mcp (default all three)."""
     picked, expires_at = _token_scopes(scopes), _token_expiry(expires_in_days)
-    PL.ensure_room(user_id, "api_tokens")
     token = TOKEN_PREFIX + secrets.token_urlsafe(32)
     conn = db.get_conn()
     try:
+        PL.ensure_room(user_id, "api_tokens", conn=conn)
         row = conn.execute("INSERT INTO api_tokens (user_id, token_hash, name, created_at, "
                            "expires_at, scopes) VALUES (?,?,?,?,?,?) RETURNING id",
                            (user_id, _token_hash(token), (name or "").strip()[:80] or None,

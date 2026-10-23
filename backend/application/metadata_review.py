@@ -204,19 +204,21 @@ def _shape_draft(r) -> dict:
 def save_draft(title: str, description: str = "", tags=None, niche: str = None,
               channel_id: str = None, is_short: bool = False, review: dict = None,
               source_video_id: str = None, *, user_id: int) -> dict:
-    PL.ensure_room(user_id, "drafts")
     conn = db.get_conn()
     now = db.now_iso()
-    row = conn.execute(
-        "INSERT INTO drafts (title, description, tags, niche, channel_id, is_short, review, "
-        "created_at, source_video_id, user_id) VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id",
-        (title, description, json.dumps(tags or [], ensure_ascii=False), niche, channel_id,
-         1 if is_short else 0,
-         json.dumps(review, ensure_ascii=False) if review else None, now, source_video_id,
-         user_id),
-    ).fetchone()
-    conn.commit()
-    conn.close()
+    try:
+        PL.ensure_room(user_id, "drafts", conn=conn)
+        row = conn.execute(
+            "INSERT INTO drafts (title, description, tags, niche, channel_id, is_short, review, "
+            "created_at, source_video_id, user_id) VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id",
+            (title, description, json.dumps(tags or [], ensure_ascii=False), niche, channel_id,
+             1 if is_short else 0,
+             json.dumps(review, ensure_ascii=False) if review else None, now, source_video_id,
+             user_id),
+        ).fetchone()
+        conn.commit()
+    finally:
+        conn.close()
     return {"id": row["id"], "createdAt": now}
 
 

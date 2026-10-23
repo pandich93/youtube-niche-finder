@@ -17,11 +17,13 @@ def test_missing_keys_take_catalog_defaults(monkeypatch):
     monkeypatch.setenv("NF_USER_DAILY_UNITS", "500")
     monkeypatch.setenv("NF_USER_DAILY_SEARCH_CALLS", "0")       # 0 in .env = no limit
     monkeypatch.delenv("NF_USER_DAILY_LLM_USD", raising=False)
+    monkeypatch.delenv("NF_USER_MAX_OWN_CHANNELS", raising=False)
     lim = DP.resolve_limits({"tracked_channels": 10})
     assert lim["yt_units"] == 500
     assert lim["search_calls"] is None
     assert lim["llm_usd"] == 0.25
-    assert lim["tracked_channels"] == 10 and lim["own_channels"] is None
+    assert lim["tracked_channels"] == 10 and lim["own_channels"] == 5
+    assert lim["saved_items"] is None
     assert set(lim) == set(DP.LIMITS)
 
 

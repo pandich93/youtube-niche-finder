@@ -16,6 +16,7 @@ from infrastructure.postgres.connection import (  # noqa: F401
     display_dsn,
     get_conn,
     hold_lock,
+    lock_until_commit,
     release_lock,
 )
 from infrastructure.postgres.repositories import (  # noqa: F401

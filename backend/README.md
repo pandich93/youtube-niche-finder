@@ -312,7 +312,14 @@ number or empty (no limit); 0 means "not at all".
 
 - The first start creates the base tariff **Free**: new users start on it and
   return to it when another tariff's period ends. Its daily limits are the
-  `NF_USER_DAILY_*` values from `.env` until an admin sets others.
+  `NF_USER_DAILY_*` values from `.env` until an admin sets others. Out of the
+  box it also caps tracked channels at `NF_USER_MAX_TRACKED_CHANNELS` (200)
+  and own channels at `NF_USER_MAX_OWN_CHANNELS` (5): the worker refreshes
+  every tracked channel from the shared quota pool. 0 in `.env`, or an empty
+  value in the tariff, means no limit. Single-user mode has no count limits.
+- A count limit is checked in the same transaction as the insert, under a lock
+  per user and limit, so two requests at once cannot both take the last free
+  row.
 - Admins edit tariffs on the dashboard's **Админка** screen and change a
   user's tariff there; admins themselves are not limited.
 - Users pick a free tariff on the **Тариф** screen. A tariff with a price is

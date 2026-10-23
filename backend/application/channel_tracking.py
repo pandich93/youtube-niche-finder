@@ -122,7 +122,7 @@ def track(channel_id: str, note: str = None, *, user_id: int) -> dict:
         already = conn.execute("SELECT 1 FROM tracked_channels WHERE user_id = ? AND channel_id = ?",
                                (user_id, channel_id)).fetchone()
         if not already:            # re-tracking updates the note, it is not a new row
-            PL.ensure_room(user_id, "tracked_channels")
+            PL.ensure_room(user_id, "tracked_channels", conn=conn)
         db.track_channel(conn, channel_id, note, user_id=user_id)
         conn.commit()
     finally:
