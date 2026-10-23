@@ -272,9 +272,27 @@ fuse against a looping client rather than a defence against outside traffic.
 
 ## The Chrome extension
 
-The extension's `host_permissions` are limited to `http://127.0.0.1/*` and
-`http://localhost/*`. It talks only to your own backend. It does not send
-anything to any third party, and it has no permission to.
+The extension talks only to the one service address set in its popup. It does
+not send anything to any third party.
+
+- **Local by default.** Its permanent `host_permissions` are
+  `http://127.0.0.1/*` and `http://localhost/*` only, the default address is
+  `http://127.0.0.1:8080`, and with it nothing leaves your machine.
+- **Your own domain, if you choose.** When you enter another address (a server
+  you or your team runs, see [docs/hosting.md](docs/hosting.md#the-chrome-extension)),
+  the popup asks Chrome for access to that one host (`optional_host_permissions`).
+  You see Chrome's prompt and can refuse; switching to another address gives
+  the old host's access back. You can also revoke it on `chrome://extensions`.
+- **What goes to that service** is what the panels need: the IDs of the videos
+  and channels you open or see in lists, the text you type into the popup's
+  metadata review or "watch this topic", and your personal API token as
+  `Authorization: Bearer`. The token goes to a remote address only over
+  `https`; over plain `http` the extension does not send it.
+- **Where the token lives.** In `chrome.storage.local` (not synced to your other
+  browsers). The popup never shows it back.
+- **The YouTube page itself.** The extension reads the page you are on (video
+  and channel IDs, which video cards are shown) to draw its panels; it does not
+  read your YouTube account, cookies or history.
 
 ## Deleting everything
 

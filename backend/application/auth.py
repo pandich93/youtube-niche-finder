@@ -1,7 +1,8 @@
 """Users and sign-in (plan 15, used when NF_MULTI_USER=1).
 
-Accounts are by invitation: an admin creates them from the command line
-(`cli.py create-user`), there is no self-registration. Passwords are hashed
+An admin creates accounts from the command line (`cli.py create-user`); with
+SMTP configured people can also sign up themselves by an emailed link
+(application/signup.py, multi-user plan P1-06). Passwords are hashed
 with scrypt from the standard library (a per-password random salt, constant-
 time comparison). A session is a random token in an HttpOnly cookie; the
 database keeps only its SHA-256, so a leaked database does not leak live
@@ -200,15 +201,22 @@ def login(email: str, password: str, client_ip: str = None) -> dict:
             _failed(conn, keys, now)
             raise AuthError(_FAIL)
         db.clear_login_failures(conn, "email", _norm(email))
-        token = secrets.token_urlsafe(32)
-        expires = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
-        conn.execute("DELETE FROM sessions WHERE expires_at::timestamptz < now()")
-        conn.execute("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?,?,?,?)",
-                     (_token_hash(token), row["id"], db.now_iso(), expires.isoformat()))
+        s = start_session(conn, row["id"])
         conn.commit()
-        return {"token": token, "userId": row["id"], "expiresAt": expires.isoformat()}
+        return s
     finally:
         conn.close()
+
+
+def start_session(conn, user_id: int) -> dict:
+    """A new session for user_id on conn (the caller commits): after a
+    sign-in, and after a sign-up or password reset by emailed link (P1-06)."""
+    token = secrets.token_urlsafe(32)
+    expires = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
+    conn.execute("DELETE FROM sessions WHERE expires_at::timestamptz < now()")
+    conn.execute("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?,?,?,?)",
+                 (_token_hash(token), user_id, db.now_iso(), expires.isoformat()))
+    return {"token": token, "userId": user_id, "expiresAt": expires.isoformat()}
 
 
 def user_for_token(token: str):

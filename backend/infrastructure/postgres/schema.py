@@ -465,6 +465,19 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT
 );
 
+-- multi-user plan P1-06: one-time links sent by email -- sign-up (user_id is
+-- NULL until the account exists; new_email is the address), password reset,
+-- and confirming a new email. Only the SHA-256 of the token is kept; a link
+-- works once and until expires_at.
+CREATE TABLE IF NOT EXISTS email_tokens (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER,
+    purpose TEXT NOT NULL,
+    new_email TEXT,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+
 -- multi-user plan P0-04: what admins did to accounts (create, disable, enable,
 -- delete, self-delete). The email is kept: the users row is gone after a delete.
 CREATE TABLE IF NOT EXISTS admin_actions (
@@ -842,7 +855,7 @@ def migrate(conn):
 # events: only rows with user_id = the person (NULL = a shared fact, kept).
 # tests/test_user_deletion.py fails when a table with user_id is missing here.
 PERSONAL_TABLES = (
-    "sessions", "api_tokens", "user_settings", "user_prefs", "user_plans", "plan_changes",
+    "sessions", "api_tokens", "email_tokens", "user_settings", "user_prefs", "user_plans", "plan_changes",
     "tracked_channels", "saved_items", "drafts", "alert_deliveries", "event_reads", "events",
     "transcript_requests", "llm_usage", "llm_reservations", "user_topics", "cost_profiles",
     "own_channels", "own_channel_daily", "own_video_metrics", "own_oauth_pending",

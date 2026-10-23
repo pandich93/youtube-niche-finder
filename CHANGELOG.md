@@ -22,6 +22,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
     compose files. A login that may not create roles keeps working as before
     and logs a warning. `NF_DB_RLS=0` turns it off. Details:
     [docs/hosting.md](docs/hosting.md#row-level-security).
+- **The Chrome extension works with a service on your domain** (multi-user
+  plan P1-16, [extension/README.md](extension/README.md#a-service-on-your-domain)).
+  Localhost stays the default.
+  - Enter `https://YOUR-DOMAIN` as the service address and Chrome asks for
+    access to that one host (`optional_host_permissions`). Switching the
+    address away gives the old host's access back.
+  - The extension signs in with a personal API token (`read` + `write`, from
+    the MCP screen). It sends the token to a remote address only over `https`,
+    and the popup says when a token is missing.
+  - `NF_EXTENSION_IDS` (comma-separated) limits CORS to your own extensions.
+    Without it a local copy answers any extension as before, and a server with
+    sign-in answers none.
+  - What publishing in the Chrome Web Store takes:
+    [docs/chrome-web-store.md](docs/chrome-web-store.md).
+- **Sign-up, password reset and a profile page** (multi-user plan P1-06).
+  - With mail set up (`SMTP_HOST`, `SMTP_FROM`, see `.env.example`), the
+    sign-in screen offers "Create an account" and "Forgot password". Both mail
+    a one-time link; the password is set only from it, so an account always
+    belongs to someone who reads that inbox. `NF_REGISTRATION=closed` turns
+    sign-up off and keeps the reset.
+  - The answers never say whether an address is registered. Links are single
+    use, kept only as hashes, and limited per client address and per recipient
+    (`NF_MAIL_PER_IP_HOUR`, `NF_MAIL_PER_EMAIL_HOUR`).
+  - The **Profile** page changes the password (other sessions and API tokens
+    end) and the email (confirmed by a link to the new address).
+  - Without mail nothing changes: accounts come from an admin.
 - **Encryption key rotation** (multi-user plan P1-12). `OWN_TOKENS_KEY` stays
   the key that encrypts. Earlier keys go into `OWN_TOKENS_KEY_OLD`
   (comma-separated) and are only used to read, so changing the key no longer

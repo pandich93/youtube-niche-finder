@@ -25,6 +25,7 @@ export default {
   mcp: 'MCP-подключение',
   plan: 'Тариф',
   admin: 'Админка',
+  profile: 'Профиль',
   crumbChannel: 'Канал',
   crumbBrief: 'Бриф',
   crumbCompare: 'Сравнение',

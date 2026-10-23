@@ -15,13 +15,14 @@ The production setup is `docker-compose.prod.yml`, layered on top of the usual
   and sign-in limits count each visitor by their own address
   (`NF_TRUSTED_PROXIES`), not all of them as the proxy.
 - **MCP works over HTTPS** at `https://YOUR-DOMAIN/mcp`, with a personal API
-  token per person.
+  token per person. So does the Chrome extension.
 - **The database is backed up on a schedule.** Each dump is checked by a
   trial restore, and old ones are rotated out.
 
 - [Before you start](#before-you-start)
 - [First start](#first-start)
 - [Connect an MCP client](#connect-an-mcp-client)
+- [The Chrome extension](#the-chrome-extension)
 - [Backups](#backups)
 - [Monitoring](#monitoring)
 - [Restore from a backup](#restore-from-a-backup)
@@ -65,6 +66,7 @@ In `.env`, set at least these values:
 | `OWN_TOKENS_KEY` | an encryption key for the notification and channel secrets people save; how to generate it is just below |
 | `NF_DEFAULT_LOCALE` | `en` for an English-speaking audience (`ru` by default) |
 | `NF_SERVICE_NAME`, `NF_OPERATOR_NAME`, `NF_CONTACT_EMAIL` | who runs the service; shown on `/privacy` and `/terms` |
+| `SMTP_HOST`, `SMTP_FROM` (and `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_PORT`, `SMTP_SECURITY` as your mail provider says) | optional: mail for sign-up, password reset and email change. Without it only you create accounts, and nobody can reset a forgotten password themselves. `NF_REGISTRATION=closed` keeps reset by mail but turns sign-up off. |
 
 You don't need to set `NF_MULTI_USER`, `NF_COOKIE_SECURE`, `NF_ALLOWED_HOSTS`,
 `NF_TRUSTED_PROXIES` or `MCP_PUBLIC_URL`: the production file sets them from
@@ -123,8 +125,10 @@ Open `https://YOUR-DOMAIN` and sign in. The first start takes a minute or two
 while Caddy gets the certificate. `make prod-logs` shows what is happening.
 
 Accounts for other people are created the same way, without `--admin`, or on
-the **Admin** screen, which shows a one-time password to hand over. People can
-delete their own account on the **Plan** page.
+the **Admin** screen, which shows a one-time password to hand over. With mail
+set up, people can also sign up on the sign-in screen and confirm their email
+by the link it sends. They change their password and email on the **Profile**
+page and can delete their account on the **Plan** page.
 
 ## Connect an MCP client
 
@@ -139,6 +143,32 @@ The client connects to `https://YOUR-DOMAIN/mcp` over streamable HTTP and
 sends the header `Authorization: Bearer nf_…`. Without a valid token the
 server answers 401. The tools then act as that person: their watchlist, their
 drafts, their share of the quota.
+
+## The Chrome extension
+
+The same extension that works with a local copy works with the server:
+
+1. Each person creates a personal API token on the dashboard's MCP screen with
+   the scopes `read` and `write` (no `mcp` needed). `read` alone is not enough:
+   the list badges, comments, "collect", "track", "save" and the popup's
+   metadata review are POST requests.
+2. In the extension popup they set the service address to
+   `https://YOUR-DOMAIN`. Chrome asks to allow access to that host; they allow
+   it (or click "Allow access to this address" later).
+3. They paste the token into "Access token". The popup says so when the service
+   is reachable but the token is missing; a revoked or expired token shows the
+   same hint on the panels.
+
+The extension sends the token only over `https` to a remote address. Its own
+requests do not need CORS (it has host access), so the server answers CORS for
+no extension at all unless you list IDs:
+
+| Setting | Value |
+| --- | --- |
+| `NF_EXTENSION_IDS` | IDs of your extensions, comma-separated: the Chrome Web Store build, and the unpacked one you debug with. Without it a server with sign-in lets no extension in through CORS, so no other extension can read the API from your users' browsers. |
+
+Publishing the extension in the Chrome Web Store, so people don't have to load
+it unpacked: [chrome-web-store.md](chrome-web-store.md).
 
 ## Backups
 
