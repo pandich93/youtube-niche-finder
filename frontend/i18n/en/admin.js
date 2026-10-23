@@ -57,4 +57,7 @@ export default {
   newUserAdmin: 'administrator',
   createUser: 'Create user',
   userCreated: 'Created {email}. Temporary password: {password} — it is shown once, pass it on to the person; the password can be changed with set-password.',
+  // P1-12: secrets the current keys cannot read
+  secretsUnreadable: 'Unreadable with the current keys: {n} of {total} stored secrets (own-channel tokens, notification tokens and addresses). OWN_TOKENS_KEY was changed or lost: put the previous key into OWN_TOKENS_KEY_OLD and restart, or these users will have to reconnect channels and enter their notifications again. Details are in the log and in the output of cli.py rotate-secrets.',
+  secretsOld: 'On an old key: {n} secrets. Re-encrypt them with cli.py rotate-secrets --apply; after that OWN_TOKENS_KEY_OLD can go.',
 };

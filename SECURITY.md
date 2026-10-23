@@ -26,7 +26,11 @@ and `main` are supported.
   cross-origin POST is refused. CORS answers only `chrome-extension://`.
 - **Secrets stay local.** Your YouTube key lives in `.env`. The OAuth refresh
   tokens of your own channels are encrypted with `OWN_TOKENS_KEY` and never
-  returned or logged.
+  returned or logged. The key can be rotated: earlier keys go into
+  `OWN_TOKENS_KEY_OLD` (read-only), and `cli.py rotate-secrets --apply`
+  re-encrypts the stored values. A value no key reads is logged without its
+  content and counted on the admin screen
+  ([docs/hosting.md](docs/hosting.md)).
 - **The YouTube key stays out of URLs and logs.**
   - The key goes in the `X-Goog-Api-Key` header, never in the request URL
     (`_get` in `backend/infrastructure/youtube/client.py`).

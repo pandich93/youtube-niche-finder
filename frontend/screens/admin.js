@@ -70,12 +70,17 @@ async function viewAdmin() {
     view.innerHTML = notice(t('adminOnly'));
     return;
   }
-  const [{ plans, catalog }, { users, pool }] = await Promise.all([
+  const [{ plans, catalog }, { users, pool, secrets }] = await Promise.all([
     api('/api/admin/plans'), api('/api/admin/users')]);
   const options = (sel) => plans.filter((p) => !p.archived || p.id === sel).map((p) =>
     `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}${p.archived ? t('archivedSuffix') : ''}</option>`).join('');
   const unlimited = `<span style="color:var(--muted)">${t('noLimits')}</span>`;
-  view.innerHTML = `
+  // P1-12: секреты, которые не читаются текущими ключами, видны сразу, а не по молчащим алертам
+  const secretsNote = [
+    secrets?.unreadable ? notice(t('secretsUnreadable', { n: fmtNum(secrets.unreadable), total: fmtNum(secrets.total) }), 'error') : '',
+    secrets?.old ? notice(t('secretsOld', { n: fmtNum(secrets.old) })) : '',
+  ].join('');
+  view.innerHTML = `${secretsNote}
     <div class="card">
       ${sectionHead(t('plansTitle'), t('plansSub'))}
       ${table([

@@ -7,6 +7,7 @@
     python cli.py refresh                     обновить счётчики (история)
     python cli.py embed-videos                досчитать эмбеддинги (0 quota)
     python cli.py fix-tracked [--apply]       почистить watchlist от handle/url вместо id
+    python cli.py rotate-secrets [--apply]    перешифровать секреты текущим OWN_TOKENS_KEY
     python cli.py viral --period 24h
     python cli.py categories --period 7d --rank-by channels
     python cli.py keywords --period 24h
@@ -248,6 +249,32 @@ def cmd_fix_tracked(args):
     out(tracking.fix_tracked(_key() or None, apply=args.apply))
 
 
+def cmd_rotate_secrets(args):
+    """P1-12: re-encrypt with OWN_TOKENS_KEY what only a key from
+    OWN_TOKENS_KEY_OLD reads. Exit code 1 while anything stays unreadable."""
+    from application import secrets_rotation as SR
+    from infrastructure import secrets as SEC
+    try:
+        res = SR.rotate(apply=args.apply)
+    except SEC.SecretsNotConfigured as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    out(res)
+    if args.apply:
+        print(tr("Перешифровано: {rotated}; уже на текущем ключе: {current}; не читаются: "
+                 "{unreadable}", **res), file=sys.stderr)
+    else:
+        print(tr("Пробный прогон, база не менялась. Будет перешифровано: {rotated}; уже на "
+                 "текущем ключе: {current}; не читаются: {unreadable}. Записать: --apply",
+                 **res), file=sys.stderr)
+    if res["unreadable"]:
+        print(tr("Не читаются ни текущим, ни старыми ключами: верните прежний ключ в "
+                 "OWN_TOKENS_KEY_OLD или попросите пользователей подключить каналы и "
+                 "ввести токены уведомлений заново."), file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_digest_send(args):
     from application import digest as digest_mod
     out(digest_mod.send_digest(force=True, user_id=LOCAL_USER_ID))
@@ -437,6 +464,12 @@ def main():
     p.add_argument("--apply", action="store_true",
                    help=tr("применить изменения (по умолчанию — только просмотр)"))
     p.set_defaults(fn=cmd_fix_tracked)
+
+    p = sub.add_parser("rotate-secrets",
+                       help=tr("перешифровать секреты текущим OWN_TOKENS_KEY (ротация ключа)"))
+    p.add_argument("--apply", action="store_true",
+                   help=tr("записать в базу (по умолчанию — только посчитать)"))
+    p.set_defaults(fn=cmd_rotate_secrets)
 
     p = sub.add_parser("collect-channel", help=tr("собрать канал (1 unit / 50 видео)"))
     p.add_argument("channel")

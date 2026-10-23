@@ -80,6 +80,30 @@ docker compose run --rm --no-deps web python -c \
   "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 ```
 
+**Rotating the key.** You can change `OWN_TOKENS_KEY` without losing what
+people saved, for example after the key may have leaked:
+
+1. Generate a new key with the command above.
+2. In `.env`, move the current key into `OWN_TOKENS_KEY_OLD` and put the new
+   one into `OWN_TOKENS_KEY`. `OWN_TOKENS_KEY_OLD` takes several keys,
+   comma-separated. It is only ever used to read.
+3. Restart with `make prod-up`. New secrets are now encrypted with the new
+   key, and the old ones are still read with the old key.
+4. See what would change: `make prod-cli ARGS="rotate-secrets"`. This is a dry
+   run. It counts the values to re-encrypt and the ones no key reads.
+5. Re-encrypt: `make prod-cli ARGS="rotate-secrets --apply"`. It prints how
+   many values were re-encrypted and how many are unreadable. The exit code is
+   1 while anything is unreadable.
+6. When a dry run reports 0 to re-encrypt, empty `OWN_TOKENS_KEY_OLD` and
+   restart again. Backups made before the rotation still need the old key, so
+   keep it somewhere safe as long as you keep those backups.
+
+A secret that no key reads is no longer dropped silently. The log says which
+field of which account it was, never the value. The **Админка** screen shows
+how many stored secrets the current keys cannot read. To fix it, put the
+previous key back into `OWN_TOKENS_KEY_OLD`. Without that key, those people
+have to reconnect their channels and enter their notification settings again.
+
 Start everything and create your own admin account:
 
 ```bash
@@ -149,7 +173,8 @@ nightly `rsync -a server:youtube-niche-finder/backups/ ./niche-backups/` from
 another machine. The dumps contain accounts, sessions and encrypted secrets:
 protect them like the server itself. Keep a copy of `.env` (with
 `OWN_TOKENS_KEY`) somewhere safe too: without the key, the restored secrets
-cannot be read.
+cannot be read. After a key rotation, keep the old key as long as you keep
+backups made before it.
 
 ## Monitoring
 

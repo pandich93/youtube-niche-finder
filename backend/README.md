@@ -640,7 +640,12 @@ One-time setup (each user brings their own OAuth client; nothing is shared):
 4. Generate the key that encrypts the stored refresh token and put it into
    `.env` as `OWN_TOKENS_KEY=...`:
    `docker compose run --rm web python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
-   Keep it only in `.env`; losing or changing it means reconnecting.
+   Keep it only in `.env`; losing it means reconnecting. To change it, move
+   the current key into `OWN_TOKENS_KEY_OLD` (comma-separated, read-only), put
+   the new one into `OWN_TOKENS_KEY`, restart, and run
+   `make rotate-secrets ARGS=--apply` (without `--apply` it is a dry run). It
+   prints how many values were re-encrypted and how many no key reads; then
+   `OWN_TOKENS_KEY_OLD` can be emptied.
 5. `docker compose up -d web worker`, open the dashboard → **Мои каналы** →
    **Подключить канал**, sign in and allow read-only access.
 
