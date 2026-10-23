@@ -106,12 +106,22 @@ optional LLM adds `openrouter.ai` only when you turn it on — or nothing at
 all with a local Ollama. [PRIVACY.md](../PRIVACY.md) has the full picture,
 including how to delete everything.
 
+## Language
+
+The dashboard, the extension, alerts, the digest and the MCP scenarios come in
+Russian and English. Each person switches the dashboard language in the
+sidebar; the choice is saved and also sets the language of their alerts,
+digest and MCP scenarios. Where nobody chose, `NF_DEFAULT_LOCALE` in `.env`
+decides (`ru` by default, so existing installs look the same); set
+`NF_DEFAULT_LOCALE=en` for an English-speaking audience. API clients pick the
+language with an `X-NF-Locale` or `Accept-Language` header.
+
 ## Giving accounts to other people
 
 A copy is single-user by default. `NF_MULTI_USER=1` turns on accounts with
 their own watchlists, drafts and alerts, per-user API tokens and tariffs:
 daily limits, count limits and features per tariff, edited by an admin on the
-dashboard's **Админка** screen ([backend/README.md](../backend/README.md#tariffs-saas-sub-project-1-nf_multi_user1)).
+dashboard's **Admin** («Админка») screen ([backend/README.md](../backend/README.md#tariffs-saas-sub-project-1-nf_multi_user1)).
 Accounts are created from the command line:
 
 ```bash
