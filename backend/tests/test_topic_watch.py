@@ -246,3 +246,70 @@ def test_owners_without_the_feature_do_not_starve_the_others(yt_api, monkeypatch
     res = TW.search_topics("key")
     assert res["topicsSearched"] == 1
     assert [c[0] for c in yt_api["search"]] == ["cooking"]
+
+
+def _two_owners(monkeypatch, older_for_first=3):
+    """A signed-in user with `older_for_first` old "ai tools" topics and the
+    local user with one newer "cooking" topic, both allowed to search."""
+    from application import auth as AUTH
+    from application import plans as PL
+    conn = db.get_conn()
+    conn.execute("DELETE FROM users WHERE id != 1")
+    conn.commit()
+    conn.close()
+    first = AUTH.create_user("spent@example.com", "correct horse battery")
+    for i in range(older_for_first):
+        t = TW.add_topic("ai tools", user_id=first, search_youtube=True)
+        _backdate_topic(t["id"], 48 + i)
+    other = TW.add_topic("cooking", threshold=0.8, search_youtube=True)
+    _backdate_topic(other["id"], 24)
+    real = PL.plan_for
+
+    def allowed(uid):
+        ent = real(uid)
+        return type(ent)(ent.plan_id, ent.name, ent.limits,
+                         {**ent.features, "topic_youtube_search": True})
+
+    monkeypatch.setattr(PL, "plan_for", allowed)
+    monkeypatch.setenv("NF_MULTI_USER", "1")
+    return first
+
+
+def _search_raising(monkeypatch, yt_api, exc, for_query):
+    import infrastructure.youtube.client as yt
+    ok = yt.search_videos
+
+    def search_videos(key, query, **kw):
+        if for_query in (None, query):
+            yt_api["search"].append((query, kw.get("published_after"), kw.get("order")))
+            raise exc("spent")
+        return ok(key, query, **kw)
+
+    monkeypatch.setattr(yt, "search_videos", search_videos)
+
+
+def test_one_users_spent_share_does_not_stop_other_users_topics(yt_api, monkeypatch):
+    # multi-user plan P0-01: a personal UserQuotaExceeded used to end the whole
+    # pass, and the spent user's topics, never marked searched, came first again
+    import infrastructure.youtube.client as yt
+    first = _two_owners(monkeypatch)
+    monkeypatch.setattr(TW, "SEARCH_MAX_PER_DAY", 2)   # fewer than the spent user's topics
+    _search_raising(monkeypatch, yt_api, yt.UserQuotaExceeded, "ai tools")
+    res = TW.search_topics("key")
+    assert res["stoppedBy"] is None and res["topicsSearched"] == 1
+    assert res["skippedUsers"] == [first]
+    assert [c[0] for c in yt_api["search"]] == ["ai tools", "cooking"]   # one try per spent user
+    conn = db.get_conn()
+    left = conn.execute("SELECT COUNT(*) AS n FROM user_topics WHERE user_id = ? "
+                        "AND last_searched_at IS NULL", (first,)).fetchone()["n"]
+    conn.close()
+    assert left == 3                                   # still due once their share comes back
+
+
+def test_shared_key_quota_still_stops_the_loop(yt_api, monkeypatch):
+    import infrastructure.youtube.client as yt
+    _two_owners(monkeypatch, older_for_first=1)
+    _search_raising(monkeypatch, yt_api, yt.QuotaExceeded, None)
+    res = TW.search_topics("key")
+    assert res["stoppedBy"] == "quota" and res["topicsSearched"] == 0
+    assert res["skippedUsers"] == [] and len(yt_api["search"]) == 1

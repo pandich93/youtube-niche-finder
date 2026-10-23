@@ -129,14 +129,19 @@ def search_topics(api_key: str) -> dict:
     """The worker's daily step: one search.list call per opted-in topic not
     searched for SEARCH_EVERY_HOURS, oldest first, at most SEARCH_MAX_PER_DAY.
     New videos are stored with embeddings and no niche; match_new does the
-    rest. Stops quietly when the day's search calls run out."""
+    rest. Stops quietly when the day's search calls run out. An owner whose
+    own share of the day is spent is skipped (skippedUsers, ids only) and the
+    others go on; the cap counts topics actually searched, so the skipped
+    owner's topics do not take the others' places (multi-user plan P0-01)."""
     import infrastructure.youtube.client as yt
     from application import collecting as C
     from domain import periods as PD
     from domain.users import multi_user_enabled
     from infrastructure import quota_owner
 
-    out = {"topicsSearched": 0, "videosStored": 0, "searchCalls": 0, "stoppedBy": None}
+    spent = []                             # owners whose own share ran out in this pass
+    out = {"topicsSearched": 0, "videosStored": 0, "searchCalls": 0, "stoppedBy": None,
+           "skippedUsers": spent}
     if SEARCH_MAX_PER_DAY <= 0:
         return out
     since = (datetime.now(timezone.utc) - timedelta(hours=SEARCH_EVERY_HOURS)).isoformat()
@@ -147,18 +152,17 @@ def search_topics(api_key: str) -> dict:
             "AND (last_searched_at IS NULL OR last_searched_at < ?) "
             "ORDER BY last_searched_at ASC NULLS FIRST, id", (since,)).fetchall()
         allowed = {}                       # the plan is read once per owner
-        picked = []
+        published_after = PD.to_rfc3339(datetime.now(timezone.utc) - timedelta(hours=24))
         for t in topics:
+            if out["topicsSearched"] >= SEARCH_MAX_PER_DAY:
+                break
+            if t["user_id"] in spent:
+                continue
             if t["user_id"] not in allowed:
                 allowed[t["user_id"]] = bool(
                     PL.plan_for(t["user_id"]).features["topic_youtube_search"])
-            if allowed[t["user_id"]]:
-                picked.append(t)
-                if len(picked) >= SEARCH_MAX_PER_DAY:
-                    break
-        topics = picked
-        published_after = PD.to_rfc3339(datetime.now(timezone.utc) - timedelta(hours=24))
-        for t in topics:
+            if not allowed[t["user_id"]]:
+                continue
             if C.search_calls_today(conn) >= yt.SEARCH_DAILY_CALL_LIMIT:
                 out["stoppedBy"] = "search-quota"
                 break
@@ -181,6 +185,11 @@ def search_topics(api_key: str) -> dict:
                     now = db.now_iso()
                     C.store_channels(conn, yt.channels_list(api_key, chans) if chans else [], now)
                     out["videosStored"] += C.store_videos(conn, items, embed=True, now=now)
+            except yt.UserQuotaExceeded:
+                # only this owner's share; the topic stays due for when it resets
+                spent.append(t["user_id"])
+                conn.commit()
+                continue
             except yt.QuotaExceeded:
                 out["stoppedBy"] = "quota"
                 conn.commit()
