@@ -62,4 +62,4 @@ def test_hidden_subscribers_give_no_forecast():
 
 def test_channel_analytics_and_inspect_channel_carry_milestones():
     assert T.channel_analytics(CH)["milestones"]["subscribers"] == 800
-    assert I.inspect_channel(None, CH, fetch=False)["milestones"]["subscribers"] == 800
+    assert I.inspect_channel(None, CH, fetch=False, user_id=1)["milestones"]["subscribers"] == 800

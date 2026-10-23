@@ -32,7 +32,7 @@ def _env_mode():
     return alerts.NOTIFY_MODE
 
 
-def get(user_id: int = LOCAL_USER_ID) -> dict:
+def get(*, user_id: int) -> dict:
     conn = db.get_conn()
     try:
         r = _row(conn, user_id)
@@ -60,7 +60,7 @@ def save(user_id: int, telegram_bot_token: str = None, telegram_chat_id: str = N
         if clear:
             conn.execute("DELETE FROM user_settings WHERE user_id = ?", (user_id,))
             conn.commit()
-            return get(user_id)
+            return get(user_id=user_id)
         r = _row(conn, user_id)
         cur = dict(r) if r else {"telegram_token_enc": None, "telegram_chat_id": None,
                                  "webhook_url_enc": None, "notify_mode": None}
@@ -95,10 +95,10 @@ def save(user_id: int, telegram_bot_token: str = None, telegram_chat_id: str = N
         conn.commit()
     finally:
         conn.close()
-    return get(user_id)
+    return get(user_id=user_id)
 
 
-def notifier_for(user_id: int = LOCAL_USER_ID):
+def notifier_for(*, user_id: int):
     conn = db.get_conn()
     try:
         r = _row(conn, user_id)
@@ -119,7 +119,7 @@ def notifier_for(user_id: int = LOCAL_USER_ID):
     return NullNotifier()
 
 
-def mode_for(user_id: int = LOCAL_USER_ID) -> str:
+def mode_for(*, user_id: int) -> str:
     conn = db.get_conn()
     try:
         r = _row(conn, user_id)
@@ -144,8 +144,8 @@ def recipients() -> list:
             if PL.plan_for(uid).features["notifications"]]
 
 
-def target_name(user_id: int = LOCAL_USER_ID) -> str:
-    n = notifier_for(user_id)
+def target_name(*, user_id: int) -> str:
+    n = notifier_for(user_id=user_id)
     return ("telegram" if isinstance(n, TelegramNotifier) else
             "webhook" if isinstance(n, WebhookNotifier) else "none")
 

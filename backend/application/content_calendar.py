@@ -14,7 +14,6 @@ from application import metadata_review as MR
 from domain import content_calendar as K
 from domain import periods as P
 from domain.i18n import tr
-from domain.users import LOCAL_USER_ID
 
 MAX_RANGE_DAYS = 62
 NOTE = "Times are UTC; the dashboard shows them in your time zone. Best hours are a correlation."
@@ -64,7 +63,7 @@ def _shape(d: dict, now, slots=None) -> dict:
     return out
 
 
-def plan_draft(draft_id: int, planned_at: str = None, user_id: int = LOCAL_USER_ID) -> dict:
+def plan_draft(draft_id: int, planned_at: str = None, *, user_id: int) -> dict:
     """Give a draft a release time (ISO, UTC; None takes it off the calendar)
     and say whether it falls on one of the best hours of its niche/channel."""
     planned = _parse(planned_at, "planned_at").isoformat() if planned_at else None
@@ -80,7 +79,7 @@ def plan_draft(draft_id: int, planned_at: str = None, user_id: int = LOCAL_USER_
     return {**_shape(d, _now(), best_slots(d["niche"], d["channelId"])), "note": NOTE}
 
 
-def content_calendar(start: str = None, end: str = None, user_id: int = LOCAL_USER_ID) -> dict:
+def content_calendar(start: str = None, end: str = None, *, user_id: int) -> dict:
     """Drafts planned (or published) between start and end (ISO; default:
     this week and the next three), each with its state; plus the drafts not
     planned yet, to put on the calendar."""

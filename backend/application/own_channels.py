@@ -84,7 +84,7 @@ def _problems() -> list:
     return []
 
 
-def status(user_id: int = LOCAL_USER_ID) -> dict:
+def status(*, user_id: int) -> dict:
     cid, secret = _client()
     missing = [name for name, ok in ((CLIENT_ID_ENV, cid), (CLIENT_SECRET_ENV, secret),
                                      (SEC.ENV, SEC.configured())) if not ok]
@@ -102,7 +102,7 @@ def _require_configured(connecting: bool = True):
     """connecting=False (a sync of channels already connected) needs the
     client and the key but not the redirect: a wrong redirect in web mode
     must not stop the daily numbers."""
-    st = status()
+    st = status(user_id=LOCAL_USER_ID)
     if not st["configured"] and (connecting or st["missing"]):
         what = ", ".join(st["missing"]) if st["missing"] else "; ".join(st["problems"])
         raise NotConfigured(("set " if st["missing"] else "") + what
@@ -111,7 +111,7 @@ def _require_configured(connecting: bool = True):
 
 # ---------------------------------------------------------- connect
 
-def start_connect(user_id: int = LOCAL_USER_ID, redirect_uri: str = None,
+def start_connect(*, user_id: int, redirect_uri: str = None,
                   include_revenue: bool = None) -> dict:
     """A Google consent URL for this user. The state is single-use and
     expires in STATE_TTL_MINUTES; the PKCE verifier stays on the server.
@@ -251,7 +251,7 @@ def _store(conn, user_id, channel_id, window, start, end, rows):
              r.get("cpm"), r.get("playbackBasedCpm"), now))
 
 
-def sync(user_id: int = LOCAL_USER_ID, channel_id: str = None, today: date = None) -> dict:
+def sync(*, user_id: int, channel_id: str = None, today: date = None) -> dict:
     """Refresh the last 28 days and lifetime per-video numbers of your
     connected channels (or one). Uses the Analytics API quota, not the Data
     API key's. A quota error is recorded and the old numbers are kept."""
@@ -351,7 +351,7 @@ def _summary(rows) -> dict:
             "medianRetentionPct": retention}
 
 
-def list_channels(user_id: int = LOCAL_USER_ID) -> dict:
+def list_channels(*, user_id: int) -> dict:
     conn = db.get_conn()
     try:
         rows = [dict(r) for r in conn.execute(
@@ -376,7 +376,7 @@ def _estimated_range(channel_id) -> dict:
     return M.rpm_range("default"), "default (channel not collected yet)"
 
 
-def rpm_calibration(user_id: int = LOCAL_USER_ID) -> dict:
+def rpm_calibration(*, user_id: int) -> dict:
     """Your real 28-day RPM next to the range niche-finder would have guessed
     for the same channel from public data (plan 06)."""
     conn = db.get_conn()
@@ -396,7 +396,7 @@ def rpm_calibration(user_id: int = LOCAL_USER_ID) -> dict:
                     "Unknown without the monetary scope or on an unmonetized channel."}
 
 
-def own_vs_niche(channel_id: str, niche: str, user_id: int = LOCAL_USER_ID) -> dict:
+def own_vs_niche(channel_id: str, niche: str, *, user_id: int) -> dict:
     """Your videos' lifetime views and retention against the videos of a niche
     we collected (their public lifetime views)."""
     conn = db.get_conn()
@@ -418,7 +418,7 @@ def own_vs_niche(channel_id: str, niche: str, user_id: int = LOCAL_USER_ID) -> d
             "note": NOTE}
 
 
-def metrics_for_videos(video_ids, user_id: int = LOCAL_USER_ID) -> dict:
+def metrics_for_videos(video_ids, *, user_id: int) -> dict:
     """{video_id: lifetime numbers} for draft_outcomes -- empty when the
     videos are not on a connected channel."""
     ids = [v for v in video_ids if v]
@@ -440,7 +440,7 @@ def metrics_for_videos(video_ids, user_id: int = LOCAL_USER_ID) -> dict:
 
 # ---------------------------------------------------------- disconnect
 
-def disconnect(channel_id: str, user_id: int = LOCAL_USER_ID) -> dict:
+def disconnect(channel_id: str, *, user_id: int) -> dict:
     """Revoke the token at Google (best effort) and delete everything stored
     for this channel."""
     conn = db.get_conn()

@@ -93,7 +93,7 @@ def test_build_groups_the_last_day_by_kind_and_ranks_by_strength(monkeypatch):
         "channelsMatched": 7, "channels": [
             {"channelId": "UCr", "channelTitle": "Rising", "multiplier": 6.1,
              "subscribers": 36_800_000}]})
-    d = digest.build_digest(top_n=2)
+    d = digest.build_digest(top_n=2, user_id=1)
     assert [e["payload"]["outlierScore"] for e in d["outliers"]["items"]] == [9.0, 4.2]
     assert d["outliers"]["total"] == 3                     # old one is outside 24h
     assert d["gone"]["total"] == 1
@@ -114,7 +114,7 @@ def test_topic_matches_and_milestones_reach_the_digest():
                                             "videoId": "vt", "similarity": 0.8}), db.now_iso()))
     conn.commit()
     conn.close()
-    d = digest.build_digest()
+    d = digest.build_digest(user_id=1)
     assert d["topics"]["total"] == 1 and d["milestones"]["total"] == 1 and d["empty"] is False
     text = digest.format_digest(d)
     assert "Ваши темы" in text and "«ai tools»: New AI agent" in text and "Рубежи" in text
@@ -132,7 +132,7 @@ def test_repackaging_section_is_per_user_only_in_multi_user_mode(monkeypatch):
 
 
 def test_empty_day_is_flagged():
-    d = digest.build_digest()
+    d = digest.build_digest(user_id=1)
     assert d["empty"] is True
 
 
@@ -140,7 +140,7 @@ def test_format_stays_under_telegram_limit_and_escapes_html(monkeypatch):
     for i in range(200):
         _event("outlier", f"v{i}", {"videoId": f"v{i}", "outlierScore": 3 + i / 100,
                                     "title": "<b>" + "очень длинный заголовок " * 20})
-    text = digest.format_digest(digest.build_digest(top_n=50))
+    text = digest.format_digest(digest.build_digest(top_n=50, user_id=1))
     assert len(text) <= digest.TELEGRAM_LIMIT
     assert "&lt;b&gt;" in text and "<b>очень" not in text
     assert "ещё" in text                                    # the rest is summarised
@@ -150,56 +150,56 @@ def test_format_stays_under_telegram_limit_and_escapes_html(monkeypatch):
 
 def test_no_notifier_configured_is_a_quiet_skip(monkeypatch):
     monkeypatch.setattr(notify_factory, "get_notifier", lambda: NullNotifier())
-    out = digest.send_digest(now=MORNING)
+    out = digest.send_digest(now=MORNING, user_id=1)
     assert out["sent"] is False and out["reason"] == "no notifier"
 
 
 def test_not_before_digest_hour_and_never_twice_a_day(monkeypatch):
     n = _stub(monkeypatch)
     _event("outlier", "v1", {"videoId": "v1", "title": "t", "outlierScore": 5})
-    assert digest.send_digest(now=TOO_EARLY)["reason"] == "too early"
-    assert digest.send_digest(now=MORNING)["sent"] is True
-    again = digest.send_digest(now=MORNING + timedelta(hours=3))
+    assert digest.send_digest(now=TOO_EARLY, user_id=1)["reason"] == "too early"
+    assert digest.send_digest(now=MORNING, user_id=1)["sent"] is True
+    again = digest.send_digest(now=MORNING + timedelta(hours=3), user_id=1)
     assert again["sent"] is False and again["reason"] == "already sent today"
     assert len(n.sent) == 1
     # the next local day sends again
-    assert digest.send_digest(now=MORNING + timedelta(days=1))["sent"] is True
+    assert digest.send_digest(now=MORNING + timedelta(days=1), user_id=1)["sent"] is True
 
 
 def test_force_sends_outside_the_schedule(monkeypatch):
     n = _stub(monkeypatch)
     _event("outlier", "v1", {"videoId": "v1", "title": "t", "outlierScore": 5})
-    digest.send_digest(now=MORNING)
-    assert digest.send_digest(now=TOO_EARLY, force=True)["sent"] is True
+    digest.send_digest(now=MORNING, user_id=1)
+    assert digest.send_digest(now=TOO_EARLY, force=True, user_id=1)["sent"] is True
     assert len(n.sent) == 2
 
 
 def test_empty_day_is_not_sent_but_is_marked_done(monkeypatch):
     n = _stub(monkeypatch)
-    out = digest.send_digest(now=MORNING)
+    out = digest.send_digest(now=MORNING, user_id=1)
     assert out["sent"] is False and out["reason"] == "empty"
     assert n.sent == []
-    assert digest.send_digest(now=MORNING)["reason"] == "already sent today"
+    assert digest.send_digest(now=MORNING, user_id=1)["reason"] == "already sent today"
 
 
 def test_failed_send_is_retried_next_cycle(monkeypatch):
     _stub(monkeypatch, ok=False)
     _event("outlier", "v1", {"videoId": "v1", "title": "t", "outlierScore": 5})
-    assert digest.send_digest(now=MORNING)["reason"] == "send failed"
+    assert digest.send_digest(now=MORNING, user_id=1)["reason"] == "send failed"
     _stub(monkeypatch, ok=True)
-    assert digest.send_digest(now=MORNING)["sent"] is True
+    assert digest.send_digest(now=MORNING, user_id=1)["sent"] is True
 
 
 def test_digest_mode_silences_instant_alerts_and_marks_covered_events(monkeypatch):
     n = _stub(monkeypatch)
     monkeypatch.setattr(alerts, "NOTIFY_MODE", "digest")
     _event("outlier", "v1", {"videoId": "v1", "title": "t", "outlierScore": 5})
-    assert alerts.deliver()["skipped"] is True
+    assert alerts.deliver(user_id=1)["skipped"] is True
     assert n.sent == []
-    digest.send_digest(now=MORNING)
+    digest.send_digest(now=MORNING, user_id=1)
     # switching back to instant must not flood with what the digest covered
     monkeypatch.setattr(alerts, "NOTIFY_MODE", "instant")
-    assert alerts.deliver()["sent"] == 0
+    assert alerts.deliver(user_id=1)["sent"] == 0
     assert len(n.sent) == 1
 
 

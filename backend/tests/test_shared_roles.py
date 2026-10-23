@@ -158,7 +158,7 @@ def test_reindex_is_for_the_author_or_an_admin(people):
 def test_operator_transcripts_belong_to_admins(people):
     # older rows have no author (NULL): only an admin replaces them
     _boss, a, _b = people
-    TR.save_transcript("vrole3", TEXT)                  # the operator, as before
+    TR.save_transcript("vrole3", TEXT, user_id=1)                  # the operator, as before
     conn = db.get_conn()
     conn.execute("UPDATE transcripts SET created_by = NULL WHERE video_id = 'vrole3'")
     conn.commit()

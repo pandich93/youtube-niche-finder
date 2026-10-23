@@ -13,7 +13,6 @@ from application import monetization as MO
 from application import own_channels as OWN
 from domain import metrics as M
 from domain import profit as P
-from domain.users import LOCAL_USER_ID
 from infrastructure.categories import repository as C
 
 MAX_PROFILES = 50
@@ -36,7 +35,7 @@ def _money(value, field) -> float:
     return round(v, 2)
 
 
-def list_profiles(user_id: int = LOCAL_USER_ID) -> list:
+def list_profiles(*, user_id: int) -> list:
     conn = db.get_conn()
     try:
         return [dict(r) for r in conn.execute(
@@ -47,7 +46,7 @@ def list_profiles(user_id: int = LOCAL_USER_ID) -> list:
 
 def save_profile(name: str, per_video_usd: float = 0, per_minute_usd: float = 0,
                  monthly_usd: float = 0, profile_id: int = None,
-                 user_id: int = LOCAL_USER_ID) -> dict:
+                 *, user_id: int) -> dict:
     """Create a profile, or change the one with profile_id (or with this name).
     Costs in US dollars: a fixed price per video, a price per minute of video,
     and a monthly overhead (subscriptions)."""
@@ -90,7 +89,7 @@ def save_profile(name: str, per_video_usd: float = 0, per_minute_usd: float = 0,
         conn.close()
 
 
-def delete_profile(profile_id: int, user_id: int = LOCAL_USER_ID) -> dict:
+def delete_profile(profile_id: int, *, user_id: int) -> dict:
     """Remove one cost profile of yours (a setting you typed in, not collected data)."""
     conn = db.get_conn()
     try:
@@ -105,7 +104,7 @@ def delete_profile(profile_id: int, user_id: int = LOCAL_USER_ID) -> dict:
 def _profile(profile, user_id) -> dict:
     """The profile by id or name; with none given the first one; none at all
     -> costs of zero (revenue only), and the result says so."""
-    profiles = list_profiles(user_id)
+    profiles = list_profiles(user_id=user_id)
     if profile in (None, ""):
         return profiles[0] if profiles else {"id": None, "name": None, "per_video_usd": 0.0,
                                              "per_minute_usd": 0.0, "monthly_usd": 0.0}
@@ -117,7 +116,7 @@ def _profile(profile, user_id) -> dict:
 
 def _real_rpm(channel_id, user_id):
     try:
-        for c in OWN.rpm_calibration(user_id)["channels"]:
+        for c in OWN.rpm_calibration(user_id=user_id)["channels"]:
             if c["channelId"] == channel_id and c.get("realRpm"):
                 return c["realRpm"]
     except Exception:
@@ -200,7 +199,7 @@ def _niche(niche, prof, videos_per_month):
 
 def profit_estimate(channel_id: str = None, video_id: str = None, niche: str = None,
                     profile=None, videos_per_month: int = None,
-                    user_id: int = LOCAL_USER_ID) -> dict:
+                    *, user_id: int) -> dict:
     """Revenue range minus the costs of one cost profile (id or name; the
     first when omitted), for a channel (a month), a video (its lifetime) or
     a niche (the typical video, and a month of videos_per_month of them)."""

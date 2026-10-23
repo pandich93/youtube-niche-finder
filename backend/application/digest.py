@@ -60,7 +60,7 @@ def _cut(s, n=TITLE_MAX) -> str:
     return s if len(s) <= n else s[:n - 1].rstrip() + "…"
 
 
-def _events(conn, kinds, start, user_id=LOCAL_USER_ID) -> list:
+def _events(conn, kinds, start, *, user_id) -> list:
     from application.alerts import DELIVERABLE_TO_USER
     q = ("SELECT id, kind, ref_id, payload, created_at FROM events e WHERE kind IN (%s) AND "
          % ",".join("?" * len(kinds))) + DELIVERABLE_TO_USER
@@ -79,7 +79,7 @@ def _events(conn, kinds, start, user_id=LOCAL_USER_ID) -> list:
     return out
 
 
-def build_digest(period: str = "24h", top_n: int = 5, user_id: int = LOCAL_USER_ID) -> dict:
+def build_digest(period: str = "24h", top_n: int = 5, *, user_id: int) -> dict:
     """Everything worth a morning glance for the last `period`: new outliers
     and accelerating videos on tracked channels, channels that just entered
     the corpus already outperforming, title/thumbnail swaps, and channels or
@@ -91,7 +91,7 @@ def build_digest(period: str = "24h", top_n: int = 5, user_id: int = LOCAL_USER_
     try:
         out, event_ids = {}, []
         for name, (kinds, rank_field) in EVENT_SECTIONS.items():
-            evs = _events(conn, kinds, start, user_id)
+            evs = _events(conn, kinds, start, user_id=user_id)
             event_ids += [e["id"] for e in evs]
             if rank_field:
                 evs.sort(key=lambda e: e["payload"].get(rank_field) or 0, reverse=True)
@@ -204,7 +204,7 @@ def _last_sent_key(user_id):
 
 
 def send_digest(now: datetime = None, force: bool = False, period: str = "24h",
-                user_id: int = LOCAL_USER_ID) -> dict:
+                *, user_id: int) -> dict:
     """Send today's digest if it is due. Due = a notifier is configured, the
     local hour is >= DIGEST_HOUR and nothing was sent yet today (force skips
     both time checks). An empty day counts as done when DIGEST_SKIP_EMPTY is
@@ -212,7 +212,7 @@ def send_digest(now: datetime = None, force: bool = False, period: str = "24h",
     event the digest covered is marked delivered, so switching NOTIFY_MODE
     back to instant does not replay them one by one."""
     from application import notify_settings as NS
-    notifier = NS.notifier_for(user_id)
+    notifier = NS.notifier_for(user_id=user_id)
     if isinstance(notifier, NullNotifier):
         return {"sent": False, "reason": "no notifier",
                 "hint": "set NOTIFY_TELEGRAM_BOT_TOKEN + NOTIFY_TELEGRAM_CHAT_ID "
@@ -253,11 +253,11 @@ def send_digest(now: datetime = None, force: bool = False, period: str = "24h",
 def digest_wanted() -> bool:
     """Whether anyone gets a digest at all (the worker's cheap pre-check)."""
     from application import notify_settings as NS
-    return any(NS.mode_for(uid) in ("digest", "both") for uid in NS.recipients())
+    return any(NS.mode_for(user_id=uid) in ("digest", "both") for uid in NS.recipients())
 
 
 def send_all_digests(now: datetime = None) -> dict:
     """plan 15 (5.9): the digest for every user who asked for one."""
     from application import notify_settings as NS
     return {str(uid): send_digest(now=now, user_id=uid) for uid in NS.recipients()
-            if NS.mode_for(uid) in ("digest", "both")}
+            if NS.mode_for(user_id=uid) in ("digest", "both")}

@@ -84,7 +84,7 @@ def test_a_saved_webhook_is_checked_again_at_send_time(ab, monkeypatch):
     _public_dns(monkeypatch, "10.0.0.1")                     # DNS changed after saving
     posted = []
     monkeypatch.setattr("infrastructure.notify.webhook.httpx.post", lambda *a, **k: posted.append(a))
-    assert NS.notifier_for(a).send("hi") is False and posted == []
+    assert NS.notifier_for(user_id=a).send("hi") is False and posted == []
 
 
 # ------------------------------------------------------------ settings
@@ -110,16 +110,16 @@ def test_bad_mode_and_missing_key_are_errors(ab, monkeypatch):
 
 
 def test_user_1_without_settings_keeps_env(ab, monkeypatch):
-    assert NS.get(1)["source"] == "env" and NS.mode_for(1) == "instant"
+    assert NS.get(user_id=1)["source"] == "env" and NS.mode_for(user_id=1) == "instant"
     monkeypatch.setattr(AL, "NOTIFY_MODE", "digest")
-    assert NS.mode_for(1) == "digest"
+    assert NS.mode_for(user_id=1) == "digest"
     a, _ = ab
-    assert NS.get(a)["source"] == "none" and isinstance(NS.notifier_for(a), NullNotifier)
+    assert NS.get(user_id=a)["source"] == "none" and isinstance(NS.notifier_for(user_id=a), NullNotifier)
 
 
 def test_clearing_drops_back_to_env_for_user_1(ab):
     NS.save(1, telegram_bot_token=BOT, telegram_chat_id="1")
-    assert NS.get(1)["source"] == "settings"
+    assert NS.get(user_id=1)["source"] == "settings"
     assert NS.save(1, clear=True)["source"] == "env"
 
 
@@ -139,7 +139,7 @@ def _stub_telegram(monkeypatch, sent):
 def _outlier(channel, vid):
     conn = db.get_conn()
     AL._emit(conn, "outlier", vid, {"videoId": vid, "channelId": channel, "title": vid,
-                                    "outlierScore": 5, "views": 1000})
+                                    "outlierScore": 5, "views": 1000}, user_id=None)
     conn.commit()
     conn.close()
 

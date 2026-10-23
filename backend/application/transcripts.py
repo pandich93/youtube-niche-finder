@@ -7,7 +7,6 @@ PRIVACY.md.
 """
 import infrastructure.postgres as db
 from domain import transcripts as TR
-from domain.users import LOCAL_USER_ID
 
 _EMB = None
 
@@ -21,7 +20,7 @@ def _embeddings():
 
 
 def request_transcript(video_id: str, reason: str = None, compare_group: str = None,
-                       requested_by: str = None, user_id: int = LOCAL_USER_ID) -> dict:
+                       requested_by: str = None, *, user_id: int) -> dict:
     """Queue a video for manual transcript paste -- shows up in
     list_transcript_queue(status='pending') until someone calls
     save_transcript() for it."""
@@ -40,7 +39,7 @@ def request_transcript(video_id: str, reason: str = None, compare_group: str = N
     return {"videoId": video_id, "status": "pending"}
 
 
-def list_transcript_queue(status: str = None, user_id: int = LOCAL_USER_ID) -> list:
+def list_transcript_queue(status: str = None, *, user_id: int) -> list:
     conn = db.get_conn()
     base = ("SELECT tr.*, v.title, v.view_count, v.channel_id, c.title AS channel_title "
             "FROM transcript_requests tr "
@@ -66,7 +65,7 @@ class TranscriptNotYours(PermissionError):
 
 
 def save_transcript(video_id: str, raw_text: str, language: str = None,
-                    user_id: int = LOCAL_USER_ID, may_overwrite: bool = True) -> dict:
+                    *, user_id: int, may_overwrite: bool = True) -> dict:
     """Parse -> chunk -> embed -> store, all synchronous (fastembed is
     local, no network). Any failure writes status='error' with the message
     instead of raising, so a bad paste shows up in the queue with a
@@ -148,7 +147,7 @@ def save_transcript(video_id: str, raw_text: str, language: str = None,
         return {"videoId": video_id, "status": "error", "error": str(e)}
 
 
-def reindex_transcript(video_id: str, user_id: int = LOCAL_USER_ID,
+def reindex_transcript(video_id: str, *, user_id: int,
                        may_overwrite: bool = True) -> dict:
     """Re-chunk + re-embed an already-saved transcript -- for after a chunk
     size or embedding model change. No re-paste needed, the raw text is
@@ -168,7 +167,7 @@ def reindex_transcript(video_id: str, user_id: int = LOCAL_USER_ID,
 
 
 def search_transcripts(query: str, niche: str = None, compare_group: str = None,
-                       k: int = 10, user_id: int = LOCAL_USER_ID) -> dict:
+                       k: int = 10, *, user_id: int) -> dict:
     """Hybrid search: vector cosine (fastembed, local) + Postgres full-text
     (tsvector/websearch_to_tsquery, 'simple' config for multilingual text),
     merged by Reciprocal Rank Fusion (RRF, k=60 -- the standard constant,

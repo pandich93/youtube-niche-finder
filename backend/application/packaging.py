@@ -135,7 +135,7 @@ _SELECT = ("SELECT ch.video_id, ch.changed_at, ch.field, ch.old_value, ch.new_va
 
 
 def packaging_feed(period: str = "30d", channel_id: str = None, field: str = None,
-                   limit: int = 50, user_id: int = None) -> dict:
+                   limit: int = 50, *, user_id: int) -> dict:
     """Newest title/thumbnail swaps first, each with before/after (titles as
     text, thumbnails as archive image paths) and the views-per-hour effect.
     user_id: only channels on that user's active watchlist (the digest in

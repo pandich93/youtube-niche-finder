@@ -434,7 +434,7 @@ def test_packaging_changes_routes_to_feed_or_one_video_history(monkeypatch):
                         lambda vid: calls.append(("history", vid)) or {"history": True})
     assert srv.packaging_changes(field="title", channel_id="UC1") == {"feed": True}
     assert calls[-1] == ("feed", {"period": "30d", "channel_id": "UC1",
-                                  "field": "title", "limit": 50})
+                                  "field": "title", "limit": 50, "user_id": None})
     assert srv.packaging_changes(video_id="v1") == {"history": True}
     assert calls[-1] == ("history", "v1")
 

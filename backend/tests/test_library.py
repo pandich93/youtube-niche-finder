@@ -55,9 +55,9 @@ L, = DOUBLES.load("application.library")
 
 def test_save_and_list_roundtrip():
     reset()
-    saved = L.save_item("video", "vid1", payload={"views": 100}, note="занятная тема")
+    saved = L.save_item("video", "vid1", payload={"views": 100}, note="занятная тема", user_id=1)
     assert saved["id"] and saved["kind"] == "video" and saved["folder"] == "default"
-    items = L.list_items()
+    items = L.list_items(user_id=1)
     assert len(items) == 1
     assert items[0]["refId"] == "vid1"
     assert items[0]["payload"] == {"views": 100}
@@ -67,7 +67,7 @@ def test_save_and_list_roundtrip():
 def test_save_rejects_bad_kind():
     reset()
     try:
-        L.save_item("banana", "x")
+        L.save_item("banana", "x", user_id=1)
         assert False, "should have raised"
     except ValueError:
         pass
@@ -76,7 +76,7 @@ def test_save_rejects_bad_kind():
 def test_save_requires_ref_id():
     reset()
     try:
-        L.save_item("video", "")
+        L.save_item("video", "", user_id=1)
         assert False, "should have raised"
     except ValueError:
         pass
@@ -84,37 +84,37 @@ def test_save_requires_ref_id():
 
 def test_filter_by_kind_and_folder():
     reset()
-    L.save_item("video", "v1", folder="titles-to-steal")
-    L.save_item("channel", "c1", folder="titles-to-steal")
-    L.save_item("video", "v2", folder="default")
-    assert len(L.list_items(kind="video")) == 2
-    assert len(L.list_items(folder="titles-to-steal")) == 2
-    assert len(L.list_items(kind="channel", folder="titles-to-steal")) == 1
+    L.save_item("video", "v1", folder="titles-to-steal", user_id=1)
+    L.save_item("channel", "c1", folder="titles-to-steal", user_id=1)
+    L.save_item("video", "v2", folder="default", user_id=1)
+    assert len(L.list_items(kind="video", user_id=1)) == 2
+    assert len(L.list_items(folder="titles-to-steal", user_id=1)) == 2
+    assert len(L.list_items(kind="channel", folder="titles-to-steal", user_id=1)) == 1
 
 
 def test_list_folders_counts():
     reset()
-    L.save_item("video", "v1", folder="a")
-    L.save_item("video", "v2", folder="a")
-    L.save_item("video", "v3", folder="b")
-    folders = {f["folder"]: f["count"] for f in L.list_folders()}
+    L.save_item("video", "v1", folder="a", user_id=1)
+    L.save_item("video", "v2", folder="a", user_id=1)
+    L.save_item("video", "v3", folder="b", user_id=1)
+    folders = {f["folder"]: f["count"] for f in L.list_folders(user_id=1)}
     assert folders == {"a": 2, "b": 1}
 
 
 def test_delete_removes_item():
     reset()
-    saved = L.save_item("video", "v1")
-    assert len(L.list_items()) == 1
-    L.delete_item(saved["id"])
-    assert len(L.list_items()) == 0
+    saved = L.save_item("video", "v1", user_id=1)
+    assert len(L.list_items(user_id=1)) == 1
+    L.delete_item(saved["id"], user_id=1)
+    assert len(L.list_items(user_id=1)) == 0
 
 
 def test_is_saved():
     reset()
-    assert L.is_saved("video", "v1") is False
-    L.save_item("video", "v1")
-    assert L.is_saved("video", "v1") is True
-    assert L.is_saved("channel", "v1") is False
+    assert L.is_saved("video", "v1", user_id=1) is False
+    L.save_item("video", "v1", user_id=1)
+    assert L.is_saved("video", "v1", user_id=1) is True
+    assert L.is_saved("channel", "v1", user_id=1) is False
 
 
 def _run_all():

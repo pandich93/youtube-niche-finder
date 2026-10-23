@@ -49,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Whose data a call touches is always named** (multi-user plan P1-01). No
+  use case in `application/` falls back to user 1 any more: `user_id` is a
+  required keyword argument, and a call that forgets it fails instead of
+  working on the admin's data. With accounts on, the HTTP API and MCP over
+  HTTP also refuse to name a user for a request nobody signed in to, where
+  they used to act as user 1. Single-user mode, the CLI and the worker pass
+  the local user explicitly and behave as before.
 - The README is rewritten as the page of the upcoming hosted service. Install
   instructions moved to [docs/self-hosting.md](docs/self-hosting.md).
 

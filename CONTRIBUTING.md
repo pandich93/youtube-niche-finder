@@ -105,6 +105,11 @@ framework — keep it that way. New screens follow the existing pattern in
   `infrastructure/`, or `application/`.
 - Prefer a test against the throwaway Postgres schema over a mock of our own
   code; mock only external services.
+- A use case that touches someone's own data takes `*, user_id` with no
+  default; the caller names the user. HTTP routes pass `_uid(request)`, MCP
+  tools `_uid()`, the CLI and the worker `LOCAL_USER_ID`, tests `user_id=1`.
+  `tests/test_user_id_required.py` fails on any `user_id` with a default in
+  `application/`: a forgotten argument must be an error, not user 1's data.
 - A new score or estimate goes into `backend/domain/score_catalog.py` in the
   same pull request: its formula, inputs, minimum sample and `source`
   (`youtube` or `niche-finder`). YouTube's derived-metrics policy asks API

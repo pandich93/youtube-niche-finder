@@ -73,7 +73,7 @@ def fake_report(access_token, channel_id, start, end, metrics, **kw):
 
 
 def connect():
-    url = OWN.start_connect()["authUrl"]
+    url = OWN.start_connect(user_id=1)["authUrl"]
     state = parse_qs(urlsplit(url).query)["state"][0]
     return OWN.finish_connect(state, "c0de", today=TODAY)
 
@@ -90,11 +90,11 @@ def dump_db():
 def test_status_lists_what_is_missing(monkeypatch):
     monkeypatch.delenv("OWN_OAUTH_CLIENT_SECRET")
     monkeypatch.setenv("OWN_TOKENS_KEY", "garbage")
-    st = OWN.status()
+    st = OWN.status(user_id=1)
     assert st["configured"] is False
     assert set(st["missing"]) == {"OWN_OAUTH_CLIENT_SECRET", "OWN_TOKENS_KEY"}
     with pytest.raises(OWN.NotConfigured):
-        OWN.start_connect()
+        OWN.start_connect(user_id=1)
 
 
 def test_connect_stores_the_channel_with_an_encrypted_token_and_syncs():
@@ -103,17 +103,17 @@ def test_connect_stores_the_channel_with_an_encrypted_token_and_syncs():
     rows = dump_db()
     assert len(rows) == 1 and rows[0]["user_id"] == 1
     assert REFRESH.encode() not in bytes(rows[0]["token_enc"])
-    assert REFRESH not in json.dumps(OWN.list_channels(), default=str)
-    assert REFRESH not in json.dumps(OWN.status(), default=str)
+    assert REFRESH not in json.dumps(OWN.list_channels(user_id=1), default=str)
+    assert REFRESH not in json.dumps(OWN.status(user_id=1), default=str)
 
 
 def test_state_is_single_use_and_expires():
-    url = OWN.start_connect()["authUrl"]
+    url = OWN.start_connect(user_id=1)["authUrl"]
     state = parse_qs(urlsplit(url).query)["state"][0]
     OWN.finish_connect(state, "c0de", today=TODAY)
     with pytest.raises(OWN.ConnectError):
         OWN.finish_connect(state, "c0de", today=TODAY)          # replayed
-    url = OWN.start_connect()["authUrl"]
+    url = OWN.start_connect(user_id=1)["authUrl"]
     state = parse_qs(urlsplit(url).query)["state"][0]
     conn = db.get_conn()
     conn.execute("UPDATE own_oauth_pending SET created_at = ?",
@@ -155,7 +155,7 @@ def test_sync_without_monetary_access_keeps_the_rest(monkeypatch):
     monkeypatch.setattr(YA, "report", no_money)
     out = connect()
     assert out["synced"]["monetary"] is False and out["synced"]["videos"] == 2
-    assert OWN.list_channels()["channels"][0]["last28d"]["revenue"] is None
+    assert OWN.list_channels(user_id=1)["channels"][0]["last28d"]["revenue"] is None
 
 
 def test_quota_exceeded_is_recorded_and_kept_for_tomorrow(monkeypatch):
@@ -164,15 +164,15 @@ def test_quota_exceeded_is_recorded_and_kept_for_tomorrow(monkeypatch):
     def quota(*a, **k):
         raise YA.QuotaExceeded("quota", reason="quotaExceeded", status=403)
     monkeypatch.setattr(YA, "report", quota)
-    out = OWN.sync(today=TODAY)
+    out = OWN.sync(today=TODAY, user_id=1)
     assert out["channels"][0]["error"] == "quota-exceeded"
-    ch = OWN.list_channels()["channels"][0]
+    ch = OWN.list_channels(user_id=1)["channels"][0]
     assert ch["lastError"] == "quota-exceeded" and ch["last28d"]["views"] == 4000   # old data kept
 
 
 def test_list_channels_summarises_the_last_28_days():
     connect()
-    ch = OWN.list_channels()["channels"][0]
+    ch = OWN.list_channels(user_id=1)["channels"][0]
     assert ch["last28d"] == {"videos": 2, "views": 4000, "revenue": 8.0, "rpm": 2.0,
                              "medianRetentionPct": 40.0}
     assert "token" not in json.dumps(ch).lower()
@@ -182,14 +182,14 @@ def test_list_channels_summarises_the_last_28_days():
 
 def test_rpm_calibration_uses_the_real_28_day_rpm():
     connect()
-    out = OWN.rpm_calibration()["channels"][0]
+    out = OWN.rpm_calibration(user_id=1)["channels"][0]
     assert out["realRpm"] == 2.0 and out["position"] in ("below", "inside", "above")
     assert set(out["estimate"]) >= {"low", "mid", "high"}
 
 
 def test_own_vs_niche_compares_lifetime_views_with_the_niche():
     connect()
-    out = OWN.own_vs_niche(CH, NICHE)
+    out = OWN.own_vs_niche(CH, NICHE, user_id=1)
     assert out["ownMedianViews"] == 2000 and out["nicheMedianViews"] == 2000
     assert out["ownMedianRetentionPct"] == 40.0
     assert out["note"] and "CTR" in out["note"]
@@ -197,7 +197,7 @@ def test_own_vs_niche_compares_lifetime_views_with_the_niche():
 
 def test_own_vs_niche_refuses_a_channel_you_did_not_connect():
     with pytest.raises(OWN.NotConnected):
-        OWN.own_vs_niche("UCsomeoneelse", NICHE)
+        OWN.own_vs_niche("UCsomeoneelse", NICHE, user_id=1)
 
 
 def test_draft_outcomes_carry_your_real_numbers():
@@ -210,7 +210,7 @@ def test_draft_outcomes_carry_your_real_numbers():
                  ("draft", db.now_iso(), "own1"))
     conn.commit()
     conn.close()
-    out = [o for o in MR.draft_outcomes(min_age_days=1) if o["videoId"] == "own1"][0]
+    out = [o for o in MR.draft_outcomes(min_age_days=1, user_id=1) if o["videoId"] == "own1"][0]
     assert out["ownMetrics"]["averageViewPercentage"] == 45.0 and out["ownMetrics"]["rpm"] == 2.0
 
 
@@ -220,7 +220,7 @@ def test_disconnect_revokes_and_forgets_everything(monkeypatch):
     connect()
     revoked = []
     monkeypatch.setattr(OA, "revoke", lambda token: revoked.append(token) or True)
-    out = OWN.disconnect(CH)
+    out = OWN.disconnect(CH, user_id=1)
     assert out == {"channelId": CH, "revoked": True, "deleted": True}
     assert revoked == [REFRESH]
     assert dump_db() == []
@@ -240,7 +240,7 @@ def test_the_consent_and_the_token_exchange_use_the_same_redirect(monkeypatch):
         seen["redirect"] = redirect_uri
         return {"access_token": "at", "refresh_token": REFRESH, "scope": " ".join(OA.SCOPES)}
     monkeypatch.setattr(OA, "exchange_code", exchange)
-    out = OWN.start_connect(redirect_uri="http://localhost:8080/api/own/oauth/callback")
+    out = OWN.start_connect(redirect_uri="http://localhost:8080/api/own/oauth/callback", user_id=1)
     q = parse_qs(urlsplit(out["authUrl"]).query)
     assert q["redirect_uri"] == ["http://localhost:8080/api/own/oauth/callback"]
     OWN.finish_connect(q["state"][0], "c0de", today=TODAY)
@@ -249,5 +249,5 @@ def test_the_consent_and_the_token_exchange_use_the_same_redirect(monkeypatch):
 
 def test_the_configured_redirect_wins(monkeypatch):
     monkeypatch.setenv("OWN_OAUTH_REDIRECT_URI", "http://127.0.0.1:9000/api/own/oauth/callback")
-    out = OWN.start_connect(redirect_uri="http://localhost:8080/api/own/oauth/callback")
+    out = OWN.start_connect(redirect_uri="http://localhost:8080/api/own/oauth/callback", user_id=1)
     assert out["redirectUri"] == "http://127.0.0.1:9000/api/own/oauth/callback"

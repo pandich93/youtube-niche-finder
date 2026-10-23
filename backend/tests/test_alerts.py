@@ -170,7 +170,7 @@ def test_scan_emits_a_milestone_once_when_subscribers_cross_it():
     res = AL.scan(period="180d")
     assert res["emitted"]["milestone"] == 1
     assert AL.scan(period="180d")["emitted"]["milestone"] == 0
-    ev = [e for e in AL.list_events(kind="milestone")][0]
+    ev = [e for e in AL.list_events(kind="milestone", user_id=1)][0]
     assert ev["payload"]["milestone"] == 1_000 and ev["payload"]["channelId"] == CH_SILENCE
 
 
@@ -194,7 +194,7 @@ def test_scan_again_produces_no_duplicates():
     res2 = AL.scan(period="180d")
     assert res2["emitted"] == NONE_EMITTED, res2
     # exactly 4 rows total in the events table, not 8
-    events = AL.list_events(limit=100)
+    events = AL.list_events(limit=100, user_id=1)
     assert len(events) == 4
 
 
@@ -208,19 +208,19 @@ def test_scan_with_no_tracked_channels_is_a_noop():
 def test_list_events_and_mark_seen_roundtrip():
     reset(); seed()
     AL.scan(period="180d")
-    assert AL.unseen_count() == 4
-    unseen = AL.list_events(unseen_only=True)
+    assert AL.unseen_count(user_id=1) == 4
+    unseen = AL.list_events(unseen_only=True, user_id=1)
     assert len(unseen) == 4
-    AL.mark_seen(ids=[unseen[0]["id"]])
-    assert AL.unseen_count() == 3
-    AL.mark_seen(all_unseen=True)
-    assert AL.unseen_count() == 0
+    AL.mark_seen(ids=[unseen[0]["id"]], user_id=1)
+    assert AL.unseen_count(user_id=1) == 3
+    AL.mark_seen(all_unseen=True, user_id=1)
+    assert AL.unseen_count(user_id=1) == 0
 
 
 def test_events_carry_readable_payload():
     reset(); seed()
     AL.scan(period="180d")
-    by_kind = {e["kind"]: e for e in AL.list_events(limit=100)}
+    by_kind = {e["kind"]: e for e in AL.list_events(limit=100, user_id=1)}
     assert by_kind["outlier"]["payload"]["videoId"] == "voutlier1"
     assert by_kind["acceleration"]["payload"]["videoId"] == "vaccel1"
     assert by_kind["acceleration"]["payload"]["acceleration"] >= 2.0
@@ -253,7 +253,7 @@ def test_confirmed_gone_tracked_channel_emits_channel_gone_with_last_known_numbe
     RAW.commit()
     res = AL.scan(period="180d")
     assert res["emitted"]["channel_gone"] == 1, res
-    ev = [e for e in AL.list_events(limit=100) if e["kind"] == "channel_gone"][0]
+    ev = [e for e in AL.list_events(limit=100, user_id=1) if e["kind"] == "channel_gone"][0]
     assert ev["refId"] == f"{CH_GONE}:{first}"
     assert ev["payload"]["subscribers"] == 12_000
     assert ev["payload"]["title"] == CH_GONE
@@ -278,7 +278,7 @@ def test_gone_channel_alerts_once_across_repeated_scans():
     AL.scan(period="180d")
     res2 = AL.scan(period="180d")
     assert res2["emitted"]["channel_gone"] == 0
-    assert len([e for e in AL.list_events(limit=100) if e["kind"] == "channel_gone"]) == 1
+    assert len([e for e in AL.list_events(limit=100, user_id=1) if e["kind"] == "channel_gone"]) == 1
 
 
 def test_video_gone_only_for_videos_that_were_alerted_as_outliers():
@@ -289,7 +289,7 @@ def test_video_gone_only_for_videos_that_were_alerted_as_outliers():
     RAW.commit()
     res = AL.scan(period="180d")
     assert res["emitted"]["video_gone"] == 1, res
-    ev = [e for e in AL.list_events(limit=100) if e["kind"] == "video_gone"][0]
+    ev = [e for e in AL.list_events(limit=100, user_id=1) if e["kind"] == "video_gone"][0]
     assert ev["payload"]["videoId"] == "voutlier1"
     assert ev["payload"]["channelId"] == CH_OUTLIER
     assert ev["payload"]["outlierScore"] >= 3.0

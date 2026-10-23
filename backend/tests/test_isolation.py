@@ -76,8 +76,8 @@ def test_the_worker_sees_each_tracked_channel_once(users):
 
 
 def test_single_user_callers_keep_working_as_user_1(users):
-    T.track(CH2)
-    assert [c["channel_id"] for c in T.list_tracked()] == [CH2]
+    T.track(CH2, user_id=1)
+    assert [c["channel_id"] for c in T.list_tracked(user_id=1)] == [CH2]
     assert T.list_tracked(user_id=users[0]) == []
 
 

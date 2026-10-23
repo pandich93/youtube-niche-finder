@@ -50,38 +50,38 @@ def _draft(title="My video", niche="tech", user_id=1):
 def test_a_draft_gets_a_time_and_comes_off_again():
     d = _draft()
     when = NOW + timedelta(days=3)
-    r = CAL.plan_draft(d, iso(when))
+    r = CAL.plan_draft(d, iso(when), user_id=1)
     assert r["plannedAt"] == iso(when) and r["state"] == "planned"
     assert r["bestSlots"][0] == {"weekday": "Mon", "hour": 15, "score": 100}
     assert r["fitsBestSlot"] == (when.strftime("%a") == "Mon" and when.hour == 15)
-    assert MR.list_drafts()[0]["plannedAt"] == iso(when)
-    off = CAL.plan_draft(d, None)
+    assert MR.list_drafts(user_id=1)[0]["plannedAt"] == iso(when)
+    off = CAL.plan_draft(d, None, user_id=1)
     assert off["plannedAt"] is None and off["state"] == "unplanned"
 
 
 def test_times_are_stored_in_utc_whatever_zone_came_in():
     d = _draft()
-    r = CAL.plan_draft(d, "2026-10-10T18:00:00+03:00")
+    r = CAL.plan_draft(d, "2026-10-10T18:00:00+03:00", user_id=1)
     assert r["plannedAt"] == "2026-10-10T15:00:00+00:00"
-    assert CAL.plan_draft(d, "2026-10-10T15:00:00Z")["plannedAt"] == "2026-10-10T15:00:00+00:00"
+    assert CAL.plan_draft(d, "2026-10-10T15:00:00Z", user_id=1)["plannedAt"] == "2026-10-10T15:00:00+00:00"
 
 
 def test_bad_input_and_someone_else_s_draft_are_refused():
     d = _draft()
     with pytest.raises(ValueError):
-        CAL.plan_draft(d, "next friday")
+        CAL.plan_draft(d, "next friday", user_id=1)
     with pytest.raises(LookupError):
         CAL.plan_draft(d, iso(NOW), user_id=2)
     with pytest.raises(LookupError):
-        CAL.plan_draft(999999, iso(NOW))
+        CAL.plan_draft(999999, iso(NOW), user_id=1)
 
 
 def test_the_calendar_shows_the_range_and_the_unplanned_drafts():
     a, b, c, gone = _draft("a"), _draft("b"), _draft("c"), _draft("published one")
-    CAL.plan_draft(a, iso(NOW + timedelta(days=1)))
-    CAL.plan_draft(b, iso(NOW + timedelta(days=90)))            # outside the range
-    MR.link_draft(gone, "vid123")
-    cal = CAL.content_calendar(iso(NOW - timedelta(days=1)), iso(NOW + timedelta(days=7)))
+    CAL.plan_draft(a, iso(NOW + timedelta(days=1)), user_id=1)
+    CAL.plan_draft(b, iso(NOW + timedelta(days=90)), user_id=1)            # outside the range
+    MR.link_draft(gone, "vid123", user_id=1)
+    cal = CAL.content_calendar(iso(NOW - timedelta(days=1)), iso(NOW + timedelta(days=7)), user_id=1)
     ids = {x["id"]: x for x in cal["items"]}
     assert set(ids) == {a, gone}
     assert ids[a]["state"] == "planned" and ids[gone]["state"] == "published"
@@ -90,19 +90,19 @@ def test_the_calendar_shows_the_range_and_the_unplanned_drafts():
 
 
 def test_the_default_range_starts_this_week_and_bad_ranges_are_refused():
-    cal = CAL.content_calendar()
+    cal = CAL.content_calendar(user_id=1)
     start = datetime.fromisoformat(cal["start"])
     assert start.weekday() == 0 and start <= NOW and (datetime.fromisoformat(cal["end"]) - start).days == 28
     for s, e in ((iso(NOW), iso(NOW - timedelta(days=1))), (iso(NOW), iso(NOW + timedelta(days=90))),
                  ("soon", None)):
         with pytest.raises(ValueError):
-            CAL.content_calendar(s, e)
+            CAL.content_calendar(s, e, user_id=1)
 
 
 def test_an_overdue_draft_is_marked():
     d = _draft()
-    CAL.plan_draft(d, iso(NOW - timedelta(hours=2)))
-    cal = CAL.content_calendar(iso(NOW - timedelta(days=1)), iso(NOW + timedelta(days=1)))
+    CAL.plan_draft(d, iso(NOW - timedelta(hours=2)), user_id=1)
+    cal = CAL.content_calendar(iso(NOW - timedelta(days=1)), iso(NOW + timedelta(days=1)), user_id=1)
     assert cal["items"][0]["state"] == "overdue"
 
 
@@ -129,23 +129,23 @@ def test_reminders_come_the_day_before_and_when_due_once_each_and_are_personal()
 
 def test_moving_the_date_brings_new_reminders_and_linking_stops_them():
     d = _draft()
-    CAL.plan_draft(d, iso(NOW + timedelta(hours=5)))
+    CAL.plan_draft(d, iso(NOW + timedelta(hours=5)), user_id=1)
     CAL.remind_due(now=NOW)
-    CAL.plan_draft(d, iso(NOW + timedelta(hours=8)))
+    CAL.plan_draft(d, iso(NOW + timedelta(hours=8)), user_id=1)
     assert CAL.remind_due(now=NOW)["raised"] == 1
-    MR.link_draft(d, "vid9")
+    MR.link_draft(d, "vid9", user_id=1)
     assert CAL.remind_due(now=NOW + timedelta(hours=8, minutes=1))["raised"] == 0
 
 
 def test_a_reminder_reads_well_in_telegram_and_in_the_digest():
     d = _draft("Launch <video>")
-    CAL.plan_draft(d, iso(NOW + timedelta(hours=3)))
+    CAL.plan_draft(d, iso(NOW + timedelta(hours=3)), user_id=1)
     CAL.remind_due(now=NOW)
     ev = _events()[0]
     text = AL._format_message({"kind": "draft_due", "payload": json.loads(ev["payload"])})
     assert "Черновик" in text and "Launch &lt;video&gt;" in text and "ближайшие сутки" in text
     assert "#/calendar" in text
-    dg = DG.build_digest(period="24h")
+    dg = DG.build_digest(period="24h", user_id=1)
     assert dg["drafts"]["total"] == 1 and not dg["empty"]
     assert "Календарь" in DG.format_digest(dg)
 

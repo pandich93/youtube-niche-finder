@@ -7,7 +7,6 @@ from datetime import date, timedelta
 
 import infrastructure.postgres as db
 from domain import own_formats as F
-from domain.users import LOCAL_USER_ID
 from infrastructure.youtube import analytics as YA
 
 DAYS = 365
@@ -32,7 +31,7 @@ def sync_daily(conn, token, user_id, channel_id, end: date) -> int:
     return len(rows)
 
 
-def formats(channel_id: str, user_id: int = LOCAL_USER_ID) -> dict:
+def formats(channel_id: str, *, user_id: int) -> dict:
     """Shorts against long videos and watch hours toward YPP for one of your
     connected channels, from the stored rows (no API call)."""
     from application import own_channels as OWN

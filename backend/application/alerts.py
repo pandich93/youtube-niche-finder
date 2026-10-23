@@ -17,7 +17,6 @@ from application import milestones as MSA
 from domain import alerts as A
 from domain import i18n
 from domain.i18n import tr
-from domain.users import LOCAL_USER_ID
 from infrastructure.notify.null import NullNotifier
 
 DEFAULT_SILENCE_DAYS = A.SILENCE_DAYS_DEFAULT
@@ -44,7 +43,7 @@ def _already_emitted(conn, kind, ref_id) -> bool:
     return row is not None
 
 
-def _emit(conn, kind, ref_id, payload, user_id=None) -> bool:
+def _emit(conn, kind, ref_id, payload, *, user_id) -> bool:
     """Insert one event unless (kind, ref_id) already exists. Returns whether
     a new row was written -- the caller uses this to report counts, not to
     make decisions, so a race between two workers double-inserting the same
@@ -165,7 +164,7 @@ def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
     emitted = dict(empty_counts)
     for kind, evs in candidates.items():
         for ev in evs:
-            if _emit(conn, ev["kind"], ev["refId"], ev["payload"]):
+            if _emit(conn, ev["kind"], ev["refId"], ev["payload"], user_id=None):
                 emitted[kind] += 1
     conn.commit()
     conn.close()
@@ -197,7 +196,7 @@ def _shape_event(r) -> dict:
 
 
 def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100,
-                user_id: int = LOCAL_USER_ID) -> list:
+                *, user_id: int) -> list:
     where, params = [VISIBLE_TO_USER], [user_id, user_id, user_id]
     if unseen_only:
         where.append("r.seen_at IS NULL")
@@ -214,7 +213,7 @@ def list_events(unseen_only: bool = False, kind: str = None, limit: int = 100,
     return [_shape_event(r) for r in rows]
 
 
-def unseen_count(user_id: int = LOCAL_USER_ID) -> int:
+def unseen_count(*, user_id: int) -> int:
     conn = db.get_conn()
     row = conn.execute(
         "SELECT COUNT(*) AS n FROM events e WHERE " + VISIBLE_TO_USER + " AND NOT EXISTS "
@@ -224,7 +223,7 @@ def unseen_count(user_id: int = LOCAL_USER_ID) -> int:
     return (row["n"] if row else 0) or 0
 
 
-def mark_seen(ids: list = None, all_unseen: bool = False, user_id: int = LOCAL_USER_ID) -> dict:
+def mark_seen(ids: list = None, all_unseen: bool = False, *, user_id: int) -> dict:
     """This user's read marks only, and only on events this user can see."""
     conn = db.get_conn()
     now = db.now_iso()
@@ -323,7 +322,7 @@ def _format_message(ev: dict) -> str:
     return text
 
 
-def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, user_id: int = LOCAL_USER_ID) -> dict:
+def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, *, user_id: int) -> dict:
     """Stage 07: send every event not yet delivered to Telegram/webhook, up
     to max_per_cycle individually plus one summary line for the rest.
     Skips entirely (no DB read at all) when no notifier is configured --
@@ -333,14 +332,14 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, user_id: int = LOCAL_USER
     token/URL cannot take the worker down (mirrors _safe() in
     worker_cycle.py, which also wraps this call)."""
     from application import notify_settings as NS
-    mode = NS.mode_for(user_id)
+    mode = NS.mode_for(user_id=user_id)
     if mode == "off":
         return {"skipped": True, "hint": "notifications are off for this user"}
     if mode == "digest":
         return {"skipped": True,
                "hint": "NOTIFY_MODE=digest -- events go out in the daily digest "
                        "(application/digest.py), not one by one"}
-    notifier = NS.notifier_for(user_id)
+    notifier = NS.notifier_for(user_id=user_id)
     if isinstance(notifier, NullNotifier):
         return {"skipped": True,
                "hint": "no NOTIFY_TELEGRAM_BOT_TOKEN/NOTIFY_TELEGRAM_CHAT_ID or "
@@ -361,7 +360,7 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, user_id: int = LOCAL_USER
         if not pending:
             return {"sent": 0, "summarized": 0, "failed": 0}
 
-        channel = NS.target_name(user_id)
+        channel = NS.target_name(user_id=user_id)
         to_send, rest = pending[:max_per_cycle], pending[max_per_cycle:]
         # written in THIS user's language, whoever else the worker sends to
         locale = recipient_locale(user_id)

@@ -26,6 +26,7 @@ import sys
 
 import infrastructure.postgres as db
 from domain.i18n import tr
+from domain.users import LOCAL_USER_ID
 
 
 def out(obj):
@@ -249,7 +250,7 @@ def cmd_fix_tracked(args):
 
 def cmd_digest_send(args):
     from application import digest as digest_mod
-    out(digest_mod.send_digest(force=True))
+    out(digest_mod.send_digest(force=True, user_id=LOCAL_USER_ID))
 
 
 def cmd_notify_test(args):

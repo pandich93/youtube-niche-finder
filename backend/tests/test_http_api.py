@@ -576,7 +576,7 @@ def test_own_connect_returns_to_the_host_the_dashboard_is_open_on(stub):
 def test_notification_settings_routes(stub):
     got = stub("NS", "get", result={"source": "env"})
     assert client.get("/api/settings/notifications").json() == {"source": "env"}
-    assert got.args == (1,)
+    assert got.kwargs == {"user_id": 1}
     saved = stub("NS", "save", result={"source": "settings"})
     client.put("/api/settings/notifications", json={"telegramChatId": "42", "mode": "digest"})
     assert saved.args == (1,) and saved.kwargs["mode"] == "digest"

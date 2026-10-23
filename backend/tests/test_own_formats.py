@@ -68,7 +68,7 @@ def _world(monkeypatch):
 
 
 def connect():
-    url = OWN.start_connect()["authUrl"]
+    url = OWN.start_connect(user_id=1)["authUrl"]
     state = parse_qs(urlsplit(url).query)["state"][0]
     return OWN.finish_connect(state, "c0de", today=TODAY)
 
@@ -76,7 +76,7 @@ def connect():
 def test_sync_stores_a_year_by_day_and_format_and_reads_it_back():
     connect()
     assert "day,creatorContentType" in CALLS
-    f = OF.formats(CH)
+    f = OF.formats(CH, user_id=1)
     assert f["available"] and f["through"] == END.isoformat()
     assert f["last90"]["SHORTS"]["views"] == 90_000
     assert f["last90"]["VIDEO_ON_DEMAND"]["subscribersPer1000Views"] == 10.0
@@ -92,16 +92,16 @@ def test_a_query_youtube_does_not_support_keeps_the_rest_of_the_sync(monkeypatch
     monkeypatch.setattr(YA, "report", unsupported)
     out = connect()
     assert out["synced"]["videos"] == 1
-    res = OWN.sync(today=TODAY)["channels"][0]
+    res = OWN.sync(today=TODAY, user_id=1)["channels"][0]
     assert res["error"] is None and res["formatDays"] is None and "not supported" in res["formatsError"]
-    assert OF.formats(CH)["available"] is False
+    assert OF.formats(CH, user_id=1)["available"] is False
 
 
 def test_only_the_owner_reads_it_and_disconnect_deletes_it():
     connect()
     with pytest.raises(OWN.NotConnected):
         OF.formats(CH, user_id=2)
-    OWN.disconnect(CH)
+    OWN.disconnect(CH, user_id=1)
     conn = db.get_conn()
     n = conn.execute("SELECT COUNT(*) FROM own_channel_daily").fetchone()[0]
     conn.close()

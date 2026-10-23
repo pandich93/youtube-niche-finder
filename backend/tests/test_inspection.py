@@ -225,7 +225,7 @@ def api_channel(cid=CH, subs=10_000, videos=50, views=5_000_000, handle="@tinyla
 def test_video_from_db_costs_nothing():
     """Свежая запись в базе — ни одного обращения к API."""
     reset(); seed_channel(); seed_videos(); seed_target()
-    d = I.inspect_video("ключ", "vid00000001")
+    d = I.inspect_video("ключ", "vid00000001", user_id=1)
     assert d["found"] and d["source"] == "db", d
     assert d["quotaUnits"] == 0 and CALLS["videos"] == 0
     # медиана предыдущих 10 роликов = 100 000, у целевого 400 000
@@ -247,7 +247,7 @@ def test_shorts_compared_with_shorts():
         " VALUES (?,?,?,?,?,?,?,?,?)",
         ("shrt0000001", CH, "Шортс", iso(NOW - timedelta(days=1)), 45, 30_000, "[]",
          iso(NOW), 1))
-    d = I.inspect_video("ключ", "shrt0000001")
+    d = I.inspect_video("ключ", "shrt0000001", user_id=1)
     assert d["metrics"]["baselineMedianViews"] == 10_000, d["metrics"]
     assert abs(d["metrics"]["outlierScore"] - 3.0) < 0.01
 
@@ -257,12 +257,12 @@ def test_missing_video_is_fetched_once():
     reset()
     API_VIDEOS["vid00000001"] = api_video()
     API_CHANNELS[CH] = api_channel()
-    d = I.inspect_video("ключ", "vid00000001")
+    d = I.inspect_video("ключ", "vid00000001", user_id=1)
     assert d["found"] and d["source"] == "youtube" and d["fetchedFromApi"]
     assert d["quotaUnits"] == 2, d["quotaUnits"]
     assert CALLS["videos"] == 1 and CALLS["channels"] == 1
     # и всё осело в базе: повторный вызов уже бесплатный
-    d2 = I.inspect_video("ключ", "vid00000001")
+    d2 = I.inspect_video("ключ", "vid00000001", user_id=1)
     assert d2["quotaUnits"] == 0 and CALLS["videos"] == 1
 
 
@@ -272,13 +272,13 @@ def test_synthetic_media_flag_roundtrips_from_api():
     reset()
     API_VIDEOS["vid00000001"] = api_video(synthetic=True)
     API_CHANNELS[CH] = api_channel()
-    d = I.inspect_video("ключ", "vid00000001")
+    d = I.inspect_video("ключ", "vid00000001", user_id=1)
     assert d["video"]["containsSyntheticMedia"] is True
 
     reset()
     API_VIDEOS["vid00000001"] = api_video(synthetic=False)
     API_CHANNELS[CH] = api_channel()
-    d = I.inspect_video("ключ", "vid00000001")
+    d = I.inspect_video("ключ", "vid00000001", user_id=1)
     assert d["video"]["containsSyntheticMedia"] is False
 
 
@@ -289,13 +289,13 @@ def test_synthetic_media_flag_absent_is_none_not_false():
     reset()
     API_VIDEOS["vid00000001"] = api_video(synthetic=None)
     API_CHANNELS[CH] = api_channel()
-    d = I.inspect_video("ключ", "vid00000001")
+    d = I.inspect_video("ключ", "vid00000001", user_id=1)
     assert d["video"]["containsSyntheticMedia"] is None
 
 
 def test_no_key_no_data_says_so():
     reset()
-    d = I.inspect_video("", "vid00000001")
+    d = I.inspect_video("", "vid00000001", user_id=1)
     assert d["found"] is False and d["quotaUnits"] == 0
     assert "YOUTUBE_API_KEY" in d["hint"]
 
@@ -304,7 +304,7 @@ def test_fetch_disabled_is_respected():
     """Выключенная дозагрузка в расширении не должна тратить квоту."""
     reset()
     API_VIDEOS["vid00000001"] = api_video()
-    d = I.inspect_video("ключ", "vid00000001", fetch=False)
+    d = I.inspect_video("ключ", "vid00000001", fetch=False, user_id=1)
     assert d["found"] is False and CALLS["videos"] == 0
     assert "выключена" in d["hint"]
 
@@ -315,7 +315,7 @@ def test_velocity_from_history():
         RAW.execute("INSERT OR REPLACE INTO video_stats_history (video_id, captured_at,"
                     " view_count) VALUES (?,?,?)",
                     ("vid00000001", iso(NOW - timedelta(hours=hours)), views))
-    m = I.inspect_video("ключ", "vid00000001")["metrics"]
+    m = I.inspect_video("ключ", "vid00000001", user_id=1)["metrics"]
     assert abs(m["vph24h"] - 100_000 / 24) < 1, m["vph24h"]
     assert m["vph7d"] is not None and m["acceleration"] is not None
 
@@ -323,7 +323,7 @@ def test_velocity_from_history():
 def test_channel_by_handle_without_quota():
     """@хэндл, уже известный базе, резолвится локально — 0 units."""
     reset(); seed_channel(handle="@tinylab"); seed_videos(n=8)
-    d = I.inspect_channel("ключ", "@tinylab")
+    d = I.inspect_channel("ключ", "@tinylab", user_id=1)
     assert d["found"] and d["channelId"] == CH and d["quotaUnits"] == 0
     assert CALLS["resolve"] == 0
     assert d["stored"]["count"] == 8 and d["hasDeepAnalytics"] is True
@@ -333,7 +333,7 @@ def test_channel_by_handle_without_quota():
 def test_channel_unknown_handle_resolves_via_api():
     reset()
     API_CHANNELS["@tinylab"] = api_channel(handle="@tinylab")
-    d = I.inspect_channel("ключ", "@tinylab")
+    d = I.inspect_channel("ключ", "@tinylab", user_id=1)
     assert d["found"] and d["quotaUnits"] == 1 and CALLS["resolve"] == 1
     assert d["hasDeepAnalytics"] is False  # роликов в базе ещё нет
 
@@ -344,7 +344,7 @@ def test_channel_growth_from_snapshots():
         RAW.execute("INSERT OR REPLACE INTO channel_stats_history (channel_id, captured_at,"
                     " subscriber_count, video_count, view_count) VALUES (?,?,?,?,?)",
                     (CH, iso(NOW - timedelta(days=days)), subs, 50, views))
-    m = I.inspect_channel("ключ", CH)["metrics"]
+    m = I.inspect_channel("ключ", CH, user_id=1)["metrics"]
     assert m["subsGrowth"]["delta"] == 2000
     assert abs(m["subsGrowth"]["per_day"] - 2000 / 30) < 1
     assert m["monthlyViewsEstimate"] > 0
@@ -391,15 +391,15 @@ def test_stale_row_is_refreshed():
     reset(); seed_channel(); seed_videos(); seed_target(fresh_hours=10)
     API_VIDEOS["vid00000001"] = api_video(views=999_000)
     API_CHANNELS[CH] = api_channel()
-    d = I.inspect_video("ключ", "vid00000001")
+    d = I.inspect_video("ключ", "vid00000001", user_id=1)
     assert CALLS["videos"] == 1 and d["video"]["views"] == 999_000
 
 
 def test_tracked_flag():
     reset(); seed_channel(); seed_videos(); seed_target()
     RAW.execute("INSERT INTO tracked_channels (channel_id, active) VALUES (?, 1)", (CH,))
-    assert I.inspect_video("ключ", "vid00000001")["channel"]["tracked"] is True
-    assert I.inspect_channel("ключ", CH)["tracked"] is True
+    assert I.inspect_video("ключ", "vid00000001", user_id=1)["channel"]["tracked"] is True
+    assert I.inspect_channel("ключ", CH, user_id=1)["tracked"] is True
 
 
 if __name__ == "__main__":

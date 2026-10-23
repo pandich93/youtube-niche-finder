@@ -66,30 +66,30 @@ def _backdate_topic(tid, hours):
 
 
 def test_add_list_pause_and_remove_a_topic():
-    t = TW.add_topic("ai tools", threshold=0.7)
+    t = TW.add_topic("ai tools", threshold=0.7, user_id=1)
     assert t["text"] == "ai tools" and t["threshold"] == 0.7 and t["paused"] is False
-    assert [x["id"] for x in TW.list_topics()] == [t["id"]]
-    assert TW.set_paused(t["id"], True)["paused"] is True
-    assert TW.remove_topic(t["id"]) == {"removed": True}
-    assert TW.list_topics() == []
+    assert [x["id"] for x in TW.list_topics(user_id=1)] == [t["id"]]
+    assert TW.set_paused(t["id"], True, user_id=1)["paused"] is True
+    assert TW.remove_topic(t["id"], user_id=1) == {"removed": True}
+    assert TW.list_topics(user_id=1) == []
 
 
 def test_an_empty_topic_or_a_bad_threshold_is_rejected():
     with pytest.raises(ValueError):
-        TW.add_topic("   ")
+        TW.add_topic("   ", user_id=1)
     with pytest.raises(ValueError):
-        TW.add_topic("ai tools", threshold=1.5)
+        TW.add_topic("ai tools", threshold=1.5, user_id=1)
 
 
 def test_a_close_new_video_raises_one_personal_event():
-    t = TW.add_topic("ai tools", threshold=0.8)
+    t = TW.add_topic("ai tools", threshold=0.8, user_id=1)
     _backdate_topic(t["id"], 24)
     _video("vnear", NEAR_AI, title="New AI agent")
     _video("vfar", HISTORY)
     _video("vnoemb", None)
     res = TW.match_new()
     assert res == {"topics": 1, "videosChecked": 2, "matched": 1}
-    ev = AL.list_events(kind="topic_match")
+    ev = AL.list_events(kind="topic_match", user_id=1)
     assert len(ev) == 1
     p = ev[0]["payload"]
     assert p["videoId"] == "vnear" and p["topic"] == "ai tools" and p["similarity"] >= 0.8
@@ -98,18 +98,18 @@ def test_a_close_new_video_raises_one_personal_event():
 
 def test_videos_seen_before_the_topic_existed_do_not_flood_it():
     _video("vold", NEAR_AI, seen_hours_ago=5)
-    t = TW.add_topic("ai tools", threshold=0.8)
+    t = TW.add_topic("ai tools", threshold=0.8, user_id=1)
     _backdate_topic(t["id"], 2)
     assert TW.match_new()["matched"] == 0
 
 
 def test_videos_older_than_the_window_and_paused_topics_are_skipped():
-    t = TW.add_topic("ai tools", threshold=0.8)
+    t = TW.add_topic("ai tools", threshold=0.8, user_id=1)
     _backdate_topic(t["id"], 100)
     _video("vstale", NEAR_AI, seen_hours_ago=60)
     assert TW.match_new()["matched"] == 0
     _video("vfresh", NEAR_AI)
-    TW.set_paused(t["id"], True)
+    TW.set_paused(t["id"], True, user_id=1)
     assert TW.match_new()["matched"] == 0
 
 
@@ -191,8 +191,8 @@ def yt_api(monkeypatch):
 
 
 def test_only_opted_in_topics_search_youtube_and_new_videos_then_match(yt_api):
-    on = TW.add_topic("ai tools", threshold=0.8, search_youtube=True)
-    TW.add_topic("cooking", threshold=0.8)                        # not opted in
+    on = TW.add_topic("ai tools", threshold=0.8, search_youtube=True, user_id=1)
+    TW.add_topic("cooking", threshold=0.8, user_id=1)                        # not opted in
     _backdate_topic(on["id"], 24)
     res = TW.search_topics("key")
     assert res["topicsSearched"] == 1 and res["videosStored"] == 2
@@ -203,16 +203,16 @@ def test_only_opted_in_topics_search_youtube_and_new_videos_then_match(yt_api):
 
 
 def test_known_videos_are_not_fetched_again(yt_api):
-    TW.add_topic("ai tools", search_youtube=True)
+    TW.add_topic("ai tools", search_youtube=True, user_id=1)
     _video("vs1", NEAR_AI)
     TW.search_topics("key")
     assert yt_api["videos"] == [["vs2"]]
 
 
 def test_the_search_toggle_and_the_daily_cap(yt_api, monkeypatch):
-    t = TW.add_topic("ai tools")
+    t = TW.add_topic("ai tools", user_id=1)
     assert t["searchYoutube"] is False
-    assert TW.set_search(t["id"], True)["searchYoutube"] is True
+    assert TW.set_search(t["id"], True, user_id=1)["searchYoutube"] is True
     monkeypatch.setattr(TW, "SEARCH_MAX_PER_DAY", 0)
     assert TW.search_topics("key")["topicsSearched"] == 0 and yt_api["search"] == []
 
@@ -231,7 +231,7 @@ def test_owners_without_the_feature_do_not_starve_the_others(yt_api, monkeypatch
         t = TW.add_topic("ai tools", user_id=blocked, search_youtube=True)
         _backdate_topic(t["id"], 48 + i)
         ids.append(t["id"])
-    ok = TW.add_topic("cooking", threshold=0.8, search_youtube=True)
+    ok = TW.add_topic("cooking", threshold=0.8, search_youtube=True, user_id=1)
     _backdate_topic(ok["id"], 24)
     real = PL.plan_for
 
@@ -261,7 +261,7 @@ def _two_owners(monkeypatch, older_for_first=3):
     for i in range(older_for_first):
         t = TW.add_topic("ai tools", user_id=first, search_youtube=True)
         _backdate_topic(t["id"], 48 + i)
-    other = TW.add_topic("cooking", threshold=0.8, search_youtube=True)
+    other = TW.add_topic("cooking", threshold=0.8, search_youtube=True, user_id=1)
     _backdate_topic(other["id"], 24)
     real = PL.plan_for
 

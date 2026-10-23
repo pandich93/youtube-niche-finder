@@ -12,7 +12,7 @@ from domain import tag_stats as TS
 VALID_SOURCES = ("manual", "claude-mcp", "llm")
 
 
-def tag_videos(items: list, source: str, replace: bool = False, user_id: int = None,
+def tag_videos(items: list, source: str, replace: bool = False, *, user_id: int,
                may_overwrite: bool = True) -> dict:
     """items: [{"video_id", "tag_group", "tags": [...]}, ...] -- each item
     tags one video in one group; pass several items to cover multiple
@@ -120,7 +120,7 @@ def list_proposed_tags(niche: str) -> list:
 
 
 def resolve_proposed_tag(video_id: str, tag_group: str, tag: str, accept: bool,
-                         user_id: int = None, may_overwrite: bool = True) -> dict:
+                         *, user_id: int, may_overwrite: bool = True) -> dict:
     """accept=True: the tag joins the niche's taxonomy (clears `proposed`, now
     counted by tag_stats). accept=False: the row is deleted outright -- a
     rejected proposal isn't a real tag. With may_overwrite=False only a

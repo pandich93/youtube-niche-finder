@@ -101,7 +101,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(packaging_mod, "fingerprint_thumbnails", rec("thumbs"))
     monkeypatch.setattr(sponsors_mod, "scan_sponsors", rec("sponsors"))
     monkeypatch.setattr(thumbsearch_mod, "embed_thumbnails", rec("thumb_embed"))
-    monkeypatch.setattr(own_mod, "status", lambda: {"configured": True, "connectedChannels": 1,
+    monkeypatch.setattr(own_mod, "status", lambda user_id: {"configured": True, "connectedChannels": 1,
                                                     "missing": []})
     monkeypatch.setattr(own_mod, "sync_all", rec("own_sync"))
     monkeypatch.setattr(freshness_mod, "refresh_stale", rec("freshness"))
@@ -248,7 +248,7 @@ def test_thumbnail_vectors_are_off_unless_asked_for(monkeypatch):
 
 
 def test_own_sync_waits_for_oauth_and_a_connected_channel(calls, monkeypatch):
-    monkeypatch.setattr(own_mod, "status", lambda: {"configured": False, "connectedChannels": 0,
+    monkeypatch.setattr(own_mod, "status", lambda user_id: {"configured": False, "connectedChannels": 0,
                                                     "missing": ["OWN_OAUTH_CLIENT_ID"]})
     worker.cycle()
     assert "own_sync" not in calls
@@ -257,7 +257,7 @@ def test_own_sync_waits_for_oauth_and_a_connected_channel(calls, monkeypatch):
 
 def test_a_wrong_web_redirect_does_not_stop_the_daily_own_sync(calls, monkeypatch):
     # plan 25: only connecting needs the redirect
-    monkeypatch.setattr(own_mod, "status", lambda: {"configured": False, "missing": [],
+    monkeypatch.setattr(own_mod, "status", lambda user_id: {"configured": False, "missing": [],
                                                     "problems": ["redirect must be https"]})
     worker.cycle()
     assert "own_sync" in calls

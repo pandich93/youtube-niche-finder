@@ -25,7 +25,6 @@ import numpy as np
 import infrastructure.postgres as db
 from application import alerts as AL
 from application import plans as PL
-from domain.users import LOCAL_USER_ID
 
 WINDOW_HOURS = 48
 SEARCH_MAX_PER_DAY = 5         # topics searched on YouTube per day, all users
@@ -56,7 +55,7 @@ def _shape(r) -> dict:
 
 
 def add_topic(text: str, threshold: float = DEFAULT_THRESHOLD,
-              user_id: int = LOCAL_USER_ID, search_youtube: bool = False) -> dict:
+              *, user_id: int, search_youtube: bool = False) -> dict:
     text = (text or "").strip()
     if not text:
         raise ValueError("topic text is empty")
@@ -85,7 +84,7 @@ def add_topic(text: str, threshold: float = DEFAULT_THRESHOLD,
         conn.close()
 
 
-def list_topics(user_id: int = LOCAL_USER_ID) -> list:
+def list_topics(*, user_id: int) -> list:
     conn = db.get_conn()
     try:
         rows = conn.execute(f"SELECT {_COLS} FROM user_topics "
@@ -95,7 +94,7 @@ def list_topics(user_id: int = LOCAL_USER_ID) -> list:
         conn.close()
 
 
-def set_paused(topic_id: int, paused: bool, user_id: int = LOCAL_USER_ID) -> dict:
+def set_paused(topic_id: int, paused: bool, *, user_id: int) -> dict:
     conn = db.get_conn()
     try:
         row = conn.execute("UPDATE user_topics SET paused = ? WHERE id = ? AND user_id = ? "
@@ -109,7 +108,7 @@ def set_paused(topic_id: int, paused: bool, user_id: int = LOCAL_USER_ID) -> dic
         conn.close()
 
 
-def set_search(topic_id: int, on: bool, user_id: int = LOCAL_USER_ID) -> dict:
+def set_search(topic_id: int, on: bool, *, user_id: int) -> dict:
     """Turn the daily YouTube search of a topic on or off."""
     if on:
         PL.ensure_feature(user_id, "topic_youtube_search")
@@ -206,7 +205,7 @@ def search_topics(api_key: str) -> dict:
     return out
 
 
-def remove_topic(topic_id: int, user_id: int = LOCAL_USER_ID) -> dict:
+def remove_topic(topic_id: int, *, user_id: int) -> dict:
     """Removes the topic only; the events it raised stay in the feed."""
     conn = db.get_conn()
     try:

@@ -56,16 +56,16 @@ def _scopes(url):
 # ------------------------------------------------------------ scopes
 
 def test_desktop_mode_keeps_asking_for_revenue_by_default():
-    url = OWN.start_connect()["authUrl"]
+    url = OWN.start_connect(user_id=1)["authUrl"]
     assert OA.MONETARY_SCOPE in _scopes(url)
 
 
 def test_web_mode_asks_for_revenue_only_when_wanted(monkeypatch):
     monkeypatch.setenv("OWN_OAUTH_MODE", "web")
     monkeypatch.setenv("OWN_OAUTH_REDIRECT_URI", HTTPS)
-    base = _scopes(OWN.start_connect()["authUrl"])
+    base = _scopes(OWN.start_connect(user_id=1)["authUrl"])
     assert base == set(OA.BASE_SCOPES) and OA.MONETARY_SCOPE not in base
-    assert OA.MONETARY_SCOPE in _scopes(OWN.start_connect(include_revenue=True)["authUrl"])
+    assert OA.MONETARY_SCOPE in _scopes(OWN.start_connect(include_revenue=True, user_id=1)["authUrl"])
 
 
 def test_revenue_access_is_reported_per_channel(monkeypatch):
@@ -75,22 +75,22 @@ def test_revenue_access_is_reported_per_channel(monkeypatch):
     monkeypatch.setattr(YA, "mine_channel", lambda at: {"channelId": CH, "title": "Mine",
                                                         "publishedAt": "2024-01-01T00:00:00Z"})
     monkeypatch.setattr(YA, "report", lambda *a, **k: [])
-    url = OWN.start_connect()["authUrl"]
+    url = OWN.start_connect(user_id=1)["authUrl"]
     OWN.finish_connect(parse_qs(urlsplit(url).query)["state"][0], "code")
-    assert OWN.list_channels()["channels"][0]["monetaryScope"] is False
+    assert OWN.list_channels(user_id=1)["channels"][0]["monetaryScope"] is False
 
 
 # ------------------------------------------------------------ web mode config
 
 def test_web_mode_needs_an_https_redirect(monkeypatch):
     monkeypatch.setenv("OWN_OAUTH_MODE", "web")
-    st = OWN.status()
+    st = OWN.status(user_id=1)
     assert st["mode"] == "web" and st["configured"] is False
     assert any("OWN_OAUTH_REDIRECT_URI" in p for p in st["problems"])
     monkeypatch.setenv("OWN_OAUTH_REDIRECT_URI", "http://nf.example.com/api/own/oauth/callback")
-    assert OWN.status()["configured"] is False
+    assert OWN.status(user_id=1)["configured"] is False
     monkeypatch.setenv("OWN_OAUTH_REDIRECT_URI", HTTPS)
-    st = OWN.status()
+    st = OWN.status(user_id=1)
     assert st["configured"] is True and st["problems"] == [] and st["redirectUri"] == HTTPS
 
 
@@ -145,5 +145,5 @@ def test_a_wrong_redirect_blocks_connecting_but_not_the_daily_sync(monkeypatch):
     monkeypatch.setenv("OWN_OAUTH_MODE", "web")
     monkeypatch.setenv("OWN_OAUTH_REDIRECT_URI", "http://nf.example.com/api/own/oauth/callback")
     with pytest.raises(OWN.NotConfigured):
-        OWN.start_connect()
-    assert OWN.sync()["channels"] == []          # no channels, but no NotConfigured either
+        OWN.start_connect(user_id=1)
+    assert OWN.sync(user_id=1)["channels"] == []          # no channels, but no NotConfigured either

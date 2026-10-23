@@ -45,7 +45,7 @@ def _emit(kind, ref_id, payload):
     conn = db.get_conn()
     conn.execute("INSERT INTO tracked_channels (user_id, channel_id, added_at, active) "
                  "VALUES (1, ?, ?, 1) ON CONFLICT DO NOTHING", (payload["channelId"], db.now_iso()))
-    alerts._emit(conn, kind, ref_id, payload)
+    alerts._emit(conn, kind, ref_id, payload, user_id=None)
     conn.commit()
     conn.close()
 
@@ -55,7 +55,7 @@ def test_deliver_is_a_noop_by_default_null_notifier(monkeypatch):
     monkeypatch.setattr(notify_factory, "get_notifier", lambda: NullNotifier())
     _emit("outlier", "v1", {"videoId": "v1", "title": "t", "outlierScore": 5, "views": 1000})
 
-    out = alerts.deliver()
+    out = alerts.deliver(user_id=1)
 
     assert out["skipped"] is True
     conn = db.get_conn()
@@ -71,7 +71,7 @@ def test_deliver_sends_each_pending_event_once(monkeypatch):
     _emit("outlier", "v1", {"videoId": "v1", "channelId": "c1", "title": "t1",
                             "outlierScore": 5, "views": 1000})
 
-    out = alerts.deliver()
+    out = alerts.deliver(user_id=1)
 
     assert out["sent"] == 1
     assert len(stub.sent) == 1
@@ -84,8 +84,8 @@ def test_deliver_never_resends_an_already_delivered_event(monkeypatch):
     monkeypatch.setattr(notify_factory, "get_notifier", lambda: stub)
     _emit("outlier", "v2", {"videoId": "v2", "title": "t2", "outlierScore": 5, "views": 1000})
 
-    alerts.deliver()
-    out = alerts.deliver()  # nothing new pending
+    alerts.deliver(user_id=1)
+    out = alerts.deliver(user_id=1)  # nothing new pending
 
     assert out["sent"] == 0
     assert len(stub.sent) == 1  # not resent
@@ -99,7 +99,7 @@ def test_deliver_sends_first_max_per_cycle_individually_and_rest_as_one_summary(
         _emit("outlier", f"vbulk{i}", {"videoId": f"vbulk{i}", "title": f"t{i}",
                                        "outlierScore": 3, "views": 100})
 
-    out = alerts.deliver(max_per_cycle=10)
+    out = alerts.deliver(max_per_cycle=10, user_id=1)
 
     assert out["sent"] == 10
     assert out["summarized"] == 5
@@ -118,7 +118,7 @@ def test_deliver_does_not_mark_a_failed_send_as_delivered(monkeypatch):
     monkeypatch.setattr(notify_factory, "get_notifier", lambda: stub)
     _emit("outlier", "vfail", {"videoId": "vfail", "title": "t", "outlierScore": 5, "views": 1})
 
-    out = alerts.deliver()
+    out = alerts.deliver(user_id=1)
 
     assert out["sent"] == 0
     assert out["failed"] == 1

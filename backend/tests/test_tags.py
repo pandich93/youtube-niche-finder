@@ -60,7 +60,7 @@ def test_tag_videos_requires_a_valid_source():
     _seed_video_in_niche("vtag1", "UCtag0000000000000000001", "n-tags-1")
     try:
         T.tag_videos([{"video_id": "vtag1", "tag_group": "theme", "tags": ["x"]}],
-                     source="not-a-real-source")
+                     source="not-a-real-source", user_id=None)
         assert False, "expected ValueError"
     except ValueError:
         pass
@@ -69,10 +69,10 @@ def test_tag_videos_requires_a_valid_source():
 def test_llm_cannot_overwrite_a_manual_tag_but_can_add_a_new_one():
     _seed_video_in_niche("vtag2", "UCtag0000000000000000002", "n-tags-2")
     T.tag_videos([{"video_id": "vtag2", "tag_group": "theme", "tags": ["fear"]}],
-                source="manual")
+                source="manual", user_id=None)
 
     r = T.tag_videos([{"video_id": "vtag2", "tag_group": "theme", "tags": ["fear", "howto"]}],
-                     source="llm")
+                     source="llm", user_id=None)
 
     assert r["written"] == 1              # howto is new, written
     assert r["blockedByProtection"] == 1  # fear is protected, blocked
@@ -84,9 +84,9 @@ def test_llm_cannot_overwrite_a_manual_tag_but_can_add_a_new_one():
 def test_manual_can_overwrite_a_claude_mcp_tag():
     _seed_video_in_niche("vtag3", "UCtag0000000000000000003", "n-tags-3")
     T.tag_videos([{"video_id": "vtag3", "tag_group": "theme", "tags": ["fear"]}],
-                source="claude-mcp")
+                source="claude-mcp", user_id=None)
     T.tag_videos([{"video_id": "vtag3", "tag_group": "theme", "tags": ["fear"]}],
-                source="manual")
+                source="manual", user_id=None)
 
     tags = {t["tag"]: t["source"] for t in T.list_video_tags(video_id="vtag3")}
     assert tags == {"fear": "manual"}
@@ -95,10 +95,10 @@ def test_manual_can_overwrite_a_claude_mcp_tag():
 def test_replace_mode_keeps_protected_tags_when_llm_replaces():
     _seed_video_in_niche("vtag4", "UCtag0000000000000000004", "n-tags-4")
     T.tag_videos([{"video_id": "vtag4", "tag_group": "theme", "tags": ["a", "b"]}],
-                source="manual", replace=True)
+                source="manual", replace=True, user_id=None)
 
     T.tag_videos([{"video_id": "vtag4", "tag_group": "theme", "tags": ["c"]}],
-                source="llm", replace=True)
+                source="llm", replace=True, user_id=None)
 
     tags = {t["tag"]: t["source"] for t in T.list_video_tags(video_id="vtag4")}
     assert tags == {"a": "manual", "b": "manual", "c": "llm"}
@@ -107,10 +107,10 @@ def test_replace_mode_keeps_protected_tags_when_llm_replaces():
 def test_replace_mode_from_manual_drops_tags_not_in_the_new_list():
     _seed_video_in_niche("vtag5", "UCtag0000000000000000005", "n-tags-5")
     T.tag_videos([{"video_id": "vtag5", "tag_group": "theme", "tags": ["a", "b"]}],
-                source="manual", replace=True)
+                source="manual", replace=True, user_id=None)
 
     T.tag_videos([{"video_id": "vtag5", "tag_group": "theme", "tags": ["b", "c"]}],
-                source="manual", replace=True)
+                source="manual", replace=True, user_id=None)
 
     tags = {t["tag"] for t in T.list_video_tags(video_id="vtag5")}
     assert tags == {"b", "c"}
@@ -128,8 +128,8 @@ def test_list_video_tags_requires_exactly_one_filter():
 def test_list_video_tags_by_niche_scopes_through_video_niches():
     _seed_video_in_niche("vtag6", "UCtag0000000000000000006", "n-tags-6")
     _seed_video_in_niche("vtag7", "UCtag0000000000000000007", "n-tags-other")
-    T.tag_videos([{"video_id": "vtag6", "tag_group": "theme", "tags": ["x"]}], source="manual")
-    T.tag_videos([{"video_id": "vtag7", "tag_group": "theme", "tags": ["y"]}], source="manual")
+    T.tag_videos([{"video_id": "vtag6", "tag_group": "theme", "tags": ["x"]}], source="manual", user_id=None)
+    T.tag_videos([{"video_id": "vtag7", "tag_group": "theme", "tags": ["y"]}], source="manual", user_id=None)
 
     rows = T.list_video_tags(niche="n-tags-6")
 
@@ -147,7 +147,7 @@ def test_tag_stats_on_a_niche_with_nothing_collected():
 def test_tag_stats_wires_population_and_tags_through_to_the_domain_function(monkeypatch):
     _seed_video_in_niche("vtag8", "UCtag0000000000000000008", "n-tags-stats")
     T.tag_videos([{"video_id": "vtag8", "tag_group": "theme", "tags": ["fear"]}],
-                source="manual")
+                source="manual", user_id=None)
 
     fake_rows = [
         {"video_id": "vtag8", "view_count": 1000, "outlierScore": 4.0,
