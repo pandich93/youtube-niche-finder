@@ -388,6 +388,27 @@ def set_archived(plan_id, archived: bool) -> dict:
         conn.close()
 
 
+def pool_summary() -> dict:
+    """The Admin page's view of the shared YouTube pool (multi-user plan
+    P0-05): every regular user's daily unit limit added up against the part
+    of the pool open to users. A warning, not a rule -- few people spend
+    their whole share -- and unlimited users are counted apart."""
+    import infrastructure.youtube.client as yt
+    conn = db.get_conn()
+    try:
+        ids = [r["id"] for r in conn.execute("SELECT id FROM users WHERE is_admin = 0").fetchall()]
+        used = int(db.get_meta(conn, yt.units_meta_key()) or 0)
+    finally:
+        conn.close()
+    limits = [yt.user_limits(uid)["units"] for uid in ids]
+    open_to_users = max(0, yt.DAILY_UNIT_LIMIT - yt.WORKER_RESERVE_UNITS)
+    total = sum(x for x in limits if x is not None)
+    return {"dailyLimit": yt.DAILY_UNIT_LIMIT, "workerReserve": yt.WORKER_RESERVE_UNITS,
+            "openToUsers": open_to_users, "usedToday": used, "userLimitsTotal": total,
+            "unlimitedUsers": sum(1 for x in limits if x is None),
+            "overbooked": total > open_to_users}
+
+
 def list_users() -> list:
     conn = db.get_conn()
     try:

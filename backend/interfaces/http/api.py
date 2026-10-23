@@ -1368,7 +1368,7 @@ def admin_plan_restore(request: Request, plan_id: int):
 @app.get("/api/admin/users")
 def admin_users(request: Request):
     _admin(request)
-    return {"users": PL.list_users()}
+    return {"users": PL.list_users(), "pool": PL.pool_summary()}
 
 
 @app.put("/api/admin/users/{user_id}/plan")

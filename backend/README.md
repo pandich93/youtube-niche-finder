@@ -257,9 +257,19 @@ YouTube quota (sub-stages 5.5–5.6): one API key serves the installation, as
 the YouTube API policies require one API project per application (III.D.1.c),
 and the worker refreshes shared data with it. Each signed-in user spends a
 daily share of it — `NF_USER_DAILY_UNITS` (2000) and
-`NF_USER_DAILY_SEARCH_CALLS` (20 of the 100 daily searches), 0 = no limit. The
-YouTube client checks the share before every call and counts it after; running
-out answers 429 to that user only. The dashboard footer shows what is left.
+`NF_USER_DAILY_SEARCH_CALLS` (20 of the 100 daily searches), 0 = no limit.
+Before every call the YouTube client reserves its cost atomically, in one
+transaction, from every counter it touches: the user's share, their searches,
+the shared pool and the 100 searches a day. A counter that would go past its
+ceiling refuses the whole call, so parallel requests cannot overshoot. A call
+that never reached Google is refunded; an answered one stays charged, failed
+answers included, because Google charges them too. Users share the pool minus
+`WORKER_RESERVE_UNITS` (1500), which only the worker (and single-user mode)
+may spend, so stats snapshots and alerts keep coming when users have used up
+the rest. Running out answers 429: a spent share to that user only
+(`UserQuotaExceeded`), a spent pool to every user (`SharedPoolExhausted`).
+If the budget cannot be recorded, the call is not sent. The dashboard footer
+shows what is left; the Admin page adds up users' limits against the pool.
 
 Personal API tokens (sub-stages 5.7–5.8) sign in clients that cannot hold the
 cookie: the browser extension (its "Токен доступа" setting) and MCP over HTTP

@@ -220,6 +220,23 @@ def purge_login_failures(conn, before: str):
     conn.execute("DELETE FROM login_attempts WHERE last_failure_at < ?", (before,))
 
 
+def incr_meta_capped(conn, key: str, n: int, limit: int) -> bool:
+    """Add n to an integer counter in meta only if the total stays within
+    limit; False (nothing written) otherwise. One statement, so parallel
+    requests cannot both pass a check and then both spend (multi-user plan
+    P0-05: the YouTube budget is reserved before a request is sent)."""
+    if n > limit:
+        return False
+    row = conn.execute(
+        "INSERT INTO meta (key, value) VALUES (?,?) "
+        "ON CONFLICT(key) DO UPDATE SET value=CAST("
+        "CAST(meta.value AS INTEGER) + CAST(excluded.value AS INTEGER) AS TEXT) "
+        "WHERE CAST(meta.value AS INTEGER) + CAST(excluded.value AS INTEGER) <= ? "
+        "RETURNING value",
+        (key, str(int(n)), int(limit))).fetchone()
+    return row is not None
+
+
 def incr_meta(conn, key: str, n: int):
     """Add n to an integer counter in meta, creating it if missing. One
     statement, so concurrent web/worker/MCP processes never lose an update
