@@ -699,6 +699,7 @@ required. The optional groups:
 | Niche clusters | `NICHE_CLUSTERS_MIN_CHANNELS` (10), `NICHE_CLUSTERS_COMPETITION_SUBS` (100000) |
 | Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_WINDOW_DAYS` (7: only events this recent are sent), `NOTIFY_DASHBOARD_URL`, `NOTIFY_MODE` (`instant` / `digest` / `both`), `DIGEST_HOUR` (8, container time zone), `DIGEST_SKIP_EMPTY` (1), `WORKER_DIGEST_CHECK_INTERVAL_MIN` (10) |
 | Servers | `WEB_PORT`, `RATE_LIMIT_PER_MINUTE`, `NF_ALLOWED_HOSTS` (extra `Host` names for the HTTP API), `MCP_TRANSPORT` (`stdio`), `MCP_HOST`, `MCP_PORT` |
+| Observability | `NF_LOG_FORMAT` (`text`; `json` = one JSON object per line), `NF_METRICS_TOKEN` (opens `/metrics`), `NF_OPERATOR_ALERTS` (`1`), `NF_OPERATOR_ALERT_HOURS` (`6`), `SENTRY_DSN`, `SENTRY_ENVIRONMENT` -- see [docs/hosting.md](../docs/hosting.md#monitoring) |
 
 What leaves the machine when the LLM or alert delivery is on is described in
 [PRIVACY.md](../PRIVACY.md).

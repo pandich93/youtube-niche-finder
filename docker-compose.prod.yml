@@ -15,6 +15,8 @@
 #     client by X-Forwarded-For from the proxy (NF_TRUSTED_PROXIES).
 #   - MCP over HTTP runs all the time behind the same domain, at /mcp, and
 #     accepts only personal API tokens.
+#   - Logs are one JSON object per line (NF_LOG_FORMAT); /metrics on web
+#     opens with NF_METRICS_TOKEN, for a Prometheus on the compose network.
 #   - `backup` dumps the database every BACKUP_INTERVAL_HOURS into
 #     BACKUP_DIR, checks that each dump restores, and keeps the newest
 #     BACKUP_KEEP.
@@ -34,8 +36,10 @@ services:
     environment:
       NF_MULTI_USER: "1"
       NF_COOKIE_SECURE: "1"
-      # NF_DOMAIN plus any extra names from .env's NF_ALLOWED_HOSTS
+      # NF_DOMAIN plus any extra names from .env's NF_ALLOWED_HOSTS (`web`,
+      # how Prometheus reaches /metrics inside compose, is always allowed)
       NF_ALLOWED_HOSTS: "${NF_DOMAIN:?set NF_DOMAIN in .env, e.g. NF_DOMAIN=niches.example.com},${NF_ALLOWED_HOSTS:-}"
+      NF_LOG_FORMAT: "${NF_LOG_FORMAT:-json}"
       # Only containers on this compose network can reach web:8080 (the port
       # is not published), so trusting Docker's private ranges means trusting
       # the proxy. Never '*'.
@@ -44,11 +48,13 @@ services:
   worker:
     environment:
       NF_MULTI_USER: "1"
+      NF_LOG_FORMAT: "${NF_LOG_FORMAT:-json}"
 
   mcp-http:
     profiles: !reset []
     environment:
       NF_MULTI_USER: "1"
+      NF_LOG_FORMAT: "${NF_LOG_FORMAT:-json}"
       MCP_PUBLIC_URL: "https://${NF_DOMAIN:?set NF_DOMAIN in .env}"
 
   proxy:

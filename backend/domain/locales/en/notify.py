@@ -5,6 +5,9 @@ to domain.i18n.tr(), Telegram HTML and {placeholders} included; the HTML stays
 exactly as in the source."""
 
 MESSAGES = {
+    # ------------------------- to whoever runs the server (infrastructure/observability.py)
+    "⚠️ <b>niche-finder: нужен оператор</b>\n{text}":
+        "⚠️ <b>niche-finder: operator needed</b>\n{text}",
     # ---------------------------------------------------- alerts, one per event
     "\U0001F680 <b>Outlier</b>: {title}\n×{score} · {views} просмотров":
         "\U0001F680 <b>Outlier</b>: {title}\n×{score} · {views} views",
