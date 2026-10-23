@@ -1,9 +1,10 @@
 /* Точка входа дашборда: тема, язык, глобальные фильтры, подвал, первый render().
    Экраны -- screens/*.js, роутинг -- router.js, общее -- shared.js. */
-import { $, api, esc, notice, state, loadScores } from './ui.js';
+import { $, api, esc, state, loadScores } from './ui.js';
 import { loadFootStat } from './shared.js';
 import { render, routeTitle } from './router.js';
 import { setMe, applyNav, renderPlanLine } from './plan-state.js';
+import { setOffers, showSignIn, openAccountLink } from './account.js';
 import { dict, getLocale, hasStoredLocale, setLocale, onLocaleChange, translateStatic } from './i18n.js';
 import ru from './i18n/ru/app.js';
 import en from './i18n/en/app.js';
@@ -83,32 +84,8 @@ function listenLocale() {
   });
 }
 
-/* ------------------------------------------------ вход (план 15)
-   Только при NF_MULTI_USER=1 на сервере. Аккаунты создаёт администратор
-   (cli.py create-user), регистрации нет. Сессия -- HttpOnly cookie, скрипт её
-   не видит и не хранит. */
-function showSignIn(message = '') {
-  $('#crumbSection').textContent = t('signInCrumb');
-  $('#view').innerHTML = `${message ? notice(esc(message), 'error') : ''}
-    <div class="card" style="max-width:420px">
-      <div class="section-head"><div><div class="section-title">${t('signInTitle')}</div>
-        <div class="section-sub">${t('signInSub')}</div></div></div>
-      <form id="signInForm" style="display:grid;gap:10px">
-        <input type="email" id="signInEmail" placeholder="email" autocomplete="username" required>
-        <input type="password" id="signInPassword" placeholder="${esc(t('passwordPlaceholder'))}" autocomplete="current-password" required>
-        <button class="btn" type="submit">${t('signIn')}</button>
-      </form>
-    </div>`;
-  $('#signInForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await api('/api/auth/login', { method: 'POST',
-        body: { email: $('#signInEmail').value, password: $('#signInPassword').value } });
-      location.reload();
-    } catch (err) { showSignIn(err.message); }
-  });
-}
-
+/* Вход, регистрация и ссылки из писем -- account.js (план 15, P1-06). Только
+   при NF_MULTI_USER=1 на сервере. */
 async function start() {
   initChrome();
   try { me = await api('/api/auth/me'); } catch { /* старый сервер без входа */ }
@@ -116,7 +93,8 @@ async function start() {
   // слушатель смены ещё не подписан, поэтому каркас переводим сами
   if (!hasStoredLocale() && me.locale && setLocale(me.locale, { persist: false })) translateChrome();
   listenLocale();
-  if (me.multiUser && !me.user) { showSignIn(); return; }
+  setOffers(me.signup);
+  if (me.multiUser && !me.user) { if (!openAccountLink(false)) showSignIn(); return; }
   setMe(me);
   if (me.multiUser) {
     const out = $('#signOut');
@@ -132,6 +110,8 @@ async function start() {
   addEventListener('nf:signin-required', () => showSignIn(t('sessionExpired')));
   loadNiches();
   loadFootStat();
+  // ссылка из письма о смене email открыта уже со входом
+  if (me.multiUser && openAccountLink(true)) return;
   // план 23: каталог оценок до первого экрана -- подсказки «?» берут формулы из него
   await loadScores();
   render();

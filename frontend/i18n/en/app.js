@@ -15,10 +15,5 @@ export default {
   p90d: '90 days',
   pAll: 'all time',
   reload: 'Refresh',
-  signInCrumb: 'Sign in',
-  signInTitle: 'Sign in to niche-finder',
-  signInSub: 'accounts are issued by the administrator of this server',
-  passwordPlaceholder: 'password',
-  signIn: 'Sign in',
   sessionExpired: 'Your session has ended — please sign in again.',
 };

@@ -31,6 +31,7 @@ import { viewMcp } from './screens/mcp.js';
 import { viewOwn } from './screens/own.js';
 import { viewPlan } from './screens/plan.js';
 import { viewAdmin } from './screens/admin.js';
+import { viewProfile } from './screens/profile.js';
 import { routeAllowed } from './plan-state.js';
 import { dict } from './i18n.js';
 import ru from './i18n/ru/router.js';
@@ -80,6 +81,7 @@ const ROUTES = {
   mcp: { run: viewMcp },
   plan: { run: viewPlan },
   admin: { run: viewAdmin },
+  profile: { run: viewProfile },
 };
 
 const routeTitle = (name) => t(name);
