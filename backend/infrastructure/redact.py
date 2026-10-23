@@ -15,8 +15,9 @@ _PARAMS = re.compile(r"(?i)\b(key|api_key|access_token|refresh_token|client_secr
 # Google API keys have a fixed shape
 _GOOGLE_KEY = re.compile(r"AIza[0-9A-Za-z_\-]{35}")
 # configured secrets, masked wherever they appear verbatim
+# (OWN_TOKENS_KEY_OLD is a comma-separated list: each key is masked on its own)
 _SECRET_ENV = ("YOUTUBE_API_KEY", "OWN_OAUTH_CLIENT_SECRET", "OWN_TOKENS_KEY",
-               "OPENROUTER_API_KEY", "NOTIFY_TELEGRAM_BOT_TOKEN")
+               "OWN_TOKENS_KEY_OLD", "OPENROUTER_API_KEY", "NOTIFY_TELEGRAM_BOT_TOKEN")
 MASK = "<redacted>"
 
 
@@ -25,8 +26,9 @@ def redact(text) -> str:
         return ""
     text = str(text)
     for name in _SECRET_ENV:
-        value = (os.environ.get(name) or "").strip()
-        if len(value) >= 6:          # never mask short or empty values everywhere
-            text = text.replace(value, MASK)
+        for value in (os.environ.get(name) or "").split(","):
+            value = value.strip()
+            if len(value) >= 6:      # never mask short or empty values everywhere
+                text = text.replace(value, MASK)
     text = _GOOGLE_KEY.sub(MASK, text)
     return _PARAMS.sub(lambda m: f"{m.group(1)}={MASK}", text)

@@ -15,7 +15,7 @@ PYTHON  ?= $(shell command -v python3.13 || command -v python3.12 || \
 RUFF_VERSION ?= 0.16.9
 RUFF    ?= uvx ruff@$(RUFF_VERSION)
 
-.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli api-docs extension-zip prod-up prod-down prod-logs prod-cli prod-backup
+.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli rotate-secrets api-docs extension-zip prod-up prod-down prod-logs prod-cli prod-backup
 
 doctor: ## проверить ключ, сеть и базу (начните отсюда)
 	$(COMPOSE) run --rm mcp python cli.py doctor
@@ -74,6 +74,9 @@ up-db:  ## just the database, e.g. before make test/seed/stats
 
 cli:    ## произвольная команда CLI:  make cli ARGS="viral --period 24h"
 	$(COMPOSE) run --rm mcp python cli.py $(ARGS)
+
+rotate-secrets: ## re-encrypt stored secrets with the current OWN_TOKENS_KEY (dry run; ARGS=--apply writes)
+	$(COMPOSE) run --rm mcp python cli.py rotate-secrets $(ARGS)
 
 clean:  ## delete the Postgres data volume (irreversible)
 	docker volume rm niche-finder-postgres-data

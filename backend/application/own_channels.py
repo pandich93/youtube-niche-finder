@@ -211,7 +211,8 @@ def _access_token(conn, user_id, channel_id):
     if not row or not row["token_enc"]:
         raise NotConnected(channel_id)
     cid, secret = _client()
-    return OA.refresh_access_token(cid, secret, SEC.decrypt(row["token_enc"]))
+    return OA.refresh_access_token(cid, secret, SEC.decrypt(
+        row["token_enc"], what=f"own_channels.token_enc user {user_id} channel {channel_id}"))
 
 
 def _report(token, channel_id, start, end):
@@ -448,8 +449,13 @@ def disconnect(channel_id: str, *, user_id: int) -> dict:
             raise NotConnected(channel_id)
         revoked = False
         try:
-            revoked = OA.revoke(SEC.decrypt(row["token_enc"])) if row["token_enc"] else False
-        except SEC.SecretsNotConfigured:
+            revoked = OA.revoke(SEC.decrypt(
+                row["token_enc"], what=f"own_channels.token_enc user {user_id} channel {channel_id}")
+            ) if row["token_enc"] else False
+        except SEC.SecretsNotConfigured as e:
+            # deleting still goes ahead; the grant stays at Google until the user removes it
+            log.warning("channel %s of user %s: token not revoked at Google: %s",
+                        channel_id, user_id, e)
             revoked = False
         conn.execute("DELETE FROM own_video_metrics WHERE user_id = ? AND channel_id = ?",
                      (user_id, channel_id))

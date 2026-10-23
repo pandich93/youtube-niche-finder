@@ -7,6 +7,8 @@ address are Fernet-encrypted (infrastructure/secrets.py, OWN_TOKENS_KEY) and
 never returned: reading the settings says only whether each is set. A webhook
 address from a user must be https to a public address (urlguard.py).
 """
+import logging
+
 import infrastructure.postgres as db
 import infrastructure.secrets as SEC
 from application import plans as PL
@@ -17,6 +19,7 @@ from infrastructure.notify.urlguard import UnsafeUrl, check_public_https
 from infrastructure.notify.webhook import WebhookNotifier
 
 MODES = ("instant", "digest", "both", "off")
+log = logging.getLogger(__name__)
 
 
 class SettingsError(ValueError):
@@ -111,10 +114,19 @@ def notifier_for(*, user_id: int):
         return NullNotifier()
     try:
         if r["telegram_token_enc"] and r["telegram_chat_id"]:
-            return TelegramNotifier(SEC.decrypt(r["telegram_token_enc"]), r["telegram_chat_id"])
+            return TelegramNotifier(SEC.decrypt(r["telegram_token_enc"],
+                                                what=f"user_settings.telegram_token_enc user {user_id}"),
+                                    r["telegram_chat_id"])
         if r["webhook_url_enc"]:
-            return WebhookNotifier(SEC.decrypt(r["webhook_url_enc"]), restricted=True)
-    except SEC.SecretsNotConfigured:
+            return WebhookNotifier(SEC.decrypt(r["webhook_url_enc"],
+                                               what=f"user_settings.webhook_url_enc user {user_id}"),
+                                   restricted=True)
+    except SEC.SecretsNotConfigured as e:
+        # P1-12: no alerts for this user until the key is back -- said out loud,
+        # not swallowed (SecretUnreadable is already logged by SEC.decrypt)
+        if not isinstance(e, SEC.SecretUnreadable):
+            log.error("user %s has saved notification settings but they cannot be read: %s",
+                      user_id, e)
         return NullNotifier()
     return NullNotifier()
 

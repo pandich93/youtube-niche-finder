@@ -66,6 +66,7 @@ from application import profit as PF
 from application import repeatability as RP
 from application import saturation as SAT
 from application import search as Q
+from application import secrets_rotation as SR
 from application import sponsors as SP
 from application import tags as TG
 from application import template_risk as TRK
@@ -1413,8 +1414,10 @@ def admin_plan_restore(request: Request, plan_id: int):
 
 @app.get("/api/admin/users")
 def admin_users(request: Request):
+    """The accounts, the shared YouTube pool and (P1-12) how many stored
+    secrets the current keys cannot read -- counts only, never a value."""
     _admin(request)
-    return {"users": PL.list_users(), "pool": PL.pool_summary()}
+    return {"users": PL.list_users(), "pool": PL.pool_summary(), "secrets": SR.health()}
 
 
 @app.put("/api/admin/users/{user_id}/plan")

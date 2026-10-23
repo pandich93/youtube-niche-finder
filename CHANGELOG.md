@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Encryption key rotation** (multi-user plan P1-12). `OWN_TOKENS_KEY` stays
+  the key that encrypts. Earlier keys go into `OWN_TOKENS_KEY_OLD`
+  (comma-separated) and are only used to read, so changing the key no longer
+  breaks the saved channel tokens and notification secrets.
+  - `cli.py rotate-secrets` (`make rotate-secrets`) counts what only an old key
+    reads; with `--apply` it re-encrypts those values with the current key.
+    Without `--apply` it is a dry run.
+  - A value no key reads is logged with its field and account (never the
+    value), and the admin screen shows how many there are. Before, alerts just
+    stopped.
+  - Steps: [docs/hosting.md](docs/hosting.md). Installs with one key work as
+    before.
 - **Logs, metrics and operator alerts for a hosted copy** (multi-user plan
   P1-14, [docs/hosting.md](docs/hosting.md#monitoring)).
   - `NF_LOG_FORMAT=json` writes one JSON object per log line on stderr, with

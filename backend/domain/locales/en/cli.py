@@ -17,6 +17,7 @@ MESSAGES = {
     python cli.py refresh                     обновить счётчики (история)
     python cli.py embed-videos                досчитать эмбеддинги (0 quota)
     python cli.py fix-tracked [--apply]       почистить watchlist от handle/url вместо id
+    python cli.py rotate-secrets [--apply]    перешифровать секреты текущим OWN_TOKENS_KEY
     python cli.py viral --period 24h
     python cli.py categories --period 7d --rank-by channels
     python cli.py keywords --period 24h
@@ -38,6 +39,7 @@ without connecting Claude Desktop.
     python cli.py refresh                     refresh counters (history)
     python cli.py embed-videos                compute missing embeddings (0 quota)
     python cli.py fix-tracked [--apply]       clean handles/URLs out of the watchlist
+    python cli.py rotate-secrets [--apply]    re-encrypt secrets with the current OWN_TOKENS_KEY
     python cli.py viral --period 24h
     python cli.py categories --period 7d --rank-by channels
     python cli.py keywords --period 24h
@@ -81,6 +83,23 @@ In Docker:  docker compose run --rm mcp python cli.py doctor
         "clean handles/URLs stored instead of channel_id out of the watchlist",
     "применить изменения (по умолчанию — только просмотр)":
         "apply the changes (by default only show them)",
+    # P1-12: key rotation
+    "перешифровать секреты текущим OWN_TOKENS_KEY (ротация ключа)":
+        "re-encrypt stored secrets with the current OWN_TOKENS_KEY (key rotation)",
+    "записать в базу (по умолчанию — только посчитать)":
+        "write to the database (by default only count)",
+    "Перешифровано: {rotated}; уже на текущем ключе: {current}; не читаются: {unreadable}":
+        "Re-encrypted: {rotated}; already on the current key: {current}; unreadable: {unreadable}",
+    "Пробный прогон, база не менялась. Будет перешифровано: {rotated}; уже на "
+    "текущем ключе: {current}; не читаются: {unreadable}. Записать: --apply":
+        "Dry run, nothing changed. Would re-encrypt: {rotated}; already on the "
+        "current key: {current}; unreadable: {unreadable}. To write: --apply",
+    "Не читаются ни текущим, ни старыми ключами: верните прежний ключ в "
+    "OWN_TOKENS_KEY_OLD или попросите пользователей подключить каналы и "
+    "ввести токены уведомлений заново.":
+        "Neither the current nor the old keys read these: put the previous key back into "
+        "OWN_TOKENS_KEY_OLD, or ask the users to reconnect their channels and enter "
+        "their notification tokens again.",
     "собрать канал (1 unit / 50 видео)": "collect a channel (1 unit / 50 videos)",
     "считать эмбеддинги сразу (по умолчанию нет)": "compute embeddings right away (default: no)",
     "собрать нишу поиском (1 из 100 поисков в сутки)":
