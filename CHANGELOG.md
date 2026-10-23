@@ -108,6 +108,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The LLM budget holds under parallel calls** (multi-user plan P1-09).
+  - Before, the gateway checked the day's spend, called the model and only
+    then recorded the cost. Parallel calls all passed the check and spent
+    past the budget.
+  - Now each call reserves its most possible cost first: the prompt and a
+    whole answer at the model's OpenRouter price. The check runs under one
+    lock against what was spent plus what other calls hold. The reservation
+    is settled to the real cost after the answer.
+  - The connection to the database is no longer held while the model
+    answers.
+  - An OpenRouter answer without `usage.cost` was recorded as free. It is now
+    priced from its tokens. A model with no known price counts at
+    `LLM_FALLBACK_USD_PER_MTOK` (15).
+  - Signed-in users share `LLM_DAILY_BUDGET_USD` minus
+    `LLM_WORKER_RESERVE_USD` (0.25), so background enrichment keeps going
+    when users have spent the rest.
 - Two requests at once can no longer both take the last free row of a count
   limit (tracked or own channels, topics, saved items, drafts, API tokens).
   The count and the insert now run in one transaction under a lock per user
