@@ -10,6 +10,7 @@ takes user_id. The OAuth refresh token is stored Fernet-encrypted
 Impressions and thumbnail click-through rate are not in the Analytics API
 (YouTube Studio only), so they are not shown.
 """
+import logging
 import os
 from datetime import date, timedelta
 
@@ -26,6 +27,8 @@ from infrastructure.youtube import analytics as YA
 from infrastructure.youtube import oauth as OA
 
 CLIENT_ID_ENV, CLIENT_SECRET_ENV = "OWN_OAUTH_CLIENT_ID", "OWN_OAUTH_CLIENT_SECRET"
+log = logging.getLogger(__name__)
+
 REDIRECT_ENV = "OWN_OAUTH_REDIRECT_URI"
 # plan 25: "desktop" -- each installation's owner brings an OAuth client of
 # type Desktop app with a loopback redirect (plan 14); "web" -- a service
@@ -312,7 +315,16 @@ def sync_all(today: date = None) -> dict:
     finally:
         conn.close()
     users = [uid for uid in users if PL.plan_for(uid).features["own_channels"]]
-    return {str(uid): sync(user_id=uid, today=today) for uid in users}
+    out = {}
+    for uid in users:
+        # one user's broken token or Google error must not stop the others (P1-11);
+        # only the error's type is logged: its text may carry token details
+        try:
+            out[str(uid)] = sync(user_id=uid, today=today)
+        except Exception as e:
+            log.warning("own channels sync failed for user %s: %s", uid, type(e).__name__)
+            out[str(uid)] = {"error": type(e).__name__}
+    return out
 
 
 # ---------------------------------------------------------- reading

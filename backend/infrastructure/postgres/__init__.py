@@ -15,6 +15,8 @@ from infrastructure.postgres.connection import (  # noqa: F401
     _schema,
     display_dsn,
     get_conn,
+    hold_lock,
+    release_lock,
 )
 from infrastructure.postgres.repositories import (  # noqa: F401
     _CHANNEL_COLS,

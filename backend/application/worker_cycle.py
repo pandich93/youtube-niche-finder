@@ -288,6 +288,32 @@ def cycle():
         _mark("own_sync")
 
 
+WORKER_LOCK = "worker"
+STANDBY_CHECK_SEC = 30
+
+
+def _wait_for_lock() -> bool:
+    """One worker per database schema (multi-user plan P1-11): a second one
+    would spend the YouTube quota twice and send every alert twice. A second
+    instance waits here as a standby and takes over once the first is gone
+    (its connection closes and Postgres frees the lock) -- exiting instead
+    would only make docker restart it in a loop. False if told to stop."""
+    told = False
+    while not _stop:
+        if db.hold_lock(WORKER_LOCK):
+            if told:
+                log("the other worker is gone -- taking over")
+            return True
+        if not told:
+            log("another worker already runs on this database -- waiting as a standby")
+            told = True
+        for _ in range(STANDBY_CHECK_SEC):
+            if _stop:
+                break
+            time.sleep(1)
+    return False
+
+
 def main():
     if not API_KEY:
         log("YOUTUBE_API_KEY is not set -- the worker has nothing to collect.\n"
@@ -299,6 +325,9 @@ def main():
     signal.signal(signal.SIGTERM, _handle_stop)
     signal.signal(signal.SIGINT, _handle_stop)
     db.init_db()
+    if not _wait_for_lock():
+        log("worker stopped")
+        return
     embed_status = (f"embed backfill every {EMBED_INTERVAL_MIN}min (batch {EMBED_BATCH})"
                      if DO_EMBED else "embed backfill=off")
     enrich_status = (f"enrich every {ENRICH_INTERVAL_MIN}min "

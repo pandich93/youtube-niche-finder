@@ -68,6 +68,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   counters in Postgres). New and changed passwords refuse common long ones,
   keyboard runs and the email's own name. Behind a reverse proxy set
   `NF_TRUSTED_PROXIES` so limits count each real client, not the proxy.
+- **One worker per database.** A second worker (a duplicate container,
+  `--scale worker=2`) no longer spends the quota and sends every alert a second
+  time. It waits as a standby on a Postgres advisory lock and takes over if the
+  first stops. One user's failing own-channel sync no longer stops the
+  others'. Alert delivery reads only the last `NOTIFY_WINDOW_DAYS` (7) of
+  events, so turning notifications on sends news, not the whole history.
 
 ## [0.4.0] - 2026-10-04
 
