@@ -487,9 +487,13 @@ def channel_velocity(channel_id: str, period: str = "30d", limit: int = 25) -> d
             "note": "vph24h/acceleration need at least two snapshots ~24h apart"}
 
 
-def title_changes(period: str = "7d", channel_id: str = None, limit: int = 50) -> dict:
+def title_changes(period: str = "7d", channel_id: str = None, limit: int = 50, *,
+                  user_id: int) -> dict:
     """Creators re-titling or swapping a thumbnail is a strong signal that a
-    video underperformed -- and 1of10 charges for exactly this detection."""
+    video underperformed -- and 1of10 charges for exactly this detection.
+    user_id: only channels on that user's active watchlist -- changes are
+    recorded for every channel someone tracks, so the whole feed would show
+    what other users watch (multi-user plan P1-05); None = every change."""
     conn = db.get_conn()
     start, _ = P.window(period)
     q = ("SELECT ch.video_id, ch.changed_at, ch.field, ch.old_value, ch.new_value, "
@@ -497,6 +501,10 @@ def title_changes(period: str = "7d", channel_id: str = None, limit: int = 50) -
          "FROM video_changes ch JOIN videos v ON v.video_id = ch.video_id "
          "LEFT JOIN channels c ON c.channel_id = v.channel_id WHERE 1=1")
     params = []
+    if user_id is not None:
+        q += (" AND EXISTS (SELECT 1 FROM tracked_channels t WHERE t.user_id = ? "
+              "AND t.channel_id = v.channel_id AND t.active = 1)")
+        params.append(user_id)
     if start:
         q += " AND ch.changed_at >= ?"
         params.append(start)

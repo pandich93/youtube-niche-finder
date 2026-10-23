@@ -116,7 +116,7 @@ def cmd_doctor(args):
     print(tr("3. База"))
     try:
         db.init_db()
-        s = query.db_stats()
+        s = query.db_stats(user_id=None)
         print(f"   {s['db_path']}")
         _say("каналов {channels}, видео {videos}, ниш {niches}, снапшотов {snapshots}",
              channels=s["channels"], videos=s["videos"], niches=s["niches"],
@@ -235,7 +235,7 @@ def cmd_channels(args):
 
 def cmd_stats(args):
     from application import search as query
-    out(query.db_stats())
+    out(query.db_stats(user_id=None))
 
 
 def cmd_embed_videos(args):

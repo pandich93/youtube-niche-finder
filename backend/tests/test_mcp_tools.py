@@ -70,14 +70,14 @@ def test_quota_reports_daily_total_not_just_this_call():
 
 
 def test_db_stats_exposes_search_quota_and_worker_flag():
-    s = query.db_stats()
+    s = query.db_stats(user_id=None)
     assert "search_quota" in s
     assert s["search_quota"]["search_calls_left_today"] <= yt.SEARCH_DAILY_CALL_LIMIT
     assert "worker_quota_blocked_until" in s
 
 
 def test_db_stats_exposes_videos_without_embedding():
-    s = query.db_stats()
+    s = query.db_stats(user_id=None)
     assert "videos_without_embedding" in s
     assert isinstance(s["videos_without_embedding"], int)
 

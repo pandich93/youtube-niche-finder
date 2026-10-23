@@ -116,7 +116,7 @@ def test_health_exposes_unit_quota():
 
 
 def test_db_stats_exposes_unit_quota():
-    s = query.db_stats()
+    s = query.db_stats(user_id=None)
     uq = s["unit_quota"]
     assert uq["daily_limit"] == yt.DAILY_UNIT_LIMIT
     assert uq["units_today"] == _units_today()

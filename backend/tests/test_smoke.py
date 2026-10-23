@@ -233,7 +233,7 @@ def test_query_layer():
     n = query.niche_overview("demo")
     assert n["found"] and n["channel_size_distribution"]["<1k"] == 1
     assert query.niche_overview("nope")["found"] is False
-    s = query.db_stats()
+    s = query.db_stats(user_id=None)
     assert s["videos"] > 100 and s["video_stat_snapshots"] > 0
 
 
@@ -242,7 +242,7 @@ def test_everything_json_serialisable():
                 trends.most_popular_categories(period="30d"),
                 trends.trending_keywords(period="30d"),
                 T.channel_analytics("UC0000000000000000000b"),
-                query.db_stats()):
+                query.db_stats(user_id=None)):
         json.dumps(obj, default=str)
 
 

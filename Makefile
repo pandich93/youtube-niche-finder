@@ -67,7 +67,7 @@ seed:   ## fill the database with synthetic demo data to try the tools (needs: m
 
 stats:  ## what is in the database right now (needs: make up-db)
 	docker run --rm --network niche-finder_default -e POSTGRES_HOST=postgres $(IMAGE) \
-	  python -c "import json; from application import search as query; print(json.dumps(query.db_stats(), indent=2, default=str))"
+	  python -c "import json; from application import search as query; print(json.dumps(query.db_stats(user_id=None), indent=2, default=str))"
 
 up-db:  ## just the database, e.g. before make test/seed/stats
 	$(COMPOSE) up -d postgres

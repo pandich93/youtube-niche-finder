@@ -188,11 +188,15 @@ Known limits (by design, worth knowing before you invite anyone):
   `MCP_ALLOW_UNAUTHENTICATED=1` says that is intended. The compose `mcp-http`
   service sets it: its port is not published, and only `mcp-https`, which
   listens on 127.0.0.1, reaches it. The production file turns it off.
-- **Some global feeds can hint at what others watch.** Thumbnail fingerprints
-  and swaps, and stats refreshes, run for every channel someone tracks, so the
-  repackaging feed on the dashboard and the tracked-channel total reflect
-  other users' watchlists. The daily digest lists only swaps on your own
-  watchlist.
+- **Background work is shared; what you see is yours.** Thumbnail
+  fingerprints, title and thumbnail swaps and stats refreshes run for every
+  channel someone tracks. With accounts on, the feeds built from them show
+  only your own watchlist: title changes, the repackaging feed (dashboard and
+  MCP), the watchlist and change totals, and the digest. In the digest,
+  rising channels are limited to your channels and the niches they are in.
+  `/api/health` tells a visitor who has not signed in only that the server is
+  up. What stays shared is the public corpus itself: channels, videos and
+  niches anyone collected, which is the point of one shared collection.
 
 Security reviews: the plan-14 OAuth flow and each plan-15 sub-stage were
 reviewed. The review of sign-in found a way to attach someone else's channel
