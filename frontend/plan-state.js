@@ -2,6 +2,11 @@
    в меню, строка «Тариф · квота» внизу. Только при NF_MULTI_USER=1; без него
    всё включено, как раньше. */
 import { $, api } from './ui.js';
+import { dict } from './i18n.js';
+import ru from './i18n/ru/planState.js';
+import en from './i18n/en/planState.js';
+
+const t = dict({ ru, en });
 
 let me = { multiUser: false, user: null, plan: null };
 
@@ -36,7 +41,7 @@ function renderPlanLine() {
   const used = me.plan.usage?.daily?.yt_units ?? 0;
   const limit = me.plan.limits?.yt_units;
   box.hidden = false;
-  box.textContent = `Тариф ${me.plan.plan.name} · квота ${used}/${limit == null ? '∞' : limit}`;
+  box.textContent = t('planLine', { name: me.plan.plan.name, used, limit: limit == null ? '∞' : limit });
 }
 
 let timer = null;

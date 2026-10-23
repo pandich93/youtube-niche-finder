@@ -11,8 +11,11 @@ import os
 import infrastructure.postgres as db
 from application import channel_tracking as T
 from application import discovery as trends
+from application import locale_prefs as LP
 from application import milestones as MSA
 from domain import alerts as A
+from domain import i18n
+from domain.i18n import tr
 from domain.users import LOCAL_USER_ID
 from infrastructure.notify.null import NullNotifier
 
@@ -238,42 +241,66 @@ def _html_escape(s) -> str:
     return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+def recipient_locale(user_id) -> str:
+    """The language one person's Telegram/webhook messages (alerts, digest)
+    are written in (i18n plan): the one they chose (user_prefs), else the
+    current request's (POST /api/digest/send from the dashboard), else
+    NF_DEFAULT_LOCALE -- the worker has no request, so there this is exactly
+    locale_prefs.effective(). A failed lookup never stops a delivery."""
+    try:
+        saved = LP.get(user_id=user_id)
+    except Exception:
+        saved = None
+    return saved or i18n.current_locale()
+
+
 def _format_message(ev: dict) -> str:
+    """Telegram HTML for one event, in the current locale (deliver() sets the
+    recipient's). Data is escaped before it goes into the template."""
     p = ev["payload"]
     kind = ev["kind"]
     if kind == "outlier":
-        text = (f"\U0001F680 <b>Outlier</b>: {_html_escape(p.get('title'))}\n"
-               f"×{p.get('outlierScore')} · {p.get('views')} просмотров")
+        text = tr("\U0001F680 <b>Outlier</b>: {title}\n×{score} · {views} просмотров",
+                  title=_html_escape(p.get('title')), score=p.get('outlierScore'),
+                  views=p.get('views'))
     elif kind == "acceleration":
-        text = (f"⚡ <b>Ускорение</b>: {_html_escape(p.get('title'))}\n"
-               f"×{p.get('acceleration')} · {p.get('vph24h')} VPH за 24ч")
+        text = tr("⚡ <b>Ускорение</b>: {title}\n×{acceleration} · {vph} VPH за 24ч",
+                  title=_html_escape(p.get('title')), acceleration=p.get('acceleration'),
+                  vph=p.get('vph24h'))
     elif kind == "title_change":
-        text = (f"✏️ <b>Смена заголовка</b>\n"
-               f"«{_html_escape(p.get('oldTitle'))}» → «{_html_escape(p.get('newTitle'))}»")
+        text = tr("✏️ <b>Смена заголовка</b>\n«{old}» → «{new}»",
+                  old=_html_escape(p.get('oldTitle')), new=_html_escape(p.get('newTitle')))
     elif kind == "silence_break":
-        text = (f"\U0001F514 <b>Вернулись после паузы</b>: {_html_escape(p.get('title'))}\n"
-               f"молчали {p.get('gapDays')} дней")
+        text = tr("\U0001F514 <b>Вернулись после паузы</b>: {title}\nмолчали {days} дней",
+                  title=_html_escape(p.get('title')), days=p.get('gapDays'))
     elif kind == "channel_gone":
-        text = (f"\U0001F6AB <b>Канал больше не доступен</b>: {_html_escape(p.get('title'))}\n"
-               f"было {p.get('subscribers')} подписчиков · {p.get('views')} просмотров · "
-               f"{p.get('videoCount')} видео\n"
-               f"не отвечает API с {(p.get('goneSince') or '')[:10]}")
+        text = tr("\U0001F6AB <b>Канал больше не доступен</b>: {title}\n"
+                  "было {subscribers} подписчиков · {views} просмотров · {videos} видео\n"
+                  "не отвечает API с {since}",
+                  title=_html_escape(p.get('title')), subscribers=p.get('subscribers'),
+                  views=p.get('views'), videos=p.get('videoCount'),
+                  since=(p.get('goneSince') or '')[:10])
     elif kind == "milestone":
-        text = (f"\U0001F3C1 <b>Рубеж</b>: {_html_escape(p.get('title'))}\n"
-               f"{p.get('milestone')} подписчиков (сейчас {p.get('subscribers')})")
+        text = tr("\U0001F3C1 <b>Рубеж</b>: {title}\n{milestone} подписчиков (сейчас {subscribers})",
+                  title=_html_escape(p.get('title')), milestone=p.get('milestone'),
+                  subscribers=p.get('subscribers'))
     elif kind == "topic_match":
-        text = (f"\U0001F3AF <b>Тема «{_html_escape(p.get('topic'))}»</b>: "
-               f"{_html_escape(p.get('title'))}\n"
-               f"{_html_escape(p.get('channelTitle') or '')} · похожесть {p.get('similarity')}")
+        text = tr("\U0001F3AF <b>Тема «{topic}»</b>: {title}\n{channel} · похожесть {similarity}",
+                  topic=_html_escape(p.get('topic')), title=_html_escape(p.get('title')),
+                  channel=_html_escape(p.get('channelTitle') or ''),
+                  similarity=p.get('similarity'))
     elif kind == "draft_due":
         # plan 33: a planned draft -- the day before and when its time comes
         from application import content_calendar as CAL
-        text = (f"\U0001F4C5 <b>Черновик</b>: {_html_escape(p.get('title'))}\n"
-                f"{_html_escape(CAL.event_text(p))}\n"
-                f'<a href="{DASHBOARD_URL}/#/calendar">календарь</a>')
+        text = tr('\U0001F4C5 <b>Черновик</b>: {title}\n{when}\n'
+                  '<a href="{url}/#/calendar">календарь</a>',
+                  title=_html_escape(p.get('title')), when=_html_escape(CAL.event_text(p)),
+                  url=DASHBOARD_URL)
     elif kind == "video_gone":
-        text = (f"\U0001F6AB <b>Видео больше не доступно</b>: {_html_escape(p.get('title'))}\n"
-               f"было outlier ×{p.get('outlierScore')} · {p.get('views')} просмотров")
+        text = tr("\U0001F6AB <b>Видео больше не доступно</b>: {title}\n"
+                  "было outlier ×{score} · {views} просмотров",
+                  title=_html_escape(p.get('title')), score=p.get('outlierScore'),
+                  views=p.get('views'))
     else:
         text = f"{_html_escape(kind)}: {_html_escape(json.dumps(p, ensure_ascii=False))}"
 
@@ -281,7 +308,7 @@ def _format_message(ev: dict) -> str:
     if p.get("videoId"):
         links.append(f'<a href="https://www.youtube.com/watch?v={p["videoId"]}">YouTube</a>')
     if p.get("channelId"):
-        links.append(f'<a href="{DASHBOARD_URL}/#/channel/{p["channelId"]}">дашборд</a>')
+        links.append(f'<a href="{DASHBOARD_URL}/#/channel/{p["channelId"]}">{tr("дашборд")}</a>')
     if links:
         text += "\n" + " · ".join(links)
     return text
@@ -326,10 +353,14 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, user_id: int = LOCAL_USER
 
         channel = NS.target_name(user_id)
         to_send, rest = pending[:max_per_cycle], pending[max_per_cycle:]
+        # written in THIS user's language, whoever else the worker sends to
+        locale = recipient_locale(user_id)
 
         sent = failed = 0
         for ev in to_send:
-            if notifier.send(_format_message(ev)):
+            with i18n.use_locale(locale):
+                text = _format_message(ev)
+            if notifier.send(text):
                 db.mark_alert_delivered(conn, str(ev["id"]), channel, user_id=user_id)
                 sent += 1
             else:
@@ -341,9 +372,10 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, user_id: int = LOCAL_USER
             by_kind = {}
             for ev in rest:
                 by_kind[ev["kind"]] = by_kind.get(ev["kind"], 0) + 1
-            lines = [f"\U0001F4EC И ещё {len(rest)} алертов:"]
-            lines += [f"• {_html_escape(k)}: {n}" for k, n in by_kind.items()]
-            lines.append(f'<a href="{DASHBOARD_URL}/#/data">открыть дашборд</a>')
+            with i18n.use_locale(locale):
+                lines = [tr("\U0001F4EC И ещё {n} алертов:", n=len(rest))]
+                lines += [f"• {_html_escape(k)}: {n}" for k, n in by_kind.items()]
+                lines.append(f'<a href="{DASHBOARD_URL}/#/data">{tr("открыть дашборд")}</a>')
             if notifier.send("\n".join(lines)):
                 for ev in rest:
                     db.mark_alert_delivered(conn, str(ev["id"]), channel, user_id=user_id)

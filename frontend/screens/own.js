@@ -1,17 +1,23 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, num, compact, ago, esc, toast, tile, sectionHead, notice, empty, table, mountCollabs } from '../ui.js';
 import { view } from '../shared.js';
+import { dict, fmtDate } from '../i18n.js';
+import ru from '../i18n/ru/own.js';
+import en from '../i18n/en/own.js';
+
+const t = dict({ ru, en });
 
 /* ------------------------------------------------ Мои каналы (план 14)
    Реальные цифры своих каналов из YouTube Analytics через OAuth. Токен
    хранится зашифрованным на сервере и сюда никогда не приходит. */
 
-const POSITION = {
-  below: ['ниже нашей оценки', 'chip-warn'],
-  inside: ['в пределах оценки', 'chip-good'],
-  above: ['выше нашей оценки', 'chip-good'],
-  unknown: ['неизвестно', ''],
-};
+/* Функция, а не константа: подписи переводятся при каждом рендере. */
+const position = () => ({
+  below: [t('posBelow'), 'chip-warn'],
+  inside: [t('posInside'), 'chip-good'],
+  above: [t('posAbove'), 'chip-good'],
+  unknown: [t('posUnknown'), ''],
+});
 
 function money(x) { return x == null ? '—' : `$${num(Math.round(x * 100) / 100)}`; }
 function pct(x) { return x == null ? '—' : `${num(x)}%`; }
@@ -20,96 +26,87 @@ function pct(x) { return x == null ? '—' : `${num(x)}%`; }
    web -- шаги для одного OAuth-клиента сервиса типа Web application. */
 function setupHtml(st) {
   if (st.adminOnly) {
-    return `<div class="card">${sectionHead('Подключение каналов пока недоступно', '')}
-      <div class="section-sub">Администратор сервиса ещё не настроил вход через Google. Загляните позже.</div></div>`;
+    return `<div class="card">${sectionHead(t('adminOnlyTitle'), '')}
+      <div class="section-sub">${t('adminOnlyText')}</div></div>`;
   }
   if (st.mode === 'web') return webSetupHtml(st);
   return `<div class="card">
-    ${sectionHead('Подключение не настроено', 'один раз: свой OAuth-клиент Google и ключ шифрования')}
+    ${sectionHead(t('setupTitle'), t('setupSub'))}
     <div class="prose">
-      <p>Не хватает переменных в <code>.env</code>: ${st.missing.map((m) => `<code>${esc(m)}</code>`).join(', ')}.</p>
+      <p>${t('missingVars', { vars: st.missing.map((m) => `<code>${esc(m)}</code>`).join(', ') })}</p>
       <ol>
-        <li>В <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> создайте проект,
-          включите <b>YouTube Data API v3</b> и <b>YouTube Analytics API</b>.</li>
-        <li>OAuth consent screen: тип External, режим Testing, добавьте свой Google-аккаунт в тестовые пользователи.</li>
-        <li>Credentials → Create credentials → OAuth client ID → тип <b>Desktop app</b>. Скопируйте Client ID и Client secret
-          в <code>OWN_OAUTH_CLIENT_ID</code> и <code>OWN_OAUTH_CLIENT_SECRET</code>.</li>
-        <li>Сгенерируйте ключ шифрования токенов и впишите в <code>OWN_TOKENS_KEY</code>:
+        <li>${t('setupStep1')}</li>
+        <li>${t('setupStep2')}</li>
+        <li>${t('setupStep3')}</li>
+        <li>${t('setupStep4')}
           <pre><code>docker compose run --rm web python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"</code></pre>
-          Храните ключ только в <code>.env</code>: без него сохранённые токены не прочитать, придётся подключить канал заново.</li>
-        <li>Перезапустите: <code>docker compose up -d web worker</code>.</li>
+          ${t('setupStep4Keep')}</li>
+        <li>${t('setupStep5')}</li>
       </ol>
-      <p>После входа Google вернёт вас на этот же адрес дашборда (<code>/api/own/oauth/callback</code>) — для клиента
-        типа Desktop app его отдельно прописывать не нужно. Завершайте вход в том же браузере, где начали. Подробно — в <code>backend/README.md</code>, раздел «Your own channels».</p>
+      <p>${t('setupAfter')}</p>
     </div></div>`;
 }
 
 function webSetupHtml(st) {
   const list = (xs) => xs.map((m) => `<code>${esc(m)}</code>`).join(', ');
   return `<div class="card">
-    ${sectionHead('Подключение каналов для клиентов не настроено', 'режим сервиса: один OAuth-клиент Google на всех клиентов')}
+    ${sectionHead(t('webSetupTitle'), t('webSetupSub'))}
     <div class="prose">
-      ${st.missing?.length ? `<p>Не хватает переменных в <code>.env</code>: ${list(st.missing)}.</p>` : ''}
+      ${st.missing?.length ? `<p>${t('missingVars', { vars: list(st.missing) })}</p>` : ''}
       ${st.problems?.length ? `<p>${st.problems.map(esc).join('<br>')}</p>` : ''}
       <ol>
-        <li>В Google Cloud Console включите <b>YouTube Data API v3</b> и <b>YouTube Analytics API</b>.</li>
-        <li>OAuth consent screen: тип External; имя сервиса, домен, ссылки на <code>https://&lt;домен&gt;/privacy</code> и
-          <code>https://&lt;домен&gt;/terms</code> (эти страницы сервис уже отдаёт). Доступы: <code>youtube.readonly</code>,
-          <code>yt-analytics.readonly</code> и, если клиенты захотят видеть доход, <code>yt-analytics-monetary.readonly</code>.</li>
-        <li>Credentials → OAuth client ID → тип <b>Web application</b>. В Authorized redirect URIs впишите
-          <code>${esc(st.redirectUri || 'https://<домен>/api/own/oauth/callback')}</code> — то же, что в <code>OWN_OAUTH_REDIRECT_URI</code>.</li>
-        <li>В <code>.env</code>: <code>OWN_OAUTH_MODE=web</code>, <code>OWN_OAUTH_CLIENT_ID</code>, <code>OWN_OAUTH_CLIENT_SECRET</code>,
-          <code>OWN_OAUTH_REDIRECT_URI</code>, <code>OWN_TOKENS_KEY</code>, а для страниц политики — <code>NF_SERVICE_NAME</code>,
-          <code>NF_OPERATOR_NAME</code>, <code>NF_CONTACT_EMAIL</code>.</li>
-        <li>Пока Google не проверил приложение, подключиться могут только тестовые пользователи (до 100), и Google показывает
-          «приложение не проверено». Для проверки нужны домен, эти страницы, видео-демонстрация и объяснение каждого доступа.</li>
+        <li>${t('webStep1')}</li>
+        <li>${t('webStep2')}</li>
+        <li>${t('webStep3', { uri: esc(st.redirectUri || t('redirectUriFallback')) })}</li>
+        <li>${t('webStep4')}</li>
+        <li>${t('webStep5')}</li>
       </ol>
-      <p>Клиенты не видят этих шагов: им показывается только кнопка «Подключить канал».</p>
+      <p>${t('webClientsNote')}</p>
     </div></div>`;
 }
 
 function channelsHtml(d, cal) {
   const byId = Object.fromEntries((cal.channels || []).map((c) => [c.channelId, c]));
+  const positions = position();
   return `<div class="card">
-    ${sectionHead('Мои каналы', 'реальные цифры за 28 дней, заканчивая 3 днями назад (задержка Analytics)',
-      `<label class="field" data-tip="Доход и RPM канала: Google спросит отдельный доступ к денежным отчётам. Можно добавить позже">
-         <input type="checkbox" id="ownRevenue"${d.mode === 'web' ? '' : ' checked'}> показывать доход</label>
-       <button class="btn btn-sm" id="ownConnect" type="button">Подключить канал</button>
-       <button class="btn btn-ghost btn-sm" id="ownSync" type="button">Обновить цифры</button>`)}
+    ${sectionHead(t('channelsTitle'), t('channelsSub'),
+      `<label class="field" data-tip="${esc(t('revenueTip'))}">
+         <input type="checkbox" id="ownRevenue"${d.mode === 'web' ? '' : ' checked'}> ${t('showRevenue')}</label>
+       <button class="btn btn-sm" id="ownConnect" type="button">${t('connect')}</button>
+       <button class="btn btn-ghost btn-sm" id="ownSync" type="button">${t('syncBtn')}</button>`)}
     ${d.channels.length ? table([
-      { label: 'Канал', wrap: true, render: (c) => `<a href="#/channel/${esc(c.channelId)}">${esc(c.title || c.channelId)}</a>
+      { label: t('colChannel'), wrap: true, render: (c) => `<a href="#/channel/${esc(c.channelId)}">${esc(c.title || c.channelId)}</a>
         ${c.lastError ? `<div class="row-sub" style="color:var(--bad, #c55)">${esc(c.lastError)}</div>` : ''}` },
-      { label: 'Просмотры', num: true, render: (c) => compact(c.last28d.views) },
-      { label: 'Доход', num: true, render: (c) => money(c.last28d.revenue) },
+      { label: t('colViews'), num: true, render: (c) => compact(c.last28d.views) },
+      { label: t('colRevenue'), num: true, render: (c) => money(c.last28d.revenue) },
       { label: 'RPM', num: true, render: (c) => money(c.last28d.rpm) },
-      { label: 'Удержание', num: true, render: (c) => pct(c.last28d.medianRetentionPct) },
-      { label: 'Наша оценка RPM', render: (c) => {
+      { label: t('colRetention'), num: true, render: (c) => pct(c.last28d.medianRetentionPct) },
+      { label: t('colRpmEstimate'), render: (c) => {
         const k = byId[c.channelId];
         if (!k) return '—';
-        const [label, cls] = POSITION[k.position] || [k.position, ''];
+        const [label, cls] = positions[k.position] || [k.position, ''];
         return `<span class="chip ${cls}">${esc(label)}</span>
           <div class="row-sub">${money(k.estimate.low)}–${money(k.estimate.high)}</div>`;
       } },
-      { label: 'Обновлено', render: (c) => (c.lastSyncedAt ? ago(c.lastSyncedAt) : '—') },
+      { label: t('colUpdated'), render: (c) => (c.lastSyncedAt ? ago(c.lastSyncedAt) : '—') },
       { label: '', render: (c) => `${c.monetaryScope ? '' : `<button class="btn btn-ghost btn-sm js-own-revenue" type="button"
-          data-tip="Google спросит доступ к денежным отчётам этого канала">Добавить доход</button> `}<button class="btn btn-ghost btn-sm js-own-off" data-id="${esc(c.channelId)}" type="button">Отключить</button>` },
-    ], d.channels) : empty('каналов пока нет — нажмите «Подключить канал»')}
-    <div class="section-sub" style="margin-top:10px">${esc(d.note)} RPM = доход на 1000 всех просмотров, как в YouTube Studio;
-      без монетизации доход пустой. Удержание — медиана среднего процента просмотра по видео.</div>
+          data-tip="${esc(t('addRevenueTip'))}">${t('addRevenue')}</button> `}<button class="btn btn-ghost btn-sm js-own-off" data-id="${esc(c.channelId)}" type="button">${t('disconnect')}</button>` },
+    ], d.channels) : empty(t('channelsEmpty'))}
+    <div class="section-sub" style="margin-top:10px">${t('channelsNote', { note: esc(d.note) })}</div>
   </div>
   ${d.channels.length ? `<div class="card">
-    ${sectionHead('Форматы', 'Shorts против длинных видео и часы до порога YPP — из YouTube Analytics',
+    ${sectionHead(t('formatsTitle'), t('formatsSub'),
       `<select id="ownFmtChannel">${d.channels.map((c) => `<option value="${esc(c.channelId)}">${esc(c.title || c.channelId)}</option>`).join('')}</select>`)}
-    <div id="ownFmtOut">${empty('Считаю…')}</div>
+    <div id="ownFmtOut">${empty(t('computing'))}</div>
   </div>` : ''}
   ${d.channels.length ? `<div class="card" id="ownVsCard">
-    ${sectionHead('Мои видео против ниши', 'пожизненные просмотры и удержание своих видео против собранных видео ниши',
+    ${sectionHead(t('vsTitle'), t('vsSub'),
       `<select id="ownVsChannel">${d.channels.map((c) => `<option value="${esc(c.channelId)}">${esc(c.title || c.channelId)}</option>`).join('')}</select>
-       <select id="ownVsNiche"><option value="">ниша…</option></select>`)}
-    <div id="ownVsOut">${empty('выберите нишу')}</div>
+       <select id="ownVsNiche"><option value="">${t('nichePlaceholder')}</option></select>`)}
+    <div id="ownVsOut">${empty(t('pickNiche'))}</div>
   </div>` : ''}
   ${d.channels.length ? `<div class="card">
-    ${sectionHead('Партнёры для коллабораций', 'похожие каналы вашего размера среди собранных',
+    ${sectionHead(t('collabsTitle'), t('collabsSub'),
       `<select id="ownCollabChannel">${d.channels.map((c) => `<option value="${esc(c.channelId)}">${esc(c.title || c.channelId)}</option>`).join('')}</select>`)}
     <div id="ownCollabOut"></div>
   </div>` : ''}`;
@@ -117,16 +114,16 @@ function channelsHtml(d, cal) {
 
 function vsHtml(v) {
   return `<div class="tiles">
-      ${tile('Медиана моих видео', compact(v.ownMedianViews), `${num(v.ownVideos)} видео`)}
-      ${tile('Медиана ниши', compact(v.nicheMedianViews), `${num(v.nicheVideos)} видео в базе`)}
-      ${tile('Во сколько раз', v.ratio == null ? '—' : `×${v.ratio}`, 'мои к нише')}
-      ${tile('Выше медианы ниши', v.shareAboveNicheMedian == null ? '—' : `${Math.round(v.shareAboveNicheMedian * 100)}%`, 'моих видео')}
-      ${tile('Удержание', pct(v.ownMedianRetentionPct), 'медиана моих видео')}
+      ${tile(t('myMedian'), compact(v.ownMedianViews), t('videosCount', { count: num(v.ownVideos) }))}
+      ${tile(t('nicheMedian'), compact(v.nicheMedianViews), t('videosInDb', { count: num(v.nicheVideos) }))}
+      ${tile(t('ratio'), v.ratio == null ? '—' : `×${v.ratio}`, t('ratioNote'))}
+      ${tile(t('aboveNicheMedian'), v.shareAboveNicheMedian == null ? '—' : `${Math.round(v.shareAboveNicheMedian * 100)}%`, t('ofMyVideos'))}
+      ${tile(t('retention'), pct(v.ownMedianRetentionPct), t('myMedianNote'))}
     </div>
     ${v.topVideos.length ? table([
-      { label: 'Видео', render: (r) => `<a href="https://www.youtube.com/watch?v=${esc(r.videoId)}" target="_blank" rel="noopener">${esc(r.videoId)}</a>` },
-      { label: 'Просмотры', num: true, render: (r) => compact(r.views) },
-      { label: 'Удержание', num: true, render: (r) => pct(r.averageViewPercentage) },
+      { label: t('colVideo'), render: (r) => `<a href="https://www.youtube.com/watch?v=${esc(r.videoId)}" target="_blank" rel="noopener">${esc(r.videoId)}</a>` },
+      { label: t('colViews'), num: true, render: (r) => compact(r.views) },
+      { label: t('colRetention'), num: true, render: (r) => pct(r.averageViewPercentage) },
       { label: 'RPM', num: true, render: (r) => money(r.rpm) },
     ], v.topVideos) : ''}
     <div class="section-sub">${esc(v.note)}</div>`;
@@ -151,21 +148,21 @@ function wire() {
   }));
   const sync = $('#ownSync');
   if (sync) sync.addEventListener('click', async () => {
-    sync.disabled = true; sync.textContent = 'Обновляю…';
+    sync.disabled = true; sync.textContent = t('syncing');
     try {
       const r = await api('/api/own/sync', { method: 'POST' });
       const bad = r.channels.filter((c) => c.error);
-      toast(bad.length ? `Не обновлено: ${bad.map((c) => c.error).join('; ')}` : 'Цифры обновлены', bad.length ? 'err' : 'ok');
+      toast(bad.length ? t('syncFailed', { errors: bad.map((c) => c.error).join('; ') }) : t('synced'), bad.length ? 'err' : 'ok');
       viewOwn();
-    } catch (e) { sync.disabled = false; sync.textContent = 'Обновить цифры'; toast(e.message, 'err'); }
+    } catch (e) { sync.disabled = false; sync.textContent = t('syncBtn'); toast(e.message, 'err'); }
   });
   view.querySelectorAll('.js-own-off').forEach((btn) => btn.addEventListener('click', async () => {
     // Двойное нажатие вместо confirm(): диалоги браузера блокируют страницу.
-    if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; btn.textContent = 'Точно отключить?'; return; }
+    if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; btn.textContent = t('confirmDisconnect'); return; }
     btn.disabled = true;
     try {
       const r = await api(`/api/own/channels/${encodeURIComponent(btn.dataset.id)}`, { method: 'DELETE' });
-      toast(r.revoked ? 'Канал отключён, доступ у Google отозван' : 'Канал отключён; доступ можно убрать и на myaccount.google.com/permissions', 'ok');
+      toast(r.revoked ? t('disconnectedRevoked') : t('disconnectedManual'), 'ok');
       viewOwn();
     } catch (e) { btn.disabled = false; toast(e.message, 'err'); }
   }));
@@ -176,8 +173,8 @@ function wire() {
     }).catch(() => {});
     const load = async () => {
       const out = $('#ownVsOut');
-      if (!nicheSel.value) { out.innerHTML = empty('выберите нишу'); return; }
-      out.innerHTML = empty('Считаю…');
+      if (!nicheSel.value) { out.innerHTML = empty(t('pickNiche')); return; }
+      out.innerHTML = empty(t('computing'));
       try {
         const v = await api(`/api/own/channels/${encodeURIComponent($('#ownVsChannel').value)}/vs-niche?niche=${encodeURIComponent(nicheSel.value)}`);
         out.innerHTML = vsHtml(v);
@@ -188,33 +185,39 @@ function wire() {
   }
 }
 
-/* План 24: форматы своего канала (creatorContentType) и часы просмотра за год. */
-const FORMAT = { SHORTS: 'Shorts', VIDEO_ON_DEMAND: 'Длинные', LIVE_STREAM: 'Трансляции', STORY: 'Истории', UNSPECIFIED: 'Прочее' };
-const READING = {
-  'move-together': 'недели с большим числом просмотров Shorts — это и недели с большим числом просмотров длинных',
-  'move-apart': 'когда растут просмотры Shorts, просмотры длинных проседают',
-  'no-clear-link': 'явной связи между просмотрами Shorts и длинных нет',
-};
+/* План 24: форматы своего канала (creatorContentType) и часы просмотра за год.
+   Функции, а не константы: подписи переводятся при каждом рендере. */
+const formatLabels = () => ({
+  SHORTS: t('fmtShorts'), VIDEO_ON_DEMAND: t('fmtLong'), LIVE_STREAM: t('fmtLive'),
+  STORY: t('fmtStory'), UNSPECIFIED: t('fmtOther'),
+});
+const readings = () => ({
+  'move-together': t('readingTogether'),
+  'move-apart': t('readingApart'),
+  'no-clear-link': t('readingNoLink'),
+});
 
 function formatsHtml(f) {
-  if (!f.available) return empty(f.hint || 'данных по форматам пока нет — они придут со следующим обновлением');
+  if (!f.available) return empty(f.hint || t('formatsEmpty'));
   const types = Object.entries(f.last90).sort((a, b) => b[1].views - a[1].views);
   const h = f.watchHours;
-  const d = (iso) => (iso ? new Date(iso).toLocaleDateString('ru-RU') : null);
-  const bar = (need, reached, eta) => (reached ? `${num(need)} ч — набрано`
-    : eta ? `${num(need)} ч ≈ ${d(eta)} при темпе ${num(h.paceHoursPerDay)} ч/день` : `${num(need)} ч — при текущем темпе не оценить`);
+  const d = (iso) => (iso ? fmtDate(iso) : null);
+  const bar = (need, reached, eta) => (reached ? t('hoursReached', { need: num(need) })
+    : eta ? t('hoursEta', { need: num(need), date: d(eta), pace: num(h.paceHoursPerDay) })
+      : t('hoursNoEta', { need: num(need) }));
   const sv = f.shortsVsLong;
-  return `<div class="tiles">${types.map(([k, t]) => tile(FORMAT[k] || k, compact(t.views),
-      `${Math.round((t.viewShare || 0) * 100)}% просмотров · ${t.subscribersPer1000Views ?? '—'} подп. на 1000`)).join('')}</div>
-    <div class="section-sub" style="margin-top:8px">За 90 дней по ${esc(d(f.through))}. «Подп. на 1000» — сколько подписчиков
-      приносит каждая тысяча просмотров этого формата.</div>
-    <div class="section-sub" style="margin-top:8px"><b>Shorts и длинные:</b> ${sv.r == null
-      ? (sv.reason === 'few-weeks' ? 'мало недель для вывода' : 'просмотры почти не менялись — вывода нет')
-      : `${esc(READING[sv.reading] || sv.reading)} (r = ${sv.r} за ${sv.weeks} недель). Это корреляция, а не причина.`}</div>
-    <div class="section-sub" style="margin-top:8px"><b>Часы просмотра за 365 дней:</b> ${num(Math.round(h.hours365))} ч
-      (длинные и трансляции; Shorts за 90 дней — ${compact(h.shortsViews90d)} просмотров).
-      ${bar(4000, h.reached4000, h.eta4000)}; с 01.02.2027 — ${bar(8000, h.reached8000, h.eta8000)}.
-      Приблизительно: это не «qualified watch hours» YouTube.</div>`;
+  const FORMAT = formatLabels();
+  const READING = readings();
+  return `<div class="tiles">${types.map(([k, ft]) => tile(FORMAT[k] || k, compact(ft.views),
+      t('formatTileNote', { share: Math.round((ft.viewShare || 0) * 100), subs: ft.subscribersPer1000Views ?? '—' }))).join('')}</div>
+    <div class="section-sub" style="margin-top:8px">${t('formatsPeriod', { date: esc(d(f.through)) })}</div>
+    <div class="section-sub" style="margin-top:8px"><b>${t('shortsVsLong')}</b> ${sv.r == null
+      ? (sv.reason === 'few-weeks' ? t('fewWeeks') : t('flatViews'))
+      : t('correlation', { reading: esc(READING[sv.reading] || sv.reading), r: sv.r, weeks: sv.weeks })}</div>
+    <div class="section-sub" style="margin-top:8px">${t('watchHours', {
+      hours: num(Math.round(h.hours365)), shorts: compact(h.shortsViews90d),
+      bar4000: bar(4000, h.reached4000, h.eta4000), bar8000: bar(8000, h.reached8000, h.eta8000),
+    })}</div>`;
 }
 
 async function loadFormats() {
@@ -228,8 +231,8 @@ async function loadFormats() {
 async function viewOwn() {
   const params = new URLSearchParams((location.hash.split('?')[1]) || '');
   const flash = params.get('connected')
-    ? notice(`Канал «${esc(params.get('connected'))}» подключён.`, 'ok')
-    : params.get('error') ? notice(`<b>Подключить не удалось.</b> ${esc(params.get('error'))}`, 'error') : '';
+    ? notice(t('connected', { title: esc(params.get('connected')) }), 'ok')
+    : params.get('error') ? notice(t('connectFailed', { error: esc(params.get('error')) }), 'error') : '';
   const st = await api('/api/own/status');
   if (!st.configured) { view.innerHTML = flash + setupHtml(st); return; }
   const [d, cal] = await Promise.all([api('/api/own/channels'), api('/api/own/rpm-calibration').catch(() => ({}))]);

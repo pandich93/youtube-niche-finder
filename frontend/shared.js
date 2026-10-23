@@ -1,6 +1,11 @@
 /* Общее для экранов: контейнер #view, подписи периодов, форма сбора, подвал
    с квотой, нишевый обзор и перерисовка текущего экрана. */
 import { $, api, num, compact, mult, esc, toast, tile, sectionHead, barList, table, state, saturationBlock } from './ui.js';
+import { dict } from './i18n.js';
+import ru from './i18n/ru/shared.js';
+import en from './i18n/en/shared.js';
+
+const t = dict({ ru, en });
 
 /* render() живёт в router.js, но экраны перерисовывают себя через него после
    действий. Прямой импорт дал бы цикл router -> screens -> router, поэтому
@@ -11,17 +16,19 @@ function render() { return renderImpl(); }
 
 const view = $('#view');
 
+// период -> ключ подписи; текст берётся при каждом вызове plabel()
 const PERIOD_LABEL = {
-  '1h': 'за час', '6h': 'за 6 часов', '24h': 'за 24 часа', '48h': 'за 48 часов',
-  '7d': 'за 7 дней', '14d': 'за 14 дней', '30d': 'за 30 дней', '60d': 'за 60 дней',
-  '90d': 'за 90 дней', '180d': 'за 180 дней', '365d': 'за год', all: 'за всё время',
+  '1h': 'period1h', '6h': 'period6h', '24h': 'period24h', '48h': 'period48h',
+  '7d': 'period7d', '14d': 'period14d', '30d': 'period30d', '60d': 'period60d',
+  '90d': 'period90d', '180d': 'period180d', '365d': 'period365d', all: 'periodAll',
 };
-const plabel = (p) => PERIOD_LABEL[p] || `за ${p}`;
+const plabel = (p) => (PERIOD_LABEL[p] ? t(PERIOD_LABEL[p]) : t('periodOther', { p }));
 
+// ключи -- строки с сервера, не меняются
 const SATURATION = {
-  'dominated by big channels -- hard to break in': 'доминируют крупные каналы — войти трудно',
-  'plenty of small channels performing -- room to enter': 'много выстреливающих мелких каналов — есть куда войти',
-  'mixed field': 'смешанное поле',
+  'dominated by big channels -- hard to break in': 'satDominated',
+  'plenty of small channels performing -- room to enter': 'satRoom',
+  'mixed field': 'satMixed',
 };
 
 function base() { return { period: state.period, niche: state.niche }; }
@@ -29,22 +36,22 @@ function base() { return { period: state.period, niche: state.niche }; }
 /* Форма сбора переиспользуется на нескольких экранах. */
 function collectForm() {
   return `<div class="card">
-    ${sectionHead('Добавить данные', 'сбор тратит квоту YouTube; канал ≈ 1 unit на 50 видео')}
+    ${sectionHead(t('collectTitle'), t('collectSub'))}
     <div class="form-row">
-      <label class="field"><span class="field-label">Канал: @handle, UC-id или URL</span>
+      <label class="field"><span class="field-label">${t('collectChannelLabel')}</span>
         <input type="text" id="collectChannel" placeholder="@Inkexplainer96"></label>
-      <label class="field"><span class="field-label">Ниша (необязательно)</span>
+      <label class="field"><span class="field-label">${t('collectNicheLabel')}</span>
         <input type="text" id="collectNiche" placeholder="explainer"></label>
-      <button class="btn" id="collectBtn" type="button">Собрать канал</button>
-      <button class="btn btn-ghost" id="collectTrackBtn" type="button">Собрать и отслеживать</button>
+      <button class="btn" id="collectBtn" type="button">${t('collectChannelBtn')}</button>
+      <button class="btn btn-ghost" id="collectTrackBtn" type="button">${t('collectTrackBtn')}</button>
     </div>
     <div class="form-row" style="margin-top:12px">
-      <label class="field"><span class="field-label">Поисковый запрос (1 из 100 поисков в сутки)</span>
+      <label class="field"><span class="field-label">${t('collectQueryLabel')}</span>
         <input type="text" id="collectQuery" placeholder="ai automation"></label>
-      <label class="field"><span class="field-label">Окно публикации</span>
-        <select id="collectPeriod"><option value="">любое</option><option value="24h">24 часа</option>
-        <option value="7d">7 дней</option><option value="30d">30 дней</option></select></label>
-      <button class="btn btn-ghost" id="searchBtn" type="button">Собрать поиском</button>
+      <label class="field"><span class="field-label">${t('collectPeriodLabel')}</span>
+        <select id="collectPeriod"><option value="">${t('periodAny')}</option><option value="24h">${t('opt24h')}</option>
+        <option value="7d">${t('opt7d')}</option><option value="30d">${t('opt30d')}</option></select></label>
+      <button class="btn btn-ghost" id="searchBtn" type="button">${t('collectSearchBtn')}</button>
     </div>
   </div>`;
 }
@@ -54,7 +61,7 @@ function wireCollect(refresh) {
     const b = $(`#${id}`);
     if (b) b.dataset.label = b.textContent;
   }
-  const busy = (btn, on) => { btn.disabled = on; btn.textContent = on ? 'Собираю…' : btn.dataset.label; };
+  const busy = (btn, on) => { btn.disabled = on; btn.textContent = on ? t('collecting') : btn.dataset.label; };
   const run = async (btn, path, body, ok) => {
     busy(btn, true);
     try {
@@ -65,24 +72,24 @@ function wireCollect(refresh) {
   };
   $('#collectBtn')?.addEventListener('click', () => {
     const ch = $('#collectChannel').value.trim();
-    if (!ch) return toast('Укажите канал', 'err');
+    if (!ch) return toast(t('needChannel'), 'err');
     run($('#collectBtn'), '/api/collect/channel',
       { channel: ch, niche: $('#collectNiche').value.trim() || null },
-      (r) => `${r.channelTitle}: сохранено ${r.videos_stored} видео, ${r.quota.units_from_shared_pool} units`);
+      (r) => t('collectedChannel', { title: r.channelTitle, videos: r.videos_stored, units: r.quota.units_from_shared_pool }));
   });
   $('#collectTrackBtn')?.addEventListener('click', () => {
     const ch = $('#collectChannel').value.trim();
-    if (!ch) return toast('Укажите канал', 'err');
+    if (!ch) return toast(t('needChannel'), 'err');
     run($('#collectTrackBtn'), '/api/collect/channel',
       { channel: ch, niche: $('#collectNiche').value.trim() || null, track: true },
-      (r) => `${r.channelTitle} добавлен в трекер, ${r.videos_stored} видео`);
+      (r) => t('collectedTracked', { title: r.channelTitle, videos: r.videos_stored }));
   });
   $('#searchBtn')?.addEventListener('click', () => {
     const query = $('#collectQuery').value.trim();
-    if (!query) return toast('Укажите запрос', 'err');
+    if (!query) return toast(t('needQuery'), 'err');
     run($('#searchBtn'), '/api/collect/niche',
       { query, period: $('#collectPeriod').value || null },
-      (r) => `«${r.query}»: ${r.videos_stored ?? 0} видео, потрачен ${r.quota.search_calls} поиск`);
+      (r) => t('collectedSearch', { query: r.query, videos: r.videos_stored ?? 0, calls: r.quota.search_calls }));
   });
 }
 
@@ -94,27 +101,27 @@ function nicheOverviewBlock(d, head) {
     <div class="card">
       ${head}
       <div class="tiles">
-        ${tile('Видео', num(d.video_count))}
-        ${tile('Каналов', num(d.channel_count))}
-        ${tile('Медиана множителя', mult(d.median_outlier_score))}
-        ${tile('Медиана просмотров', compact(d.median_views_per_video))}
-        ${tile('Viral skew', d.viral_skew ?? '—', 'среднее / медиана')}
+        ${tile(t('tileVideos'), num(d.video_count))}
+        ${tile(t('tileChannels'), num(d.channel_count))}
+        ${tile(t('tileMedianMult'), mult(d.median_outlier_score))}
+        ${tile(t('tileMedianViews'), compact(d.median_views_per_video))}
+        ${tile('Viral skew', d.viral_skew ?? '—', t('viralSkewNote'))}
         ${tile('Shorts', `${d.shorts_share_percent}%`)}
-        ${tile('Пробитий у мелких', num(d.small_channel_breakouts), '≤10k подп., VSR ≥ 5')}
+        ${tile(t('tileSmallBreakouts'), num(d.small_channel_breakouts), t('smallBreakoutsNote'))}
       </div>
     </div>
     ${saturationBlock(d.saturation_v2)}
     <div class="grid-2">
       <div class="card">
-        ${sectionHead('Каналы по размеру', SATURATION[d.saturation_hint] || d.saturation_hint)}
+        ${sectionHead(t('channelsBySize'), SATURATION[d.saturation_hint] ? t(SATURATION[d.saturation_hint]) : d.saturation_hint)}
         ${barList(Object.entries(d.channel_size_distribution).map(([k, v]) => ({ name: k, value: v, display: num(v) })))}
       </div>
       <div class="card">
-        ${sectionHead('Топ по множителю')}
+        ${sectionHead(t('topByMult'))}
         ${table([
-          { label: 'Видео', wrap: true, render: (r) => esc(r.title) },
-          { label: 'Просмотры', num: true, render: (r) => compact(r.views) },
-          { label: 'Множитель', num: true, render: (r) => mult(r.outlierScore) },
+          { label: t('colVideo'), wrap: true, render: (r) => esc(r.title) },
+          { label: t('colViews'), num: true, render: (r) => compact(r.views) },
+          { label: t('colMult'), num: true, render: (r) => mult(r.outlierScore) },
           { label: 'VSR', num: true, render: (r) => (+r.viewsPerSubscriber).toFixed(1) },
         ], d.top_videos_by_outlier_score)}
       </div>
@@ -126,12 +133,12 @@ async function loadFootStat() {
     const sq = h.searchQuota;
     const uq = h.unitQuota;
     $('#footStat').innerHTML =
-      `${num(h.db.channels)} каналов · ${num(h.db.videos)} видео<br>` +
-      (h.historyAvailable ? 'история пишется' : 'истории нет — запустите воркер') +
-      (sq ? `<br>Поиск: ${sq.callsLeft}/${sq.dailyLimit} осталось сегодня` : '') +
-      (uq ? `<br>Квота API: ${num(uq.unitsLeft)}/${num(uq.dailyLimit)} units осталось` : '');
-    $('#brandTag').textContent = h.hasApiKey ? 'local' : 'без ключа';
-  } catch { $('#footStat').textContent = 'сервис недоступен'; }
+      `${t('footCounts', { channels: num(h.db.channels), videos: num(h.db.videos) })}<br>` +
+      (h.historyAvailable ? t('historyOn') : t('historyOff')) +
+      (sq ? `<br>${t('footSearch', { left: sq.callsLeft, limit: sq.dailyLimit })}` : '') +
+      (uq ? `<br>${t('footUnits', { left: num(uq.unitsLeft), limit: num(uq.dailyLimit) })}` : '');
+    $('#brandTag').textContent = h.hasApiKey ? 'local' : t('noApiKey');
+  } catch { $('#footStat').textContent = t('serviceDown'); }
 }
 
 export { view, plabel, base, collectForm, wireCollect, loadFootStat, nicheOverviewBlock, render, setRender };

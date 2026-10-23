@@ -21,22 +21,22 @@ The extension never talks to the outside world — only to `127.0.0.1`.
   same channel;
 * "Repackaged N times" — when the backend saw this video's title or
   thumbnail change, with a link to the before/after on the dashboard;
-* "Бриф" — opens the dashboard's brief for your own video built from this one;
+* "Brief" — opens the dashboard's brief for your own video built from this one;
 * "Show comments" — a live fetch of up to 50 comments (1 quota unit) with how
   many arrived in the first 24 hours; raw text, no sentiment analysis;
 * a small chart of the video's views by age from the worker's snapshots,
   with the channel's usual curve dashed (`/api/videos/trajectory`);
-* "Формат повторяем?" — whether similar videos of other channels in your
+* "Is the format repeatable?" — whether similar videos of other channels in your
   database became outliers too (`/api/videos/{id}/repeatability`, zero quota);
-* "На другом языке?" — whether a similar video exists in the biggest other
-  language of your database and whether it is an outlier there: "похожего нет"
-  / "снимали, но слабо" / "уже есть хит" (`/api/videos/{id}/language-gap`,
+* "In another language?" — whether a similar video exists in the biggest other
+  language of your database and whether it is an outlier there: "nothing similar"
+  / "covered, but weakly" / "there's already a hit" (`/api/videos/{id}/language-gap`,
   zero quota; says so when that language is thinly collected);
 * "Why did it take off?" — an LLM explanation of why the video beat its
   channel (`/api/video/{id}/why`, cached). The button only appears when an
   LLM provider is configured on the backend;
 * buttons: "collect channel", "track", "watch this topic" (a topic alert from
-  the video's title, see the dashboard's "Алерты" screen), "save" (to the swipe file, see
+  the video's title, see the dashboard's "Alerts" screen), "save" (to the swipe file, see
   below), and a link to the dashboard.
 
 **Channel page** (under the header): subscribers, average views per video,
@@ -110,7 +110,15 @@ blue number is the count of unseen alerts. The badge is refreshed via
 | Badges on cards | multipliers on thumbnails in lists |
 | Outliers only | the badge appears from ×1.5 and up |
 | Views-per-hour badge | a second, blue badge under the thumbnail with views per hour |
-| Access token | only for a server with sign-in (`NF_MULTI_USER=1`): a personal token from the dashboard's MCP screen ("Личные токены"). Kept in `chrome.storage.local` (not synced to your other browsers), sent as `Authorization: Bearer` to the backend address only, never shown back in the popup |
+| Access token | only for a server with sign-in (`NF_MULTI_USER=1`): a personal token from the dashboard's MCP screen ("Personal tokens"). Kept in `chrome.storage.local` (not synced to your other browsers), sent as `Authorization: Bearer` to the backend address only, never shown back in the popup |
+
+## Language
+
+The interface follows the browser language: Russian for a Russian Chrome, English
+for everything else (texts live in `_locales/{en,ru}/messages.json`). Every request
+to the backend carries `X-NF-Locale: ru|en` (`ru` for ru/uk/be/kk/uz/ky/tg browser
+languages, `en` otherwise), so hints and errors coming from the server use that
+language too.
 
 ## What it costs in quota
 

@@ -23,12 +23,34 @@
       chrome.runtime.sendMessage(msg, (res) => {
         if (chrome.runtime.lastError) {
           resolve({ ok: false, error: chrome.runtime.lastError.message });
-        } else resolve(res || { ok: false, error: 'пустой ответ' });
+        } else resolve(res || { ok: false, error: t('errEmptyResponse') });
       });
     } catch (e) { resolve({ ok: false, error: String(e) }); }
   });
 
-  const RU = new Intl.NumberFormat('ru-RU');
+  // i18n: тексты -- chrome.i18n из _locales, числа/даты/плюралы -- Intl на языке браузера.
+  // Если для языка браузера нет своих _locales (uk, pl...), Chrome показывает en --
+  // тогда и плюралы с числами берём по en, чтобы не вышло «21 subscriber» и «1,2 тис. views».
+  const MSG_LOCALE = chrome.i18n.getMessage('localeCode') || 'en';
+  const BROWSER_LANG = chrome.i18n.getUILanguage() || MSG_LOCALE;
+  const UI_LANG = BROWSER_LANG.toLowerCase().split(/[-_]/)[0] === MSG_LOCALE ? BROWSER_LANG : MSG_LOCALE;
+  function t(key, subs) {
+    return chrome.i18n.getMessage(key, subs === undefined ? undefined : [].concat(subs).map(String)) || key;
+  }
+  // Плюралы: в chrome.i18n их нет, ключи key_one / key_few / key_many / key_other,
+  // форму выбирает Intl.PluralRules; нет нужной формы в локали -- берём key_other.
+  const PLURAL = new Intl.PluralRules(UI_LANG);
+  function tn(base, n, subs) {
+    const list = subs === undefined ? [n] : [].concat(subs);
+    const args = list.map(String);
+    const form = PLURAL.select(Math.abs(Math.round(Number(n) || 0)));
+    return chrome.i18n.getMessage(`${base}_${form}`, args)
+      || chrome.i18n.getMessage(`${base}_other`, args) || base;
+  }
+
+  const NUM = new Intl.NumberFormat(UI_LANG);
+  const COMPACT = [0, 1].map((fd) => new Intl.NumberFormat(UI_LANG, { notation: 'compact', maximumFractionDigits: fd }));
+  const DECIMAL = new Map();
   const esc = (s) => String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
@@ -36,28 +58,22 @@
   function compact(n) {
     if (n == null || Number.isNaN(n)) return '—';
     const a = Math.abs(n);
-    const cut = (v, s) => (v).toFixed(v >= 100 ? 0 : 1).replace('.', ',').replace(',0', '') + s;
-    if (a >= 1e9) return cut(n / 1e9, ' млрд');
-    if (a >= 1e6) return cut(n / 1e6, ' млн');
-    if (a >= 1e3) return cut(n / 1e3, ' тыс.');
-    return RU.format(Math.round(n));
+    if (a < 1e3) return NUM.format(Math.round(n));
+    // как раньше: до 100 в своём разряде -- один знак после запятой, дальше целые
+    const scaled = a >= 1e9 ? a / 1e9 : a >= 1e6 ? a / 1e6 : a / 1e3;
+    return COMPACT[scaled >= 100 ? 0 : 1].format(n);
   }
 
   function decimal(n, digits = 2) {
     if (n == null || Number.isNaN(n)) return '—';
     // хвостовые нули срезаем только после запятой: 1000 -> «1000», 2,50 -> «2,5»
-    return Number(n).toFixed(digits).replace('.', ',').replace(/(,\d*?)0+$/, '$1').replace(/,$/, '');
+    if (!DECIMAL.has(digits)) {
+      DECIMAL.set(digits, new Intl.NumberFormat(UI_LANG, { maximumFractionDigits: digits, useGrouping: false }));
+    }
+    return DECIMAL.get(digits).format(Number(n));
   }
 
   function pct(n) { return n == null ? '—' : decimal(n, 2) + '%'; }
-
-  function plural(n, one, few, many) {
-    const a = Math.abs(Math.round(n || 0)) % 100, b = a % 10;
-    if (a > 10 && a < 20) return many;
-    if (b > 1 && b < 5) return few;
-    if (b === 1) return one;
-    return many;
-  }
 
   function duration(sec) {
     if (!sec) return '—';
@@ -67,19 +83,19 @@
 
   function ageText(days) {
     if (days == null) return '—';
-    if (days < 1) return Math.max(1, Math.round(days * 24)) + ' ч';
-    if (days < 45) return Math.round(days) + ' дн.';
-    if (days < 400) return Math.round(days / 30) + ' мес.';
-    return decimal(days / 365, 1) + ' г.';
+    if (days < 1) return t('ageHours', Math.max(1, Math.round(days * 24)));
+    if (days < 45) return t('ageDays', Math.round(days));
+    if (days < 400) return t('ageMonths', Math.round(days / 30));
+    return t('ageYears', decimal(days / 365, 1));
   }
 
   const BANDS = {
-    'normal': ['обычное', 1],
-    'above average': ['выше среднего', 2],
-    'noteworthy': ['заметное', 3],
-    'strong outlier': ['сильный выброс', 4],
-    'viral': ['вирусное', 5],
-    'mega outlier': ['мега-выброс', 6],
+    'normal': [t('bandNormal'), 1],
+    'above average': [t('bandAboveAverage'), 2],
+    'noteworthy': [t('bandNoteworthy'), 3],
+    'strong outlier': [t('bandStrongOutlier'), 4],
+    'viral': [t('bandViral'), 5],
+    'mega outlier': [t('bandMegaOutlier'), 6],
   };
   const bandName = (b) => (BANDS[b] || ['—', 1])[0];
   const bandLevel = (b) => (BANDS[b] || ['—', 1])[1];
@@ -121,7 +137,7 @@
       <div class="nf-logo">niche&#8209;finder</div>
       <div class="nf-sub">${esc(subtitle)}</div>
       ${statusHtml}
-      <button class="nf-icon-btn nf-refresh" title="Обновить (потратит 1-2 units квоты)">⟳</button>
+      <button class="nf-icon-btn nf-refresh" title="${esc(t('refreshTitle'))}">⟳</button>
     </div>`;
 
   const skeleton = (text) => header(text) + `
@@ -130,22 +146,21 @@
 
   function errorHtml(res) {
     const offline = res.offline;
-    return header('нет связи с бэкендом') + `
+    return header(t('noBackendConnection')) + `
       <div class="nf-body">
-        <div class="nf-error">${esc(res.error || 'ошибка')}</div>
-        ${offline ? `<div class="nf-hint">Запустите бэкенд проекта:<br>
-          <code>make dev</code> или <code>docker compose up -d web</code>,<br>
-          затем нажмите «Повторить».</div>` : ''}
-        <button class="nf-btn nf-retry">Повторить</button>
+        <div class="nf-error">${esc(res.error || t('errorGeneric'))}</div>
+        ${offline ? `<div class="nf-hint">${esc(t('offlineHintStart'))}<br>
+          <code>make dev</code> ${esc(t('wordOr'))} <code>docker compose up -d web</code>,<br>
+          ${esc(t('offlineHintThen'))}</div>` : ''}
+        <button class="nf-btn nf-retry">${esc(t('retry'))}</button>
       </div>`;
   }
 
   function statusChip(d) {
     const fromApi = d.fetchedFromApi;
-    const label = fromApi ? `дозагружено · ${d.quotaUnits || 0} units` : 'из локальной базы';
+    const label = fromApi ? t('chipFetched', d.quotaUnits || 0) : t('chipLocal');
     return `<span class="nf-chip ${fromApi ? 'nf-chip-api' : ''}" title="${
-      fromApi ? 'Данных не было в базе или они устарели — добрали из YouTube Data API и сохранили'
-              : 'Ответ полностью из локального Postgres, квота не потрачена'}">${esc(label)}</span>`;
+      esc(fromApi ? t('chipFetchedTitle') : t('chipLocalTitle'))}">${esc(label)}</span>`;
   }
 
   const cell = (label, value, hint = '') => `
@@ -162,20 +177,20 @@
     const score = m.outlierScore;
     const lvl = bandLevel(m.outlierBand);
     const baseText = m.baselineMedianViews
-      ? `медиана последних ${m.baselineSample} роликов канала: ${compact(m.baselineMedianViews)}`
-      : (c.avgViews ? `среднее по каналу за всё время: ${compact(c.avgViews)}` : 'базы сравнения нет');
+      ? t('baseMedian', [m.baselineSample, compact(m.baselineMedianViews)])
+      : (c.avgViews ? t('baseAvgAllTime', compact(c.avgViews)) : t('baseNone'));
 
     const vph = m.vph24h != null ? m.vph24h : m.vphLifetime;
-    const vphLabel = m.vph24h != null ? 'просмотров/час (24ч)' : 'просмотров/час (за всё время)';
+    const vphLabel = m.vph24h != null ? t('vph24Label') : t('vphAllLabel');
     const accel = m.acceleration;
 
     const tags = (v.tags || []).slice(0, 18);
     const tagsHtml = tags.length
-      ? `<div class="nf-tags">${tags.map((t) => `<span class="nf-tag">${esc(t)}</span>`).join('')}</div>
-         <button class="nf-link nf-copy-tags">Скопировать все теги (${(v.tags || []).length})</button>`
-      : `<div class="nf-hint">Тегов нет — автор их не задал или они скрыты.</div>`;
+      ? `<div class="nf-tags">${tags.map((tag) => `<span class="nf-tag">${esc(tag)}</span>`).join('')}</div>
+         <button class="nf-link nf-copy-tags">${esc(t('copyAllTags', (v.tags || []).length))}</button>`
+      : `<div class="nf-hint">${esc(t('noTags'))}</div>`;
 
-    return header(v.isShort ? 'Shorts' : 'Ролик', statusChip(d)) + `
+    return header(v.isShort ? 'Shorts' : t('videoLabel'), statusChip(d)) + `
       <div class="nf-body">
         <div class="nf-hero nf-band-${lvl}">
           <div class="nf-score">${score != null ? '×' + decimal(score, score < 10 ? 2 : 1) : '—'}</div>
@@ -186,90 +201,89 @@
         </div>
 
         <div class="nf-grid">
-          ${cell('просмотры', compact(v.views))}
-          ${cell(vphLabel, compact(vph), 'Считается по нашим же снапшотам, если история есть')}
-          ${cell('на подписчика', m.viewsPerSubscriber != null ? '×' + decimal(m.viewsPerSubscriber, 2) : '—',
-            'VSR: >1 значит, что ролик вышел далеко за пределы своей аудитории')}
-          ${cell('вовлечённость', pct(m.engagementRate), '(лайки + комментарии) / просмотры')}
-          ${cell('прогноз к 30 дню', compact(m.projected30dViews),
-            'Просмотры, приведённые к общему горизонту 30 дней по кривой созревания')}
-          ${cell('возраст', ageText(v.ageDays) + (v.durationSeconds ? ' · ' + duration(v.durationSeconds) : ''))}
+          ${cell(t('cellViews'), compact(v.views))}
+          ${cell(vphLabel, compact(vph), t('cellVphHint'))}
+          ${cell(t('cellPerSub'), m.viewsPerSubscriber != null ? '×' + decimal(m.viewsPerSubscriber, 2) : '—',
+            t('cellPerSubHint'))}
+          ${cell(t('cellEngagement'), pct(m.engagementRate), t('cellEngagementHint'))}
+          ${cell(t('cellProjected30'), compact(m.projected30dViews), t('cellProjected30Hint'))}
+          ${cell(t('cellAge'), ageText(v.ageDays) + (v.durationSeconds ? ' · ' + duration(v.durationSeconds) : ''))}
         </div>
 
         ${accel ? `<div class="nf-note ${accel >= 1.5 ? 'nf-hot' : (accel <= 0.7 ? 'nf-cold' : '')}">
-          Ускорение ×${decimal(accel, 2)} — ${accel >= 1.5 ? 'ролик разгоняется' : accel <= 0.7 ? 'ролик остывает' : 'ровный темп'}
-          <span class="nf-hint">(24ч против недели)</span></div>` : ''}
+          ${esc(t('accelLine', [decimal(accel, 2),
+            accel >= 1.5 ? t('accelUp') : accel <= 0.7 ? t('accelDown') : t('accelFlat')]))}
+          <span class="nf-hint">${esc(t('accelVs'))}</span></div>` : ''}
 
         <div class="nf-row">
-          <span class="nf-muted">Доход, оценка:</span>
+          <span class="nf-muted">${esc(t('revenueEstimate'))}</span>
           <b>$${decimal(d.revenue.lifetime.low_usd, 0)}–$${decimal(d.revenue.lifetime.high_usd, 0)}</b>
-          <span class="nf-hint">за всё время, диапазон Social Blade · ${AD_ONLY}</span>
+          <span class="nf-hint">${esc(t('lifetimeSbRange'))} · ${esc(AD_ONLY)}</span>
         </div>
 
         <div class="nf-channel">
-          <div class="nf-ch-title">${esc(c.title || 'канал')}</div>
+          <div class="nf-ch-title">${esc(c.title || t('channelFallback'))}</div>
           <div class="nf-hint">
-            ${c.subscribersHidden ? 'подписчики скрыты'
-              : compact(c.subscribers) + ' ' + plural(c.subscribers, 'подписчик', 'подписчика', 'подписчиков')} ·
-            ${compact(c.avgViews)} в среднем на ролик ·
-            ${c.videosStored ? c.videosStored + ' ' + plural(c.videosStored, 'ролик', 'ролика', 'роликов') + ' в базе'
-                             : 'в базе роликов нет'}
+            ${esc(c.subscribersHidden ? t('subsHidden')
+              : tn('subscribersCount', c.subscribers, compact(c.subscribers)))} ·
+            ${esc(t('avgPerVideo', compact(c.avgViews)))} ·
+            ${esc(c.videosStored ? tn('videosInDb', c.videosStored) : t('noVideosInDb'))}
           </div>
         </div>
 
         ${tagsHtml}
 
         <div class="nf-actions">
-          <button class="nf-btn nf-collect">${c.videosStored ? 'Обновить канал в базе' : 'Собрать канал (100 видео)'}</button>
-          <button class="nf-btn nf-track">${c.tracked ? 'Не отслеживать' : 'Отслеживать'}</button>
-          <button class="nf-btn nf-ghost nf-save">В избранное</button>
+          <button class="nf-btn nf-collect">${esc(c.videosStored ? t('updateChannelInDb') : t('collectChannel100'))}</button>
+          <button class="nf-btn nf-track">${esc(c.tracked ? t('untrack') : t('track'))}</button>
+          <button class="nf-btn nf-ghost nf-save">${esc(t('addToSaved'))}</button>
           <button class="nf-btn nf-ghost nf-topic"
-             title="Алерт, когда в базу попадёт видео на эту тему (по названию ролика; поправить — на экране «Алерты»)">Следить за темой</button>
+             title="${esc(t('watchTopicTitle'))}">${esc(t('watchTopic'))}</button>
           <a class="nf-btn nf-ghost nf-brief" target="_blank" rel="noopener"
-             title="Собрать бриф для своего видео из этого ролика">Бриф</a>
-          <a class="nf-btn nf-ghost nf-dash" target="_blank" rel="noopener">Дашборд</a>
+             title="${esc(t('briefTitle'))}">${esc(t('brief'))}</a>
+          <a class="nf-btn nf-ghost nf-dash" target="_blank" rel="noopener">${esc(t('dashboard'))}</a>
         </div>
         ${similarList.length ? `<div class="nf-sec">
-          <div class="nf-sec-h">Похожие видео</div>
+          <div class="nf-sec-h">${esc(t('similarVideos'))}</div>
           ${similarList.map((s) => `<a class="nf-item" href="/watch?v=${esc(s.videoId)}">
             <span class="nf-item-t">${esc(s.title || s.videoId)}</span>
-            <span class="nf-hint">${compact(s.views)} · ${decimal(s.similarity * 100, 0)}%${s.sameChannel ? ' · свой канал' : ''}</span></a>`).join('')}
-          <div class="nf-hint">Ищем только в собранной базе, не по всему YouTube — пусто не значит «похожих нет».</div>
+            <span class="nf-hint">${compact(s.views)} · ${decimal(s.similarity * 100, 0)}%${s.sameChannel ? ' · ' + esc(t('sameChannel')) : ''}</span></a>`).join('')}
+          <div class="nf-hint">${esc(t('similarNote'))}</div>
         </div>` : ''}
 
         <div class="nf-sec nf-comments-sec">
-          <button class="nf-btn nf-ghost nf-comments-btn">Показать комментарии (1 unit квоты)</button>
+          <button class="nf-btn nf-ghost nf-comments-btn">${esc(t('showComments'))}</button>
           <div class="nf-comments-body"></div>
         </div>
 
         <div class="nf-pk"></div>
 
         <div class="nf-sec nf-rep-sec">
-          <button class="nf-btn nf-ghost nf-rep-btn" title="Похожие по смыслу видео других каналов: у кого ещё это сработало. Квота не тратится">Формат повторяем?</button>
+          <button class="nf-btn nf-ghost nf-rep-btn" title="${esc(t('repTitle'))}">${esc(t('repBtn'))}</button>
           <div class="nf-rep-body"></div>
         </div>
 
         <div class="nf-sec nf-lg-sec">
-          <button class="nf-btn nf-ghost nf-lg-btn" title="Есть ли похожее видео на другом языке в вашей базе: формат может быть не занят. Квота не тратится">На другом языке?</button>
+          <button class="nf-btn nf-ghost nf-lg-btn" title="${esc(t('lgTitle'))}">${esc(t('lgBtn'))}</button>
           <div class="nf-lg-body"></div>
         </div>
 
         ${llmOn ? `<div class="nf-sec nf-why-sec">
-          <button class="nf-btn nf-ghost nf-why-btn">Почему выстрелило?</button>
+          <button class="nf-btn nf-ghost nf-why-btn">${esc(t('whyBtn'))}</button>
           <div class="nf-why-body"></div>
         </div>` : ''}
 
-        <div class="nf-foot">${d.history.points > 1
-          ? `история: ${d.history.points} ${plural(d.history.points, 'снапшот', 'снапшота', 'снапшотов')}`
-          : 'история пустая — запустите воркер, чтобы появились скорость и ускорение'}</div>
+        <div class="nf-foot">${esc(d.history.points > 1
+          ? tn('historySnapshots', d.history.points)
+          : t('historyEmpty'))}</div>
       </div>`;
   }
 
-  function notFoundHtml(d, what) {
-    return header('нет данных', '') + `
+  function notFoundHtml(d, fallback) {
+    return header(t('noData'), '') + `
       <div class="nf-body">
-        <div class="nf-hint">${esc(d.hint || 'не нашли ' + what)}</div>
-        <button class="nf-btn nf-retry">Повторить</button>
+        <div class="nf-hint">${esc(d.hint || fallback)}</div>
+        <button class="nf-btn nf-retry">${esc(t('retry'))}</button>
       </div>`;
   }
 
@@ -284,7 +298,7 @@
     const mount = await waitFor('#secondary-inner, #secondary');
     if (!mount || getVideoId() !== videoId) return;
     const root = ensurePanel(mount, 'nf-panel-video');
-    root.innerHTML = skeleton('анализ ролика…');
+    root.innerHTML = skeleton(t('analysingVideo'));
 
     const res = await send({ type: 'video', videoId, refresh: !!opts.refresh });
     if (!root.isConnected || getVideoId() !== videoId) return;
@@ -296,7 +310,7 @@
     }
     const d = res.data;
     if (!d.found) {
-      root.innerHTML = notFoundHtml(d, 'ролик');
+      root.innerHTML = notFoundHtml(d, t('notFoundVideo'));
       wireCommon(root, () => renderWatch(videoId, { refresh: true }));
       return;
     }
@@ -318,15 +332,15 @@
     const copy = root.querySelector('.nf-copy-tags');
     if (copy) copy.addEventListener('click', async () => {
       await navigator.clipboard.writeText((d.video.tags || []).join(', '));
-      copy.textContent = 'Скопировано';
-      setTimeout(() => { copy.textContent = `Скопировать все теги (${(d.video.tags || []).length})`; }, 1500);
+      copy.textContent = t('copied');
+      setTimeout(() => { copy.textContent = t('copyAllTags', (d.video.tags || []).length); }, 1500);
     });
 
     const collect = root.querySelector('.nf-collect');
     if (collect) collect.addEventListener('click', async () => {
-      collect.disabled = true; collect.textContent = 'Собираю…';
+      collect.disabled = true; collect.textContent = t('collecting');
       const r = await send({ type: 'collect', channel: d.channel.channelId, maxVideos: 100 });
-      collect.textContent = r.ok ? `Готово: ${r.data.videos_stored} роликов` : 'Ошибка';
+      collect.textContent = r.ok ? t('collectDone', r.data.videos_stored) : t('errorShort');
       setTimeout(() => renderWatch(videoId, { refresh: true }), 1200);
     });
 
@@ -335,36 +349,36 @@
       track.disabled = true;
       const r = await send({ type: d.channel.tracked ? 'untrack' : 'track', channelId: d.channel.channelId });
       track.disabled = false;
-      if (r.ok) { d.channel.tracked = !d.channel.tracked; track.textContent = d.channel.tracked ? 'Не отслеживать' : 'Отслеживать'; }
+      if (r.ok) { d.channel.tracked = !d.channel.tracked; track.textContent = d.channel.tracked ? t('untrack') : t('track'); }
     });
 
     const save = root.querySelector('.nf-save');
     if (save) save.addEventListener('click', async () => {
       save.disabled = true;
       const r = await send({ type: 'save', kind: 'video', refId: d.videoId, payload: d });
-      save.textContent = r.ok ? 'Сохранено' : 'Ошибка';
-      setTimeout(() => { save.disabled = false; save.textContent = 'В избранное'; }, 1500);
+      save.textContent = r.ok ? t('saved') : t('errorShort');
+      setTimeout(() => { save.disabled = false; save.textContent = t('addToSaved'); }, 1500);
     });
 
     const topic = root.querySelector('.nf-topic');
     if (topic) topic.addEventListener('click', async () => {
       topic.disabled = true;
       const r = await send({ type: 'watchTopic', text: (d.video?.title || '').slice(0, 300) });
-      topic.textContent = r.ok ? 'Тема добавлена' : 'Ошибка';
-      setTimeout(() => { topic.disabled = false; topic.textContent = 'Следить за темой'; }, 1500);
+      topic.textContent = r.ok ? t('topicAdded') : t('errorShort');
+      setTimeout(() => { topic.disabled = false; topic.textContent = t('watchTopic'); }, 1500);
     });
 
     const commentsBtn = root.querySelector('.nf-comments-btn');
     if (commentsBtn) commentsBtn.addEventListener('click', async () => {
       commentsBtn.disabled = true;
-      commentsBtn.textContent = 'Загружаю…';
+      commentsBtn.textContent = t('loadingShort');
       const body = root.querySelector('.nf-comments-body');
       const r = await send({ type: 'comments', videoId, maxResults: 50 });
       if (!root.isConnected) return;
       if (!r.ok) {
         commentsBtn.disabled = false;
-        commentsBtn.textContent = 'Не получилось, повторить';
-        if (body) body.innerHTML = `<div class="nf-error">${esc(r.error || 'ошибка')}</div>`;
+        commentsBtn.textContent = t('failedRetry');
+        if (body) body.innerHTML = `<div class="nf-error">${esc(r.error || t('errorGeneric'))}</div>`;
         return;
       }
       commentsBtn.remove();
@@ -375,61 +389,61 @@
     const repBtn = root.querySelector('.nf-rep-btn');
     if (repBtn) repBtn.addEventListener('click', async () => {
       repBtn.disabled = true;
-      repBtn.textContent = 'Считаю…';
+      repBtn.textContent = t('counting');
       const r = await send({ type: 'repeatability', videoId });
       if (!root.isConnected) return;
       const body = root.querySelector('.nf-rep-body');
       if (!r.ok) {
         repBtn.disabled = false;
-        repBtn.textContent = 'Не получилось, повторить';
+        repBtn.textContent = t('failedRetry');
         if (body) body.innerHTML = `<div class="nf-hint">${esc(r.error || '')}</div>`;
         return;
       }
       const d = r.data;
-      const label = { repeatable: 'повторяем', mixed: 'сработал не у всех',
-        one_off: 'похоже на разовую удачу', unknown: 'мало данных' }[d.verdict] || d.verdict;
+      const label = { repeatable: t('repRepeatable'), mixed: t('repMixed'),
+        one_off: t('repOneOff'), unknown: t('repUnknown') }[d.verdict] || d.verdict;
       repBtn.remove();
-      if (body) body.innerHTML = `<div class="nf-row"><span class="nf-muted">Формат:</span> <b>${esc(label)}</b>
-        <span class="nf-hint">${d.verdict === 'unknown' ? (d.reason === 'no-embedding' ? 'нет эмбеддинга' : 'мало похожих видео')
-          : `outlier у ${d.channelsHit} из ${d.channels} каналов`} · оценка по собранной базе</span></div>`;
+      if (body) body.innerHTML = `<div class="nf-row"><span class="nf-muted">${esc(t('repFormat'))}</span> <b>${esc(label)}</b>
+        <span class="nf-hint">${esc(d.verdict === 'unknown' ? (d.reason === 'no-embedding' ? t('repNoEmbedding') : t('repFewSimilar'))
+          : t('repOutlierAt', [d.channelsHit, d.channels]))} · ${esc(t('estimateFromDb'))}</span></div>`;
     });
 
     // план 26: снято ли похожее видео на другом языке (язык цели -- крупнейший другой в базе)
     const lgBtn = root.querySelector('.nf-lg-btn');
     if (lgBtn) lgBtn.addEventListener('click', async () => {
       lgBtn.disabled = true;
-      lgBtn.textContent = 'Ищу…';
+      lgBtn.textContent = t('searching');
       const r = await send({ type: 'languageGap', videoId });
       if (!root.isConnected) return;
       const body = root.querySelector('.nf-lg-body');
       if (!r.ok) {
         lgBtn.disabled = false;
-        lgBtn.textContent = 'Не получилось, повторить';
+        lgBtn.textContent = t('failedRetry');
         if (body) body.innerHTML = `<div class="nf-hint">${esc(r.error || '')}</div>`;
         return;
       }
       const d = r.data;
       lgBtn.remove();
       if (!body) return;
-      if (!d.verdict) { body.innerHTML = `<div class="nf-hint">${esc(d.hint || 'нечего сравнить')}</div>`; return; }
-      const label = { open: 'похожего нет', thin: 'снимали, но слабо', covered: 'уже есть хит' }[d.verdict] || d.verdict;
+      if (!d.verdict) { body.innerHTML = `<div class="nf-hint">${esc(d.hint || t('lgNothing'))}</div>`; return; }
+      const label = { open: t('lgOpen'), thin: t('lgThin'), covered: t('lgCovered') }[d.verdict] || d.verdict;
       const top = d.matches && d.matches[0];
-      body.innerHTML = `<div class="nf-row"><span class="nf-muted">На ${esc(d.targetLabel)}:</span> <b>${esc(label)}</b>
-        <span class="nf-hint">${top ? esc(top.title || '') + ' · ' : ''}${d.targetCorpus.thin ? 'в базе мало видео на этом языке · ' : ''}оценка по собранной базе</span></div>`;
+      body.innerHTML = `<div class="nf-row"><span class="nf-muted">${esc(t('lgIn', d.targetLabel))}</span> <b>${esc(label)}</b>
+        <span class="nf-hint">${top ? esc(top.title || '') + ' · ' : ''}${d.targetCorpus.thin ? esc(t('lgThinCorpus')) + ' · ' : ''}${esc(t('estimateFromDb'))}</span></div>`;
     });
 
     const whyBtn = root.querySelector('.nf-why-btn');
     if (whyBtn) whyBtn.addEventListener('click', async () => {
       whyBtn.disabled = true;
-      whyBtn.textContent = 'Спрашиваю…';
+      whyBtn.textContent = t('asking');
       const body = root.querySelector('.nf-why-body');
       const r = await send({ type: 'why', videoId });
       if (!root.isConnected) return;
       if (!r.ok || !r.data || !r.data.hooks) {
         whyBtn.disabled = false;
-        whyBtn.textContent = 'Не получилось, повторить';
+        whyBtn.textContent = t('failedRetry');
         if (body) body.innerHTML = `<div class="nf-hint">${esc(
-          (r.ok ? r.data?.hint : r.error) || 'LLM недоступен')}</div>`;
+          (r.ok ? r.data?.hint : r.error) || t('llmUnavailable'))}</div>`;
         return;
       }
       whyBtn.remove();
@@ -453,39 +467,39 @@
     const titles = p.changes.filter((c) => c.field === 'title').length;
     const thumbs = p.changes.filter((c) => c.field === 'thumbnail_image').length;
     const parts = [];
-    if (titles) parts.push(`заголовок ×${titles}`);
-    if (thumbs) parts.push(`обложка ×${thumbs}`);
+    if (titles) parts.push(t('pkTitleCount', titles));
+    if (thumbs) parts.push(t('pkThumbCount', thumbs));
     const dash = (SETTINGS?.baseUrl || 'http://127.0.0.1:8080') + '/#/packaging';
     return `<div class="nf-sec">
-      <div class="nf-sec-h">Перепаковано ${p.count} ${plural(p.count, 'раз', 'раза', 'раз')}</div>
-      <div class="nf-hint">${esc(parts.join(' · '))} · последняя смена ${esc(ageText(
-        (Date.now() - new Date(p.changes[0].changedAt).getTime()) / 864e5))} назад</div>
-      <a class="nf-btn nf-ghost" href="${esc(dash)}" target="_blank" rel="noopener">«Было / стало» в дашборде</a>
+      <div class="nf-sec-h">${esc(tn('pkRepackaged', p.count))}</div>
+      <div class="nf-hint">${esc(parts.join(' · '))} · ${esc(t('pkLastChange', ageText(
+        (Date.now() - new Date(p.changes[0].changedAt).getTime()) / 864e5)))}</div>
+      <a class="nf-btn nf-ghost" href="${esc(dash)}" target="_blank" rel="noopener">${esc(t('pkBeforeAfter'))}</a>
     </div>`;
   }
 
   function whyViralHtml(d) {
     const hooks = d.hooks || [];
     return `
-      ${hooks.length ? `<div class="nf-hint"><b>Зацепки:</b></div>
+      ${hooks.length ? `<div class="nf-hint"><b>${esc(t('whyHooks'))}</b></div>
         <ul class="nf-why-list">${hooks.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>` : ''}
-      ${d.title_pattern ? `<div class="nf-hint"><b>Паттерн заголовка:</b> ${esc(d.title_pattern)}</div>` : ''}
-      ${d.timing_factor ? `<div class="nf-hint"><b>Время публикации:</b> ${esc(d.timing_factor)}</div>` : ''}
-      ${d.replicable_formula ? `<div class="nf-hint"><b>Формула:</b> ${esc(d.replicable_formula)}</div>` : ''}
-      <div class="nf-hint">уверенность: ${Math.round((d.confidence || 0) * 100)}%</div>`;
+      ${d.title_pattern ? `<div class="nf-hint"><b>${esc(t('whyTitlePattern'))}</b> ${esc(d.title_pattern)}</div>` : ''}
+      ${d.timing_factor ? `<div class="nf-hint"><b>${esc(t('whyTiming'))}</b> ${esc(d.timing_factor)}</div>` : ''}
+      ${d.replicable_formula ? `<div class="nf-hint"><b>${esc(t('whyFormula'))}</b> ${esc(d.replicable_formula)}</div>` : ''}
+      <div class="nf-hint">${esc(t('whyConfidence', Math.round((d.confidence || 0) * 100)))}</div>`;
   }
 
   function commentsHtml(data, videoPublishedAt) {
     const comments = data.comments || [];
     if (!comments.length) {
-      return `<div class="nf-hint">Комментариев нет или они отключены.</div>`;
+      return `<div class="nf-hint">${esc(t('commentsNone'))}</div>`;
     }
     let first24h = null;
     const pub = videoPublishedAt ? new Date(videoPublishedAt).getTime() : null;
     if (pub) {
       const cutoff = pub + 24 * 3600 * 1000;
       const early = comments.filter((c) => c.publishedAt && new Date(c.publishedAt).getTime() <= cutoff);
-      first24h = `${early.length} из ${comments.length} загруженных — в первые сутки после публикации`;
+      first24h = t('commentsFirst24h', [early.length, comments.length]);
     }
     return `
       ${first24h ? `<div class="nf-hint">${esc(first24h)}</div>` : ''}
@@ -496,32 +510,32 @@
           <div class="nf-comment-t">${esc((c.text || '').slice(0, 300))}</div>
         </div>`).join('')}
       </div>
-      <div class="nf-hint">Загружено ${comments.length} — сырой текст, без анализа тональности; читайте сами, что просят и на что жалуются.</div>`;
+      <div class="nf-hint">${esc(t('commentsLoaded', comments.length))}</div>`;
   }
 
   // ------------------------------------------------------- страница канала
 
-  const RISK_LEVEL = { low: 'низкий', medium: 'средний', high: 'высокий' };
+  const RISK_LEVEL = { low: t('riskLow'), medium: t('riskMedium'), high: t('riskHigh') };
 
   function riskRow(r) {
     if (!r || !r.found || r.level === 'insufficient-data') return '';
     const why = (r.reasons || []).map((x) => x.text).join('; ');
-    return `<div class="nf-row"><span class="nf-muted">Риск шаблонности:</span>
+    return `<div class="nf-row"><span class="nf-muted">${esc(t('riskTemplated'))}</span>
       <b>${esc(RISK_LEVEL[r.level] || r.level)}</b> · ${r.score}/100
-      <span class="nf-hint" title="${esc(why)}">${esc(why || 'сигналы шаблонности не выражены')}.
-        Эвристика, не решение YouTube.</span></div>`;
+      <span class="nf-hint" title="${esc(why)}">${esc(why || t('riskNoSignals'))}.
+        ${esc(t('riskHeuristic'))}</span></div>`;
   }
 
   // План 06: оценки дохода -- только реклама; вилка RPM ниши вместо одного числа.
-  const AD_ONLY = 'только реклама, без спонсорских интеграций';
+  const AD_ONLY = t('adOnly');
 
   function nicheRpmRow(nm) {
     if (!nm || nm.monthly_usd_low == null || !nm.rpm_range) return '';
     const r = nm.rpm_range;
-    return `<div class="nf-row"><span class="nf-muted">По RPM ниши:</span>
-      <b>$${decimal(nm.monthly_usd_low, 0)}–$${decimal(nm.monthly_usd_high, 0)}</b> в месяц
+    return `<div class="nf-row"><span class="nf-muted">${esc(t('nicheRpm'))}</span>
+      <b>$${decimal(nm.monthly_usd_low, 0)}–$${decimal(nm.monthly_usd_high, 0)}</b> ${esc(t('perMonth'))}
       <span class="nf-hint" title="${esc(r.basis || '')}">RPM $${decimal(r.low, 1)}–$${decimal(r.high, 1)} ·
-        грубая вилка: оценки RPM одной ниши расходятся до 7 раз</span></div>`;
+        ${esc(t('rpmRough'))}</span></div>`;
   }
 
   // План 20: мини-график -- просмотры по возрасту из снимков, пунктир -- обычное
@@ -534,12 +548,13 @@
     const px = (h) => pad + (h / x1) * (W - 2 * pad);
     const py = (val) => H - pad - (val / y1) * (H - 2 * pad);
     const d = (pts) => inX(pts).map((p, i) => `${i ? 'L' : 'M'}${px(p.ageHours).toFixed(1)},${py(p.views).toFixed(1)}`).join('');
-    const age = (h) => (h < 48 ? `${Math.round(h)} ч` : `${Math.round(h / 24)} дн`);
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" aria-label="просмотры по возрасту">
+    const age = (h) => (h < 48 ? t('ageHours', Math.round(h)) : t('ageDaysShort', Math.round(h / 24)));
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" aria-label="${esc(t('sparkAria'))}">
         ${v.expected.length ? `<path d="${d(v.expected)}" fill="none" stroke="#898781" stroke-width="1.5" stroke-dasharray="4 3"/>` : ''}
         <path d="${d(v.points)}" fill="none" stroke="#3987e5" stroke-width="2"/></svg>
-      <div class="nf-hint">${v.points.length} ${plural(v.points.length, 'снимок', 'снимка', 'снимков')} · ${
-        v.observedFromHours > 24 ? `наблюдаем с ${age(v.observedFromHours)} · ` : ''}до ${age(x1)} · пунктир — обычное видео канала (оценка)</div>`;
+      <div class="nf-hint">${esc(tn('points', v.points.length))} · ${
+        v.observedFromHours > 24 ? esc(t('sparkObservedFrom', age(v.observedFromHours))) + ' · ' : ''}${
+        esc(t('sparkUpTo', age(x1)))} · ${esc(t('sparkDashed'))}</div>`;
   }
 
   // Пороги YPP (план 12) -- что видно по открытым данным, не статус монетизации.
@@ -547,16 +562,16 @@
     if (!e) return '';
     const seen = compact(e.tiers?.full?.shortsViews90d?.seenAtLeast || 0);
     const text = {
-      'below-threshold': 'не достигнут (меньше 500 подписчиков)',
-      'subscribers-met': 'по подписчикам достигнут, часы просмотра не узнать',
-      'shorts-path-met': `достигнут через Shorts (≥${seen} за 90 дней)`,
-      unknown: 'неизвестно (подписчики скрыты)',
+      'below-threshold': t('yppBelow'),
+      'subscribers-met': t('yppSubsMet'),
+      'shorts-path-met': t('yppShortsMet', seen),
+      unknown: t('yppUnknown'),
     }[e.status] || e.status;
     // план 17: с 01.02.2027 полный уровень -- 8 000 часов или 20 млн просмотров Shorts
-    const next = e.upcoming ? ' · с 01.02.2027 порог выше: 8 000 ч или 20 млн Shorts'
-      : e.rules === '2027' ? ' · правила 2027' : '';
-    return `<div class="nf-row"><span class="nf-muted">Порог YPP:</span> ${esc(text + next)}
-      <span class="nf-hint" title="${esc(e.note || '')}">Не статус монетизации: YouTube его не публикует.</span></div>`;
+    const next = e.upcoming ? ' · ' + t('yppUpcoming')
+      : e.rules === '2027' ? ' · ' + t('yppRules2027') : '';
+    return `<div class="nf-row"><span class="nf-muted">${esc(t('yppLabel'))}</span> ${esc(text + next)}
+      <span class="nf-hint" title="${esc(e.note || '')}">${esc(t('yppNote'))}</span></div>`;
   }
 
   // Рубежи подписчиков (план 17) -- прямая по темпу наших снимков, не данные YouTube.
@@ -564,10 +579,10 @@
     const f = (ms?.forecasts || []).find((x) => !x.reached);
     if (!f) return '';
     const eta = f.eta30 || f.eta90;
-    const text = eta ? `${compact(f.target)} ≈ ${new Date(eta).toLocaleDateString('ru-RU')}`
-      : `${compact(f.target)}: нельзя оценить`;
-    return `<div class="nf-row"><span class="nf-muted">Рубеж:</span> ${esc(text)}
-      <span class="nf-hint" title="${esc(ms.note || '')}">оценка по темпу снимков</span></div>`;
+    const text = eta ? `${compact(f.target)} ≈ ${new Date(eta).toLocaleDateString(UI_LANG)}`
+      : t('milestoneNoEstimate', compact(f.target));
+    return `<div class="nf-row"><span class="nf-muted">${esc(t('milestoneLabel'))}</span> ${esc(text)}
+      <span class="nf-hint" title="${esc(ms.note || '')}">${esc(t('milestoneHint'))}</span></div>`;
   }
 
   function channelHtml(d, deep, risk) {
@@ -579,43 +594,42 @@
     const outliers = (a?.topOutliers || []).slice(0, 5);
 
     const growthLine = m.subsGrowth
-      ? `${m.subsGrowth.per_day > 0 ? '+' : ''}${compact(m.subsGrowth.per_day)} подписчиков/день`
-      : 'роста пока не видно — мало снапшотов';
+      ? t('growthPerDay', `${m.subsGrowth.per_day > 0 ? '+' : ''}${compact(m.subsGrowth.per_day)}`)
+      : t('growthNone');
 
-    return header('Канал', statusChip(d)) + `
+    return header(t('channelLabel'), statusChip(d)) + `
       <div class="nf-body">
         <div class="nf-grid">
-          ${cell('подписчики', p.subscribersHidden ? 'скрыты' : compact(p.subscribers))}
-          ${cell('всего просмотров', compact(p.totalViews))}
-          ${cell('роликов', compact(p.videoCount))}
-          ${cell('в среднем на ролик', compact(m.avgViewsPerVideo))}
-          ${cell('возраст канала', ageText(p.ageDays))}
-          ${cell('оценка роста', m.grade || '—', 'Импульс Social Blade: недавний темп против пожизненного')}
+          ${cell(t('cellSubscribers'), p.subscribersHidden ? esc(t('hidden')) : compact(p.subscribers))}
+          ${cell(t('cellTotalViews'), compact(p.totalViews))}
+          ${cell(t('cellVideos'), compact(p.videoCount))}
+          ${cell(t('cellAvgPerVideo'), compact(m.avgViewsPerVideo))}
+          ${cell(t('cellChannelAge'), ageText(p.ageDays))}
+          ${cell(t('cellGrowthGrade'), m.grade || '—', t('cellGrowthGradeHint'))}
         </div>
 
-        <div class="nf-row"><span class="nf-muted">Динамика:</span> ${esc(growthLine)}
-          <span class="nf-hint">${d.snapshots} ${plural(d.snapshots, 'снапшот', 'снапшота', 'снапшотов')}</span></div>
+        <div class="nf-row"><span class="nf-muted">${esc(t('dynamics'))}</span> ${esc(growthLine)}
+          <span class="nf-hint">${esc(tn('snapshots', d.snapshots))}</span></div>
         ${riskRow(risk)}
         <div class="nf-policy"></div>
         ${yppRow(d.yppEligibility)}
         ${milestonesRow(d.milestones)}
 
-        <div class="nf-row"><span class="nf-muted">Доход в месяц, оценка:</span>
+        <div class="nf-row"><span class="nf-muted">${esc(t('monthlyRevenue'))}</span>
           <b>$${decimal(m.revenue.low_usd, 0)}–$${decimal(m.revenue.high_usd, 0)}</b>
-          <span class="nf-hint">диапазон Social Blade · ${AD_ONLY}</span></div>
+          <span class="nf-hint">${esc(t('sbRange'))} · ${esc(AD_ONLY)}</span></div>
         ${nicheRpmRow(a?.revenue?.nicheModel)}
         <div class="nf-profit"></div>
 
-        ${a ? `<div class="nf-row"><span class="nf-muted">Ритм:</span>
-          ${decimal(a.cadence.uploadsPerWeekLifetime, 1)} видео/нед. ·
-          Shorts ${decimal(a.cadence.shortsSharePercent, 0)}% ·
-          последняя загрузка ${ageText(a.cadence.daysSinceLastUpload)} назад</div>` : ''}
+        ${a ? `<div class="nf-row"><span class="nf-muted">${esc(t('cadence'))}</span>
+          ${esc(t('cadenceLine', [decimal(a.cadence.uploadsPerWeekLifetime, 1),
+            decimal(a.cadence.shortsSharePercent, 0), ageText(a.cadence.daysSinceLastUpload)]))}</div>` : ''}
 
-        ${a?.profile?.aiLabels ? `<div class="nf-row"><span class="nf-muted">AI-разметка:</span>
+        ${a?.profile?.aiLabels ? `<div class="nf-row"><span class="nf-muted">${esc(t('aiLabels'))}</span>
           <span class="nf-chip">${esc(a.profile.aiLabels.isFaceless ? 'faceless' : 'on-camera')} · ${esc(a.profile.aiLabels.contentFormat)}</span></div>` : ''}
 
         ${outliers.length ? `<div class="nf-sec">
-          <div class="nf-sec-h">Лучшие выбросы канала</div>
+          <div class="nf-sec-h">${esc(t('topOutliers'))}</div>
           ${outliers.map((o) => `<a class="nf-item" href="/watch?v=${esc(o.videoId)}">
             <span class="nf-mult nf-band-${bandLevel(o.band)}">×${decimal(o.outlierScore, 1)}</span>
             <span class="nf-item-t">${esc(o.title)}</span>
@@ -623,37 +637,36 @@
         </div>` : ''}
 
         ${best.length ? `<div class="nf-sec">
-          <div class="nf-sec-h">Когда публиковать</div>
-          <div class="nf-slots">${best.map((b) => `<span class="nf-slot" title="медианный выброс ×${decimal(b.medianOutlier, 2)}, выборка ${b.samples}">
+          <div class="nf-sec-h">${esc(t('whenToPost'))}</div>
+          <div class="nf-slots">${best.map((b) => `<span class="nf-slot" title="${esc(t('slotTitle', [decimal(b.medianOutlier, 2), b.samples]))}">
             ${esc(b.weekday)} ${String(b.hour).padStart(2, '0')}:00
             <b>${b.score}</b></span>`).join('')}</div>
-          <div class="nf-hint">Оценка относительная, лучший слот = 100. Время в вашем часовом поясе. Корреляция, не причина.</div>
+          <div class="nf-hint">${esc(t('slotsNote'))}</div>
         </div>` : ''}
 
         ${patterns.length ? `<div class="nf-sec">
-          <div class="nf-sec-h">Фразы в заголовках, которые чаще дают выброс</div>
+          <div class="nf-sec-h">${esc(t('titlePhrases'))}</div>
           ${patterns.map((x) => `<div class="nf-item">
             <span class="nf-mult">×${decimal(x.outlierLift, 1)}</span>
             <span class="nf-item-t">${esc(x.keyword)}</span>
-            <span class="nf-hint">${x.videos} ${plural(x.videos, 'видео', 'видео', 'видео')}</span></div>`).join('')}
+            <span class="nf-hint">${esc(tn('videosCount', x.videos))}</span></div>`).join('')}
         </div>` : ''}
 
         ${similar.length ? `<div class="nf-sec">
-          <div class="nf-sec-h">Похожие каналы</div>
+          <div class="nf-sec-h">${esc(t('similarChannels'))}</div>
           ${similar.map((s) => `<a class="nf-item" href="/channel/${esc(s.channelId)}">
             <span class="nf-item-t">${esc(s.title || s.channelId)}</span>
             <span class="nf-hint">${compact(s.subscriberCount)} · ${decimal(s.similarity * 100, 0)}%</span></a>`).join('')}
         </div>` : ''}
 
         ${!d.hasDeepAnalytics ? `<div class="nf-hint">
-          В базе ${d.stored.count} ${plural(d.stored.count, 'ролик', 'ролика', 'роликов')} этого канала — для выбросов, времени публикации и
-          паттернов нужно хотя бы 5. Нажмите «Собрать канал».</div>` : ''}
+          ${esc(tn('needMoreVideos', d.stored.count))}</div>` : ''}
 
         <div class="nf-actions">
-          <button class="nf-btn nf-collect">${d.stored.count ? 'Обновить канал в базе' : 'Собрать канал (100 видео)'}</button>
-          <button class="nf-btn nf-track">${d.tracked ? 'Не отслеживать' : 'Отслеживать'}</button>
-          <button class="nf-btn nf-ghost nf-save">В избранное</button>
-          <a class="nf-btn nf-ghost nf-dash" target="_blank" rel="noopener">Дашборд</a>
+          <button class="nf-btn nf-collect">${esc(d.stored.count ? t('updateChannelInDb') : t('collectChannel100'))}</button>
+          <button class="nf-btn nf-track">${esc(d.tracked ? t('untrack') : t('track'))}</button>
+          <button class="nf-btn nf-ghost nf-save">${esc(t('addToSaved'))}</button>
+          <a class="nf-btn nf-ghost nf-dash" target="_blank" rel="noopener">${esc(t('dashboard'))}</a>
         </div>
       </div>`;
   }
@@ -662,7 +675,7 @@
     const mount = await waitFor('#page-header, #channel-header, ytd-two-column-browse-results-renderer');
     if (!mount || channelRef() !== ref) return;
     const root = ensurePanel(mount, 'nf-panel-channel', 'after');
-    root.innerHTML = skeleton('анализ канала…');
+    root.innerHTML = skeleton(t('analysingChannel'));
 
     const res = await send({ type: 'channel', ref, refresh: !!opts.refresh });
     if (!root.isConnected || channelRef() !== ref) return;
@@ -674,7 +687,7 @@
     }
     const d = res.data;
     if (!d.found) {
-      root.innerHTML = notFoundHtml(d, 'канал');
+      root.innerHTML = notFoundHtml(d, t('notFoundChannel'));
       wireCommon(root, () => renderChannel(ref, { refresh: true }));
       return;
     }
@@ -701,11 +714,11 @@
       const box = root.querySelector('.nf-profit');
       const mo = pr.ok && pr.data?.found ? pr.data.month : null;
       if (!box || !mo) return;
-      const label = { profitable: 'в плюсе', loss: 'в минусе', uncertain: 'не ясно' }[mo.verdict] || mo.verdict;
-      const prof = pr.data.profile?.name ? `профиль «${pr.data.profile.name}»` : 'без расходов — добавьте профиль в дашборде';
-      box.innerHTML = `<div class="nf-row"><span class="nf-muted">Прибыль в месяц:</span>
+      const label = { profitable: t('profitProfitable'), loss: t('profitLoss'), uncertain: t('profitUncertain') }[mo.verdict] || mo.verdict;
+      const prof = pr.data.profile?.name ? t('profitProfile', pr.data.profile.name) : t('profitNoProfile');
+      box.innerHTML = `<div class="nf-row"><span class="nf-muted">${esc(t('profitMonth'))}</span>
         <b>$${decimal(mo.profit.low, 0)}–$${decimal(mo.profit.high, 0)}</b> (${esc(label)})
-        <span class="nf-hint">${esc(prof)} · расходы $${decimal(mo.cost, 0)}${pr.data.yppWarning ? ' · ниже полного YPP: реклама может не платить' : ''}</span></div>`;
+        <span class="nf-hint">${esc(prof)} · ${esc(t('profitCosts'))} $${decimal(mo.cost, 0)}${pr.data.yppWarning ? ' · ' + esc(t('profitYppWarn')) : ''}</span></div>`;
     });
 
     // план 22: сигналы по правилам монетизации -- одной строкой, без процента риска
@@ -713,14 +726,14 @@
       send({ type: 'policySignals', channelId: d.channelId }).then((ps) => {
         const box = root.querySelector('.nf-policy');
         if (!box || !ps.ok || !ps.data?.found) return;
-        const names = { generic_repetitive: 'шаблонность', unsatisfying: 'шок-заголовки',
-          ai_persona_sensitive: 'ИИ-персона в чувствительной теме' };
+        const names = { generic_repetitive: t('policyGeneric'), unsatisfying: t('policyUnsatisfying'),
+          ai_persona_sensitive: t('policyAiPersona') };
         const flagged = Object.entries(ps.data.categories)
           .filter(([, c]) => c.level === 'high' || c.level === 'watch')
-          .map(([k, c]) => `${names[k]}${c.level === 'high' ? ' (заметно)' : ''}`);
-        box.innerHTML = `<div class="nf-row"><span class="nf-muted">Правила монетизации:</span>
-          ${esc(flagged.length ? flagged.join(', ') : 'сигналов нет')}
-          <span class="nf-hint" title="${esc(ps.data.note || '')}">сигналы по открытым данным, не решение YouTube</span></div>`;
+          .map(([k, c]) => `${names[k]}${c.level === 'high' ? ' ' + t('policyNoticeable') : ''}`);
+        box.innerHTML = `<div class="nf-row"><span class="nf-muted">${esc(t('policyLabel'))}</span>
+          ${esc(flagged.length ? flagged.join(', ') : t('policyNone'))}
+          <span class="nf-hint" title="${esc(ps.data.note || '')}">${esc(t('policyHint'))}</span></div>`;
       });
     }
 
@@ -729,9 +742,9 @@
 
     const collect = root.querySelector('.nf-collect');
     if (collect) collect.addEventListener('click', async () => {
-      collect.disabled = true; collect.textContent = 'Собираю…';
+      collect.disabled = true; collect.textContent = t('collecting');
       const r = await send({ type: 'collect', channel: d.channelId, maxVideos: 100 });
-      collect.textContent = r.ok ? `Готово: ${r.data.videos_stored} роликов` : 'Ошибка';
+      collect.textContent = r.ok ? t('collectDone', r.data.videos_stored) : t('errorShort');
       setTimeout(() => renderChannel(ref, { refresh: true }), 1200);
     });
 
@@ -740,15 +753,15 @@
       track.disabled = true;
       const r = await send({ type: d.tracked ? 'untrack' : 'track', channelId: d.channelId });
       track.disabled = false;
-      if (r.ok) { d.tracked = !d.tracked; track.textContent = d.tracked ? 'Не отслеживать' : 'Отслеживать'; }
+      if (r.ok) { d.tracked = !d.tracked; track.textContent = d.tracked ? t('untrack') : t('track'); }
     });
 
     const save = root.querySelector('.nf-save');
     if (save) save.addEventListener('click', async () => {
       save.disabled = true;
       const r = await send({ type: 'save', kind: 'channel', refId: d.channelId, payload: d });
-      save.textContent = r.ok ? 'Сохранено' : 'Ошибка';
-      setTimeout(() => { save.disabled = false; save.textContent = 'В избранное'; }, 1500);
+      save.textContent = r.ok ? t('saved') : t('errorShort');
+      setTimeout(() => { save.disabled = false; save.textContent = t('addToSaved'); }, 1500);
     });
   }
 
@@ -821,18 +834,18 @@
     return `
       <div class="nf-head">
         <div class="nf-logo">niche&#8209;finder</div>
-        <div class="nf-sub">Итоги выдачи · ${total} ${plural(total, 'ролик', 'ролика', 'роликов')} проверено</div>
+        <div class="nf-sub">${esc(tn('resultsTitle', total))}</div>
       </div>
       <div class="nf-body">
         <div class="nf-grid">
-          ${cell('выбросов (×≥2)', total ? `${outliers.length} из ${withScore.length}` : '—')}
-          ${cell('медиана просмотров', medianViews != null ? compact(medianViews) : '—')}
-          ${cell('медианный возраст', medianAge != null ? ageText(medianAge) : '—')}
+          ${cell(t('cellOutliersX2'), total ? esc(t('outOf', [outliers.length, withScore.length])) : '—')}
+          ${cell(t('cellMedianViews'), medianViews != null ? compact(medianViews) : '—')}
+          ${cell(t('cellMedianAge'), medianAge != null ? ageText(medianAge) : '—')}
           ${cell('Shorts', total ? shortsShare + '%' : '—')}
-          ${cell('каналов в выдаче', channels.size || '—')}
-          ${cell('медиана подписчиков', medianSubs != null ? compact(medianSubs) : '—')}
+          ${cell(t('cellChannelsInResults'), channels.size || '—')}
+          ${cell(t('cellMedianSubs'), medianSubs != null ? compact(medianSubs) : '—')}
         </div>
-        <div class="nf-hint">Считается по уже загруженным значкам — прокрутите ленту, чтобы захватить больше карточек.</div>
+        <div class="nf-hint">${esc(t('resultsNote'))}</div>
       </div>`;
   }
 
@@ -864,9 +877,9 @@
       badge.textContent = '×' + decimal(info.outlierScore, info.outlierScore < 10 ? 1 : 0);
       badge.title = [
         info.channelTitle || '',
-        `${compact(info.views)} просмотров · ${ageText(info.ageDays)}`,
-        info.viewsPerSubscriber != null ? `×${decimal(info.viewsPerSubscriber, 2)} к подписчикам` : '',
-        `${bandName(info.outlierBand)} относительно среднего по каналу`,
+        t('badgeViewsAge', [compact(info.views), ageText(info.ageDays)]),
+        info.viewsPerSubscriber != null ? t('badgeToSubs', decimal(info.viewsPerSubscriber, 2)) : '',
+        t('badgeBandVsAvg', bandName(info.outlierBand)),
       ].filter(Boolean).join('\n');
       if (getComputedStyle(anchor).position === 'static') anchor.style.position = 'relative';
       anchor.appendChild(badge);
@@ -876,10 +889,8 @@
         if (vph != null && vph > 0) {
           const vBadge = document.createElement('span');
           vBadge.className = 'nf-badge nf-badge-vph';
-          vBadge.textContent = compact(vph) + '/ч';
-          vBadge.title = info.vph24h != null
-            ? 'просмотров в час за последние 24 часа (наши снапшоты)'
-            : 'просмотров в час в среднем за всё время — истории снапшотов ещё нет';
+          vBadge.textContent = t('vphBadge', compact(vph));
+          vBadge.title = info.vph24h != null ? t('vphTitle24') : t('vphTitleAll');
           anchor.appendChild(vBadge);
         }
       }

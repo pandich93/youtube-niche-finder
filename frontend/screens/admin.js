@@ -3,6 +3,11 @@
 import { api, esc, toast, sectionHead, notice, table } from '../ui.js';
 import { view, render } from '../shared.js';
 import { getMe } from '../plan-state.js';
+import { dict, fmtNum } from '../i18n.js';
+import ru from '../i18n/ru/admin.js';
+import en from '../i18n/en/admin.js';
+
+const t = dict({ ru, en });
 
 function planForm(p, catalog) {
   const v = (x) => (x == null ? '' : esc(String(x)));
@@ -12,31 +17,31 @@ function planForm(p, catalog) {
     return `<label style="display:grid;grid-template-columns:220px 120px auto;gap:8px;align-items:center">
         <span>${esc(l.label)} (${esc(l.unit)})</span>
         <input type="number" min="0" step="${l.key === 'llm_usd' ? '0.01' : '1'}" data-limit="${l.key}"
-          value="${has && val != null ? v(val) : ''}" placeholder="${l.default == null ? 'без лимита' : `по умолчанию ${l.default}`}">
-        <span><input type="checkbox" data-unlimited="${l.key}" ${has && val == null ? 'checked' : ''}> без лимита</span>
+          value="${has && val != null ? v(val) : ''}" placeholder="${esc(l.default == null ? t('unlimited') : t('defaultValue', { value: l.default }))}">
+        <span><input type="checkbox" data-unlimited="${l.key}" ${has && val == null ? 'checked' : ''}> ${t('unlimited')}</span>
       </label>`;
   }).join('');
   const feats = catalog.features.map((f) => `<label><input type="checkbox" data-feature="${f.key}"
       ${!p || p.features[f.key] !== false ? 'checked' : ''}> ${esc(f.label)}</label>`).join('<br>');
   return `<form id="planForm" class="card" style="display:grid;gap:8px;margin-top:12px">
-      <div class="section-title">${p ? `Тариф «${esc(p.name)}»` : 'Новый тариф'}</div>
-      <input name="name" placeholder="Название" value="${v(p?.name)}" required>
-      <input name="slug" placeholder="slug (латиница, например pro)" value="${v(p?.slug)}" required>
-      <textarea name="description" placeholder="Описание">${v(p?.description)}</textarea>
+      <div class="section-title">${p ? t('planNamed', { name: esc(p.name) }) : t('newPlan')}</div>
+      <input name="name" placeholder="${esc(t('namePlaceholder'))}" value="${v(p?.name)}" required>
+      <input name="slug" placeholder="${esc(t('slugPlaceholder'))}" value="${v(p?.slug)}" required>
+      <textarea name="description" placeholder="${esc(t('descriptionPlaceholder'))}">${v(p?.description)}</textarea>
       <div style="display:flex;gap:8px">
-        <input name="price" type="number" min="0" step="0.01" placeholder="Цена в месяц" value="${v(p?.price ?? 0)}">
+        <input name="price" type="number" min="0" step="0.01" placeholder="${esc(t('pricePlaceholder'))}" value="${v(p?.price ?? 0)}">
         <input name="currency" placeholder="USD" value="${v(p?.currency ?? 'USD')}" style="width:80px">
-        <input name="periodDays" type="number" min="1" placeholder="Срок, дней (пусто — бессрочно)" value="${v(p?.periodDays)}">
-        <input name="sortOrder" type="number" placeholder="Порядок" value="${v(p?.sortOrder ?? 0)}" style="width:100px">
+        <input name="periodDays" type="number" min="1" placeholder="${esc(t('periodPlaceholder'))}" value="${v(p?.periodDays)}">
+        <input name="sortOrder" type="number" placeholder="${esc(t('sortPlaceholder'))}" value="${v(p?.sortOrder ?? 0)}" style="width:100px">
       </div>
-      <label><input type="checkbox" name="isBase" ${p?.isBase ? 'checked' : ''}> базовый (на нём новые пользователи)</label>
-      <label><input type="checkbox" name="isPublic" ${!p || p.isPublic ? 'checked' : ''}> виден на странице тарифов</label>
-      <div class="section-sub">Лимиты (пусто — значение по умолчанию; 0 — нельзя)</div>
+      <label><input type="checkbox" name="isBase" ${p?.isBase ? 'checked' : ''}> ${t('isBase')}</label>
+      <label><input type="checkbox" name="isPublic" ${!p || p.isPublic ? 'checked' : ''}> ${t('isPublic')}</label>
+      <div class="section-sub">${t('limitsHint')}</div>
       ${limits}
-      <div class="section-sub">Функции</div>
+      <div class="section-sub">${t('features')}</div>
       <div>${feats}</div>
-      <div><button class="btn" type="submit">Сохранить</button>
-        <button class="btn btn-ghost" type="button" id="planCancel">Отмена</button></div>
+      <div><button class="btn" type="submit">${t('save')}</button>
+        <button class="btn btn-ghost" type="button" id="planCancel">${t('cancel')}</button></div>
     </form>`;
 }
 
@@ -62,37 +67,37 @@ function readForm(form) {
 async function viewAdmin() {
   const me = getMe();
   if (!me.multiUser || !me.user?.isAdmin) {
-    view.innerHTML = notice('Админка доступна администратору в многопользовательском режиме (NF_MULTI_USER=1).');
+    view.innerHTML = notice(t('adminOnly'));
     return;
   }
   const [{ plans, catalog }, { users }] = await Promise.all([
     api('/api/admin/plans'), api('/api/admin/users')]);
   const options = (sel) => plans.filter((p) => !p.archived || p.id === sel).map((p) =>
-    `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}${p.archived ? ' (архив)' : ''}</option>`).join('');
-  const unlimited = '<span style="color:var(--muted)">без ограничений</span>';
+    `<option value="${p.id}" ${p.id === sel ? 'selected' : ''}>${esc(p.name)}${p.archived ? t('archivedSuffix') : ''}</option>`).join('');
+  const unlimited = `<span style="color:var(--muted)">${t('noLimits')}</span>`;
   view.innerHTML = `
     <div class="card">
-      ${sectionHead('Тарифы', 'цена и срок пока только показываются — оплата не подключена')}
+      ${sectionHead(t('plansTitle'), t('plansSub'))}
       ${table([
-        { label: 'Тариф', render: (p) => `${esc(p.name)} ${p.isBase ? '<span class="chip">базовый</span>' : ''}${p.archived ? ' <span class="chip">архив</span>' : ''}` },
-        { label: 'Цена', render: (p) => (p.price > 0 ? `${p.price} ${esc(p.currency)}` : 'бесплатно') },
-        { label: 'Срок', render: (p) => (p.periodDays ? `${p.periodDays} дн.` : 'бессрочно') },
-        { label: 'Виден', render: (p) => (p.isPublic ? 'да' : 'нет') },
-        { label: 'Пользователей', render: (p) => p.users },
-        { label: '', render: (p) => `<button class="btn btn-ghost btn-sm edit" data-id="${p.id}">изменить</button>
-            ${p.isBase ? '' : `<button class="btn btn-ghost btn-sm arch" data-id="${p.id}" data-on="${p.archived ? 0 : 1}">${p.archived ? 'вернуть' : 'в архив'}</button>`}` },
+        { label: t('colPlan'), render: (p) => `${esc(p.name)} ${p.isBase ? `<span class="chip">${t('baseChip')}</span>` : ''}${p.archived ? ` <span class="chip">${t('archiveChip')}</span>` : ''}` },
+        { label: t('colPrice'), render: (p) => (p.price > 0 ? `${fmtNum(p.price)} ${esc(p.currency)}` : t('free')) },
+        { label: t('colPeriod'), render: (p) => (p.periodDays ? t('periodDays', { n: p.periodDays }) : t('noExpiry')) },
+        { label: t('colPublic'), render: (p) => (p.isPublic ? t('yes') : t('no')) },
+        { label: t('colUsers'), render: (p) => p.users },
+        { label: '', render: (p) => `<button class="btn btn-ghost btn-sm edit" data-id="${p.id}">${t('edit')}</button>
+            ${p.isBase ? '' : `<button class="btn btn-ghost btn-sm arch" data-id="${p.id}" data-on="${p.archived ? 0 : 1}">${p.archived ? t('restore') : t('archive')}</button>`}` },
       ], plans)}
-      <button class="btn btn-sm" id="planNew" style="margin-top:8px">Новый тариф</button>
+      <button class="btn btn-sm" id="planNew" style="margin-top:8px">${t('newPlan')}</button>
       <div id="planEditor"></div>
     </div>
     <div class="card" style="margin-top:12px">
-      ${sectionHead('Пользователи', 'тариф, дата окончания и расход сегодня')}
+      ${sectionHead(t('usersTitle'), t('usersSub'))}
       ${table([
-        { label: 'Email', render: (u) => `${esc(u.email)}${u.isAdmin ? ' <span class="chip">админ</span>' : ''}` },
-        { label: 'Тариф', render: (u) => (u.isAdmin ? unlimited : `<select class="uplan" data-id="${u.id}">${options(u.plan.id)}</select>`) },
-        { label: 'До', render: (u) => (u.isAdmin ? '' : `<input type="date" class="uexp" data-id="${u.id}" value="${u.expiresAt ? u.expiresAt.slice(0, 10) : ''}">`) },
-        { label: 'Сегодня', render: (u) => `${u.today.ytUnits} units · $${u.today.llmUsd}` },
-        { label: '', render: (u) => (u.isAdmin ? '' : `<button class="btn btn-ghost btn-sm usave" data-id="${u.id}">сохранить</button>`) },
+        { label: 'Email', render: (u) => `${esc(u.email)}${u.isAdmin ? ` <span class="chip">${t('adminChip')}</span>` : ''}` },
+        { label: t('colPlan'), render: (u) => (u.isAdmin ? unlimited : `<select class="uplan" data-id="${u.id}">${options(u.plan.id)}</select>`) },
+        { label: t('colUntil'), render: (u) => (u.isAdmin ? '' : `<input type="date" class="uexp" data-id="${u.id}" value="${u.expiresAt ? u.expiresAt.slice(0, 10) : ''}">`) },
+        { label: t('colToday'), render: (u) => `${u.today.ytUnits} units · $${u.today.llmUsd}` },
+        { label: '', render: (u) => (u.isAdmin ? '' : `<button class="btn btn-ghost btn-sm usave" data-id="${u.id}">${t('saveUser')}</button>`) },
       ], users)}
     </div>`;
 
@@ -105,7 +110,7 @@ async function viewAdmin() {
       try {
         const body = readForm(e.target);
         await api(p ? `/api/admin/plans/${p.id}` : '/api/admin/plans', { method: p ? 'PUT' : 'POST', body });
-        toast('Тариф сохранён', 'ok'); render();
+        toast(t('planSaved'), 'ok'); render();
       } catch (err) { toast(err.message, 'err'); }
     });
   };
@@ -125,7 +130,7 @@ async function viewAdmin() {
       await api(`/api/admin/users/${id}/plan`, { method: 'PUT', body: {
         planId: Number(view.querySelector(`.uplan[data-id="${id}"]`).value),
         expiresAt: exp ? new Date(`${exp}T23:59:59Z`).toISOString() : null } });
-      toast('Тариф пользователя сохранён', 'ok'); render();
+      toast(t('userPlanSaved'), 'ok'); render();
     } catch (e) { toast(e.message, 'err'); }
   }));
 }

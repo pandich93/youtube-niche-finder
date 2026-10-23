@@ -14,6 +14,8 @@ niche-finder over the corpus we collected, not YouTube data.
 """
 import re
 
+from domain.i18n import tr
+
 HIT_SCORE = 2.0
 MIN_SIMILARITY = 0.62      # multilingual MiniLM: cross-language cosine runs lower than within a language
 SOURCE_MIN_SIMILARITY = 0.6  # within one language, same as repeatability (plan 21)
@@ -50,8 +52,10 @@ def normalize_lang(code) -> str | None:
 
 
 def lang_label(code: str) -> str:
-    """The words after "на" for a normalized code: 'русском языке'."""
-    return _NAMES.get(code) or f"языке «{code}»"
+    """The words after "на" for a normalized code: 'русском языке' (in
+    English the words after "in": 'Russian')."""
+    name = _NAMES.get(code)
+    return tr(name) if name else tr("языке «{code}»", code=code)
 
 
 def verdict(neighbours, hit_score: float = HIT_SCORE, min_similarity: float = MIN_SIMILARITY) -> dict:
@@ -92,5 +96,6 @@ def corpus_hint(videos: int, lang: str) -> str | None:
     """Words for a thin target corpus; None when it is big enough."""
     if videos >= THIN_CORPUS_VIDEOS:
         return None
-    return (f"В базе только {videos} видео на {lang_label(lang)}: «открыто» может значить "
-            "«не собрано». Соберите каналы этой ниши на этом языке и проверьте снова.")
+    return tr("В базе только {videos} видео на {lang}: «открыто» может значить "
+              "«не собрано». Соберите каналы этой ниши на этом языке и проверьте снова.",
+              videos=videos, lang=lang_label(lang))

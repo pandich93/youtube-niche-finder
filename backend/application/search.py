@@ -17,6 +17,7 @@ from application import saturation as SAT
 from domain import idea_verdicts as IV
 from domain import metrics as M
 from domain import monetization as MZ
+from domain.i18n import tr
 from infrastructure.categories import repository as C
 from infrastructure.llm import factory as llm_factory
 
@@ -296,16 +297,18 @@ def check_ideas(ideas: list, niche: str = None, min_similarity: float = 0.55,
     return {
         "niche": niche, "ideaCount": len(ideas), "semanticSearchAvailable": semantic_available,
         "hint": None if semantic_available else
-            "эмбеддинги недоступны в этом прогоне -- совпадения только по вхождению фразы "
-            "в название, точность ниже, чем с семантическим поиском",
+            tr("эмбеддинги недоступны в этом прогоне -- совпадения только по вхождению фразы "
+               "в название, точность ниже, чем с семантическим поиском"),
         "rules": {
-            "free": "совпадений не найдено",
-            "recent": f"последнее совпадение младше {recent_days} дней -- пропустить, недавно снимали",
-            "proven": f"совпадения старше {recent_days} дней, лучший outlier >= {proven_outlier} "
-                     "-- спрос доказан",
-            "flopped": f"совпадения старше {recent_days} дней и лучший outlier < {proven_outlier} "
-                      f"(включая {flop_outlier}-{proven_outlier} -- сигнал слабый, не считаем "
-                      "доказанным без явного провала)",
+            "free": tr("совпадений не найдено"),
+            "recent": tr("последнее совпадение младше {recent_days} дней -- пропустить, "
+                         "недавно снимали", recent_days=recent_days),
+            "proven": tr("совпадения старше {recent_days} дней, лучший outlier >= {proven_outlier} "
+                         "-- спрос доказан", recent_days=recent_days, proven_outlier=proven_outlier),
+            "flopped": tr("совпадения старше {recent_days} дней и лучший outlier < {proven_outlier} "
+                          "(включая {flop_outlier}-{proven_outlier} -- сигнал слабый, не считаем "
+                          "доказанным без явного провала)", recent_days=recent_days,
+                          proven_outlier=proven_outlier, flop_outlier=flop_outlier),
         },
         "ideas": out_ideas,
     }

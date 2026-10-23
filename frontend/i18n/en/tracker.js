@@ -1,0 +1,18 @@
+export default {
+  title: 'Channel tracker',
+  sub: 'the background collector snapshots these channels\' stats and builds up history',
+  facelessAny: 'faceless: any',
+  facelessYes: 'faceless: yes',
+  facelessNo: 'faceless: no',
+  formatPlaceholder: 'format',
+  topicPlaceholder: 'topic',
+  colChannel: 'Channel',
+  colSubs: 'Subscribers',
+  colVideos: 'Videos',
+  colViews: 'Views',
+  colSnapshots: 'Snapshots',
+  colRefreshed: 'Refreshed',
+  remove: 'remove',
+  empty: 'nobody here yet — add a channel below, or the AI label filter found nothing',
+  removed: 'Removed from the tracker',
+};

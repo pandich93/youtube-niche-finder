@@ -2,89 +2,91 @@
 <meta charset="utf-8">
 <title>niche-finder</title>
 <link rel="stylesheet" href="popup.css">
+<!-- Тексты подставляет popup.js из _locales по атрибутам data-i18n / data-i18n-title / data-i18n-placeholder;
+     английский в разметке -- запасной вариант на случай, если chrome.i18n не ответил. -->
 <div class="wrap">
   <h1>niche&#8209;finder</h1>
-  <div id="status" class="status">проверяю связь…</div>
+  <div id="status" class="status" data-i18n="popupStatusChecking">Checking connection…</div>
 
   <label class="field">
-    <span>Адрес локального бэкенда</span>
+    <span data-i18n="popupBaseUrlLabel">Local backend address</span>
     <input id="baseUrl" type="text" spellcheck="false" placeholder="http://127.0.0.1:8080">
   </label>
 
   <label class="field">
-    <span>Токен доступа (только если на сервере включён вход)</span>
+    <span data-i18n="popupTokenLabel">Access token (only if sign-in is enabled on the server)</span>
     <input id="apiToken" type="password" spellcheck="false" autocomplete="off" placeholder="nf_…">
   </label>
 
   <label class="check">
     <input id="autoFetch" type="checkbox">
-    <span>Добирать из YouTube API то, чего нет в базе
-      <em>1-2 units на страницу, данные сохраняются локально</em></span>
+    <span><span data-i18n="optAutoFetch">Fetch what's missing from your database via the YouTube API</span>
+      <em data-i18n="optAutoFetchHint">1-2 units per page, data is stored locally</em></span>
   </label>
 
   <label class="check">
     <input id="showBadges" type="checkbox">
-    <span>Значки с множителем на карточках видео</span>
+    <span data-i18n="optShowBadges">Multiplier badges on video cards</span>
   </label>
 
   <label class="check">
     <input id="onlyOutliers" type="checkbox">
-    <span>Показывать значок только у выбросов (от ×1,5)</span>
+    <span data-i18n="optOnlyOutliers">Show the badge only on outliers (×1.5 and up)</span>
   </label>
 
   <label class="check">
     <input id="showVph" type="checkbox">
-    <span>Второй значок — просмотров в час
-      <em>под превью, синим; за 24ч если есть история, иначе за всё время</em></span>
+    <span><span data-i18n="optShowVph">Second badge: views per hour</span>
+      <em data-i18n="optShowVphHint">under the thumbnail, in blue; last 24 h if there's history, otherwise all time</em></span>
   </label>
 
   <details class="md-details" id="alertsDetails">
-    <summary>Алерты <span id="alertsCount"></span></summary>
+    <summary><span data-i18n="alertsTitle">Alerts</span> <span id="alertsCount"></span></summary>
     <div class="md-form">
-      <div id="alertsBody" class="md-result"><div class="md-summary">загрузка…</div></div>
+      <div id="alertsBody" class="md-result"><div class="md-summary" data-i18n="loading">Loading…</div></div>
       <div class="row">
-        <button id="alertsScan" class="btn" type="button">Проверить сейчас</button>
-        <button id="alertsMarkSeen" class="btn ghost" type="button">Отметить прочитанным</button>
+        <button id="alertsScan" class="btn" type="button" data-i18n="alertsScan">Check now</button>
+        <button id="alertsMarkSeen" class="btn ghost" type="button" data-i18n="alertsMarkSeen">Mark as read</button>
       </div>
     </div>
   </details>
 
   <details class="md-details">
-    <summary>Разбор метаданных черновика</summary>
+    <summary data-i18n="mdSectionTitle">Draft metadata review</summary>
     <div class="md-form">
       <label class="field">
-        <span>Заголовок</span>
-        <input id="mdTitle" type="text" placeholder="5 секретов нейросетей, о которых молчат">
+        <span data-i18n="mdFieldTitle">Title</span>
+        <input id="mdTitle" type="text" data-i18n-placeholder="mdTitlePlaceholder" placeholder="5 AI secrets nobody talks about">
       </label>
       <label class="field">
-        <span>Описание</span>
-        <textarea id="mdDesc" rows="2" placeholder="00:00 вступление..."></textarea>
+        <span data-i18n="mdFieldDesc">Description</span>
+        <textarea id="mdDesc" rows="2" data-i18n-placeholder="mdDescPlaceholder" placeholder="00:00 intro..."></textarea>
       </label>
       <label class="field">
-        <span>Теги (через запятую)</span>
-        <input id="mdTags" type="text" placeholder="нейросети, ai">
+        <span data-i18n="mdFieldTags">Tags (comma-separated)</span>
+        <input id="mdTags" type="text" data-i18n-placeholder="mdTagsPlaceholder" placeholder="neural networks, ai">
       </label>
       <label class="field">
-        <span>Ниша</span>
+        <span data-i18n="mdFieldNiche">Niche</span>
         <input id="mdNiche" type="text" placeholder="ai-explainers">
       </label>
       <label class="field">
-        <span>ID канала (необязательно)</span>
+        <span data-i18n="mdFieldChannel">Channel ID (optional)</span>
         <input id="mdChannel" type="text" placeholder="UC...">
       </label>
       <label class="check"><input id="mdShort" type="checkbox"><span>Shorts</span></label>
       <div class="row">
-        <button id="mdReview" class="btn" type="button">Проверить</button>
-        <button id="mdSave" class="btn ghost" type="button">Сохранить черновик</button>
+        <button id="mdReview" class="btn" type="button" data-i18n="mdReview">Check</button>
+        <button id="mdSave" class="btn ghost" type="button" data-i18n="mdSave">Save draft</button>
       </div>
       <div id="mdResult" class="md-result"></div>
     </div>
   </details>
 
   <div class="row">
-    <button id="check" class="btn">Проверить связь</button>
-    <a id="dash" class="btn ghost" target="_blank" rel="noopener">Дашборд</a>
+    <button id="check" class="btn" data-i18n="popupCheck">Check connection</button>
+    <a id="dash" class="btn ghost" target="_blank" rel="noopener" data-i18n="dashboard">Dashboard</a>
   </div>
-  <div class="foot">Данные не покидают ваш компьютер: расширение ходит только на localhost.</div>
+  <div class="foot" data-i18n="popupFoot">Your data stays on your computer: the extension only talks to localhost.</div>
 </div>
 <script src="popup.js"></script>

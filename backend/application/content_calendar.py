@@ -13,6 +13,7 @@ from application import channel_tracking as T
 from application import metadata_review as MR
 from domain import content_calendar as K
 from domain import periods as P
+from domain.i18n import tr
 from domain.users import LOCAL_USER_ID
 
 MAX_RANGE_DAYS = 62
@@ -134,6 +135,8 @@ def remind_due(now: datetime = None) -> dict:
 
 def event_text(p: dict) -> str:
     """The words of a draft_due reminder (Telegram HTML is escaped by the caller)."""
+    # tr(): the recipient's language, set by alerts.deliver / digest.send_digest
     when = (p.get("plannedAt") or "")[:16].replace("T", " ")
-    return ("выпуск в ближайшие сутки" if p.get("stage") == "soon" else "пора выпускать") + f" · {when} UTC"
+    return (tr("выпуск в ближайшие сутки") if p.get("stage") == "soon"
+            else tr("пора выпускать")) + f" · {when} UTC"
 

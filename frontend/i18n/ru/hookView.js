@@ -1,0 +1,40 @@
+export default {
+  levelStrong: 'сильное',
+  levelOk: 'среднее',
+  levelWeak: 'слабое',
+  levelInsufficient: 'мало текста',
+
+  featQuestion: 'вопрос зрителю',
+  featNumber: 'цифра или сумма',
+  featPromise: 'обещание результата',
+  featIntrigue: 'интрига или конфликт',
+  featSecondPerson: 'обращение «ты / вы»',
+  featFirstSentence: 'короткая первая фраза',
+  featPace: 'темп речи',
+
+  notScored: '{label}: не оценивается',
+  hitYes: '✓ есть',
+  hitNo: '✗ нет',
+  featureRow: '{hit} — {label}: {points} из {max}',
+
+  cmpInsufficient: 'Сравнение с нишей: мало данных (нужно 10 outliers и 10 обычных видео с транскриптами).',
+  cmpGaps: 'У outliers чаще встречается то, чего нет у вас: {list}.',
+  cmpLine: 'Сравнение с нишей: ваш балл {your}, у outliers в среднем {outlier}, у обычных видео {regular}.',
+
+  llmTitle: 'LLM-разбор',
+  llmCached: '(из кэша)',
+  llmWorks: 'Что работает',
+  llmImprove: 'Что улучшить',
+  llmRewrite: 'Вариант вступления:',
+
+  noTranscript: 'нет транскрипта',
+  tooLittleText: 'Слишком мало текста для оценки.',
+  penaltyGreeting: 'приветствие в начале текста',
+  penaltyFiller: 'фразы-вода: {text}',
+  wordsTimed: { one: '{n} слов, с таймкодами', few: '{n} слов, с таймкодами', many: '{n} слов, с таймкодами', other: '{n} слов, с таймкодами' },
+  wordsUntimed: { one: '{n} слов, без таймкодов', few: '{n} слов, без таймкодов', many: '{n} слов, без таймкодов', other: '{n} слов, без таймкодов' },
+  noPunctuation: 'В тексте почти нет знаков препинания — вопросы по «?» и длина первой фразы не оцениваются.',
+  fillerTitle: 'Вода в начале',
+  tipsTitle: 'Что можно попробовать',
+  disclaimer: 'Оценка текста вступления, не визуального крючка; корреляция, не причинность.',
+};

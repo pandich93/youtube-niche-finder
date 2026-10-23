@@ -16,7 +16,9 @@ from datetime import datetime
 import infrastructure.postgres as db
 from application import channel_tracking as T
 from application import packaging as PKG
+from domain import i18n
 from domain import periods as P
+from domain.i18n import tr
 from domain.users import LOCAL_USER_ID, multi_user_enabled
 from infrastructure.notify.null import NullNotifier
 
@@ -124,31 +126,34 @@ def _event_line(e) -> str:
     if e["kind"] == "acceleration":
         return f"• ×{p.get('acceleration')} · {_esc(_cut(p.get('title') or p.get('videoId')))}"
     if e["kind"] == "channel_gone":
-        return f"• канал {_esc(_cut(p.get('title') or p.get('channelId')))}"
+        return tr("• канал {title}", title=_esc(_cut(p.get('title') or p.get('channelId'))))
     if e["kind"] == "topic_match":
         return f"• «{_esc(_cut(p.get('topic'), 40))}»: {_esc(_cut(p.get('title') or p.get('videoId')))}"
     if e["kind"] == "milestone":
-        return f"• {_esc(_cut(p.get('title') or p.get('channelId')))} — {_compact(p.get('milestone'))} подп."
+        return tr("• {title} — {n} подп.", title=_esc(_cut(p.get('title') or p.get('channelId'))),
+                  n=_compact(p.get('milestone')))
     if e["kind"] == "draft_due":
         from application import content_calendar as CAL
         return f"• {_esc(_cut(p.get('title') or str(p.get('draftId'))))} — {_esc(CAL.event_text(p))}"
     if e["kind"] == "video_gone":
-        return f"• видео {_esc(_cut(p.get('title') or p.get('videoId')))}"
+        return tr("• видео {title}", title=_esc(_cut(p.get('title') or p.get('videoId'))))
     return f"• {_esc(e['kind'])}"
 
 
 def _channel_line(c) -> str:
-    return (f"• {_esc(_cut(c.get('channelTitle') or c.get('channelId')))} — "
-            f"×{c.get('multiplier')}, {_compact(c.get('subscribers'))} подп.")
+    return tr("• {title} — ×{multiplier}, {subscribers} подп.",
+              title=_esc(_cut(c.get('channelTitle') or c.get('channelId'))),
+              multiplier=c.get('multiplier'), subscribers=_compact(c.get('subscribers')))
 
 
 def _swap_line(s) -> str:
     if s.get("field") == "title":
-        return (f"• заголовок: «{_esc(_cut(s.get('old'), 50))}» → "
-                f"«{_esc(_cut(s.get('new'), 50))}»")
-    return f"• обложка: {_esc(_cut(s.get('title') or s.get('videoId')))}"
+        return tr("• заголовок: «{old}» → «{new}»",
+                  old=_esc(_cut(s.get('old'), 50)), new=_esc(_cut(s.get('new'), 50)))
+    return tr("• обложка: {title}", title=_esc(_cut(s.get('title') or s.get('videoId'))))
 
 
+# headers stay Russian here and go through tr() in _render (i18n plan)
 SECTIONS = (
     ("outliers", "\U0001F680 <b>Новые outlier-видео</b>", _event_line),
     ("acceleration", "⚡ <b>Ускоряются</b>", _event_line),
@@ -162,25 +167,27 @@ SECTIONS = (
 
 
 def _render(d, per_section: int) -> str:
-    lines = ["\U0001F5DE <b>niche-finder — за сутки</b>"]
+    lines = [tr("\U0001F5DE <b>niche-finder — за сутки</b>")]
     for key, header, line_fn in SECTIONS:
         sec = d.get(key) or {}
         if not sec.get("total"):
             continue
         shown = sec["items"][:per_section]
         lines.append("")
-        lines.append(f"{header} ({sec['total']})")
+        lines.append(f"{tr(header)} ({sec['total']})")
         lines += [line_fn(x) for x in shown]
         if sec["total"] > len(shown):
-            lines.append(f"…и ещё {sec['total'] - len(shown)}")
+            lines.append(tr("…и ещё {n}", n=sec['total'] - len(shown)))
     lines.append("")
-    lines.append(f'<a href="{DASHBOARD_URL}/#/overview">открыть дашборд</a>')
+    lines.append(f'<a href="{DASHBOARD_URL}/#/overview">{tr("открыть дашборд")}</a>')
     return "\n".join(lines)
 
 
 def format_digest(d: dict) -> str:
     """Telegram HTML, never longer than TELEGRAM_LIMIT: if the full list does
-    not fit, fewer items are shown per section (the rest become "…и ещё N")."""
+    not fit, fewer items are shown per section (the rest become "…и ещё N").
+    Written in the current locale: send_digest() sets the recipient's, while
+    GET /api/digest returns build_digest()'s data, never this text."""
     most = max((len((d.get(k) or {}).get("items", [])) for k, _, _ in SECTIONS), default=0)
     for per_section in range(most, -1, -1):
         text = _render(d, per_section)
@@ -227,7 +234,12 @@ def send_digest(now: datetime = None, force: bool = False, period: str = "24h",
             conn.commit()
             return {"sent": False, "reason": "empty"}
 
-        if not notifier.send(format_digest(d)):
+        # the recipient's language (worker, CLI and POST /api/digest/send alike):
+        # the text goes to their Telegram/webhook
+        from application.alerts import recipient_locale
+        with i18n.use_locale(recipient_locale(user_id)):
+            text = format_digest(d)
+        if not notifier.send(text):
             return {"sent": False, "reason": "send failed"}
         for event_id in d["eventIds"]:
             db.mark_alert_delivered(conn, str(event_id), "digest", user_id=user_id)

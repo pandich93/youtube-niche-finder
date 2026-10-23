@@ -166,6 +166,7 @@ SUMMARY = {
     "GET /api/auth/me": ("auth", "The signed-in user and today's quota usage; in single-user mode it just says multi-user is off."),
     "POST /api/auth/login": ("auth", "Sign in with email and password; sets the session cookie."),
     "POST /api/auth/logout": ("auth", "Sign out and drop the session."),
+    "PUT /api/me/locale": ("auth", "Save the interface language (`ru` or `en`): the dashboard on other devices and your alerts and digest use it."),
     "GET /api/auth/tokens": ("auth", "Your personal API tokens (names and dates, never the secret)."),
     "POST /api/auth/tokens": ("auth", "Create a personal token for the extension or MCP over HTTP; shown once."),
     "DELETE /api/auth/tokens/{token_id}": ("auth", "Revoke a personal token."),

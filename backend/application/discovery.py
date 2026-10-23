@@ -22,6 +22,7 @@ from application import maturity_curve as MC
 from domain import keywords as K
 from domain import metrics as M
 from domain import periods as P
+from domain.i18n import tr
 from infrastructure.categories import repository as C
 
 # ------------------------------------------------------------------ loading
@@ -355,17 +356,18 @@ def _funnel_hint(funnel, period, period_by):
     if funnel[-1][1] > 0:
         return None
     if funnel[0][1] == 0:
-        return (f"Ни одного видео в окне {period} по '{period_by}'. Соберите больше "
-                f"(collect_channel дешевле всего), возьмите период шире, или "
-                f"period_by='discovered', если видео старые, а в базу попали недавно.")
+        return tr("Ни одного видео в окне {period} по '{period_by}'. Соберите больше "
+                  "(collect_channel дешевле всего), возьмите период шире, или "
+                  "period_by='discovered', если видео старые, а в базу попали недавно.",
+                  period=period, period_by=period_by)
     # first step that reached zero
     for i, (name, n, param) in enumerate(funnel):
         if n == 0:
             before = funnel[i - 1][1]
-            return (f"Фильтр '{name}' отсёк все {before} видео. Понизьте {param} "
-                    f"или уберите его (0 / None).")
+            return tr("Фильтр '{name}' отсёк все {before} видео. Понизьте {param} "
+                      "или уберите его (0 / None).", name=name, before=before, param=param)
     survivors = funnel[-1]
-    return f"Осталось 0 после '{survivors[0]}'."
+    return tr("Осталось 0 после '{step}'.", step=survivors[0])
 
 
 def _video_out(r):
@@ -499,12 +501,14 @@ def most_popular_categories(period="7d", period_by="published", niche=None, regi
 
     hint = None
     if not items:
-        hint = (f"Ни одной категории с >= {min_videos} видео в окне {period}. "
-                f"В окне всего {len(rows)} видео — соберите больше, возьмите период "
-                f"шире, понизьте min_videos, или period_by='discovered'."
+        hint = (tr("Ни одной категории с >= {min_videos} видео в окне {period}. "
+                   "В окне всего {total} видео — соберите больше, возьмите период "
+                   "шире, понизьте min_videos, или period_by='discovered'.",
+                   min_videos=min_videos, period=period, total=len(rows))
                 if rows else
-                f"В окне {period} по '{period_by}' нет видео вообще — сначала соберите "
-                f"корпус (collect_channel / collect_niche).")
+                tr("В окне {period} по '{period_by}' нет видео вообще — сначала соберите "
+                   "корпус (collect_channel / collect_niche).",
+                   period=period, period_by=period_by))
 
     return {
         "period": period,
@@ -611,10 +615,12 @@ def trending_keywords(period="7d", period_by="published", niche=None, region=Non
     tagged = sum(1 for r in rows if r["tags"] and r["tags"] not in ("[]", "null"))
     hint = None
     if not ranked:
-        hint = (f"Ни одной фразы, встречающейся в >= {min_videos} видео. В окне "
-                f"{total} видео — понизьте min_videos (до 2 или 1), возьмите период "
-                f"шире, или соберите больше." if total else
-                f"В окне {period} по '{period_by}' нет видео — сначала соберите корпус.")
+        hint = (tr("Ни одной фразы, встречающейся в >= {min_videos} видео. В окне "
+                   "{total} видео — понизьте min_videos (до 2 или 1), возьмите период "
+                   "шире, или соберите больше.", min_videos=min_videos, total=total)
+                if total else
+                tr("В окне {period} по '{period_by}' нет видео — сначала соберите корпус.",
+                   period=period, period_by=period_by))
 
     return {
         "period": period,
@@ -688,10 +694,12 @@ def top_tags_by_category(period="7d", period_by="published", niche=None, region=
         "topN": top_n,
         "quotaUsed": 0,
         "hint": None if categories else (
-            f"Ни одного тега, встречающегося в >= {min_videos} видео ни в одной "
-            f"категории. Понизьте min_videos или возьмите период шире."
+            tr("Ни одного тега, встречающегося в >= {min_videos} видео ни в одной "
+               "категории. Понизьте min_videos или возьмите период шире.",
+               min_videos=min_videos)
             if rows else
-            f"В окне {period} по '{period_by}' нет видео — сначала соберите корпус."),
+            tr("В окне {period} по '{period_by}' нет видео — сначала соберите корпус.",
+               period=period, period_by=period_by)),
         "categories": categories,
     }
 

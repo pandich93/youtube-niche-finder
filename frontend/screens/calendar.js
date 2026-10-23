@@ -1,14 +1,29 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, q, esc, toast, sectionHead, empty, notice } from '../ui.js';
 import { view } from '../shared.js';
+import { dict, fmtDate, fmtTime } from '../i18n.js';
+import ru from '../i18n/ru/calendar.js';
+import en from '../i18n/en/calendar.js';
+
+const t = dict({ ru, en });
 
 /* --------------------------------------------- Контент-календарь (план 33) */
 
 // Время хранится в UTC, показывается в часовом поясе браузера.
-const STATE = { planned: ['', 'запланировано'], overdue: ['chip-bad', 'просрочено'],
-  published: ['chip-good', 'вышло'], unplanned: ['', 'без даты'] };
-const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
-const WEEKDAY_RU = { Mon: 'пн', Tue: 'вт', Wed: 'ср', Thu: 'чт', Fri: 'пт', Sat: 'сб', Sun: 'вс' };
+// Второй элемент -- ключ словаря: подпись переводится при рендере.
+const STATE = { planned: ['', 'stPlanned'], overdue: ['chip-bad', 'stOverdue'],
+  published: ['chip-good', 'stPublished'], unplanned: ['', 'stUnplanned'] };
+// Сервер отдаёт день недели слота как 'Mon'..'Sun'; название -- через Intl текущей локали.
+const WEEKDAY_IDX = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
+const weekdayName = (w) => (w in WEEKDAY_IDX
+  // 2024-01-01 -- понедельник
+  ? fmtDate(new Date(Date.UTC(2024, 0, 1 + WEEKDAY_IDX[w])), { weekday: 'short', timeZone: 'UTC' })
+  : w);
+// Заголовок ячейки: короткое название дня с заглавной буквы («Пн», «Mon»).
+const dayName = (d) => {
+  const s = fmtDate(d, { weekday: 'short' });
+  return s.charAt(0).toUpperCase() + s.slice(1);
+};
 
 let mode = 'week';
 let anchor = startOfWeek(new Date());
@@ -33,7 +48,7 @@ function range() {
 }
 
 const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const hhmm = (iso) => new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+const hhmm = (iso) => fmtTime(new Date(iso), { hour: '2-digit', minute: '2-digit' });
 const localInput = (iso) => {
   const d = new Date(iso);
   return `${dayKey(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
@@ -44,7 +59,7 @@ function chip(x) {
   const when = x.plannedAt || x.publishedAt;
   return `<div class="chip ${cls} cal-item" draggable="${x.state === 'published' ? 'false' : 'true'}" data-id="${x.id}"
     style="display:block;margin:3px 0;cursor:pointer;white-space:normal;text-align:left"
-    title="${esc(x.title || '')}">${when ? `<b>${hhmm(when)}</b> ` : ''}${esc(x.title || `черновик ${x.id}`)}</div>`;
+    title="${esc(x.title || '')}">${when ? `<b>${hhmm(when)}</b> ` : ''}${esc(x.title || t('draftChip', { id: x.id }))}</div>`;
 }
 
 function grid(d, start, days) {
@@ -61,7 +76,7 @@ function grid(d, start, days) {
     const other = mode === 'month' && day.getMonth() !== anchor.getMonth();
     cells.push(`<div class="cal-day" data-day="${key}" style="border:1px solid var(--border);border-radius:8px;
       padding:6px;min-height:${mode === 'week' ? 160 : 90}px;${other ? 'opacity:.5;' : ''}${key === today ? 'border-color:var(--series);' : ''}">
-      <div class="section-sub" style="margin:0">${DAYS[i % 7]} ${day.getDate()}</div>
+      <div class="section-sub" style="margin:0">${esc(dayName(day))} ${day.getDate()}</div>
       ${(byDay[key] || []).map(chip).join('')}</div>`);
   }
   return `<div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px">${cells.join('')}</div>`;
@@ -71,24 +86,28 @@ function editor(d) {
   if (!selected) return '';
   const x = [...d.items, ...d.unplanned].find((i) => i.id === selected);
   if (!x) return '';
-  const [cls, label] = STATE[x.state] || ['', x.state];
+  const [cls, labelKey] = STATE[x.state] || ['', null];
+  const label = labelKey ? t(labelKey) : x.state;
   const plan = lastPlan && lastPlan.id === x.id ? lastPlan : null;
-  const slots = plan?.bestSlots?.length
-    ? `Лучшее время ниши (UTC): ${plan.bestSlots.map((s) => `${WEEKDAY_RU[s.weekday] || s.weekday} ${String(s.hour).padStart(2, '0')}:00`).join(', ')}${
-      plan.fitsBestSlot === true ? ' — вы попали в одно из них.' : plan.fitsBestSlot === false ? ' — выбранное время не из них.' : ''}`
+  const slotList = plan?.bestSlots?.length
+    ? plan.bestSlots.map((s) => `${weekdayName(s.weekday)} ${String(s.hour).padStart(2, '0')}:00`).join(', ')
     : '';
-  return `<div class="card">${sectionHead(x.title || `Черновик ${x.id}`, x.niche ? `ниша ${x.niche}` : '',
+  const slots = slotList
+    ? t(plan.fitsBestSlot === true ? 'bestSlotsFit' : plan.fitsBestSlot === false ? 'bestSlotsMiss' : 'bestSlots',
+      { slots: slotList })
+    : '';
+  return `<div class="card">${sectionHead(x.title || t('draftTitle', { id: x.id }), x.niche ? t('nicheSub', { niche: x.niche }) : '',
       `<span class="chip ${cls}">${esc(label)}</span>`)}
-    ${x.state === 'published' ? `<div class="section-sub">Вышло: <a href="https://www.youtube.com/watch?v=${esc(x.videoId)}" target="_blank" rel="noopener">${esc(x.videoId)}</a></div>`
+    ${x.state === 'published' ? `<div class="section-sub">${t('published', {
+        link: `<a href="https://www.youtube.com/watch?v=${esc(x.videoId)}" target="_blank" rel="noopener">${esc(x.videoId)}</a>` })}</div>`
       : `<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
-        <label class="field-label">Дата и время выпуска (ваш часовой пояс)<br>
+        <label class="field-label">${t('whenLabel')}<br>
           <input type="datetime-local" id="calWhen" value="${x.plannedAt ? localInput(x.plannedAt) : ''}"></label>
-        <button class="btn" id="calSave">Сохранить</button>
-        ${x.plannedAt ? '<button class="btn btn-ghost" id="calUnplan">Убрать из календаря</button>' : ''}
+        <button class="btn" id="calSave">${t('save')}</button>
+        ${x.plannedAt ? `<button class="btn btn-ghost" id="calUnplan">${t('unplan')}</button>` : ''}
       </div>
       ${slots ? `<div class="section-sub" style="margin-top:8px">${esc(slots)}</div>` : ''}
-      <div class="section-sub" style="margin-top:8px">Напоминание придёт в Telegram и дайджест за сутки и в момент выпуска,
-        пока черновик не связан с вышедшим видео (кнопка «привязать» на экране «Разбор метаданных»).</div>`}
+      <div class="section-sub" style="margin-top:8px">${t('reminderNote')}</div>`}
   </div>`;
 }
 
@@ -96,7 +115,7 @@ async function plan(id, iso) {
   try {
     lastPlan = await api(`/api/drafts/${id}/plan`, { method: 'POST', body: { plannedAt: iso } });
     selected = id;
-    toast(iso ? 'Черновик в календаре' : 'Черновик убран из календаря', 'ok');
+    toast(iso ? t('toastPlanned') : t('toastUnplanned'), 'ok');
     viewCalendar();
   } catch (e) { toast(e.message, 'err'); }
 }
@@ -106,25 +125,25 @@ async function viewCalendar() {
   const days = Math.round((end - start) / 864e5);
   const d = await api('/api/calendar' + q({ start: start.toISOString(), end: end.toISOString() }));
   const title = mode === 'week'
-    ? `${start.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} — ${new Date(end - 864e5).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}`
-    : anchor.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' });
+    ? `${fmtDate(start, { day: 'numeric', month: 'long' })} — ${fmtDate(new Date(end - 864e5), { day: 'numeric', month: 'long' })}`
+    : fmtDate(anchor, { month: 'long', year: 'numeric' });
   view.innerHTML = `
     <div class="card">
-      ${sectionHead('Календарь', 'черновики по дням выпуска · перетащите черновик на день', `
+      ${sectionHead(t('title'), t('sub'), `
         <button class="btn btn-ghost btn-sm" id="calPrev">‹</button>
-        <button class="btn btn-ghost btn-sm" id="calToday">Сегодня</button>
+        <button class="btn btn-ghost btn-sm" id="calToday">${t('today')}</button>
         <button class="btn btn-ghost btn-sm" id="calNext">›</button>
-        <button class="btn btn-ghost btn-sm" id="calMode">${mode === 'week' ? 'Месяц' : 'Неделя'}</button>`)}
+        <button class="btn btn-ghost btn-sm" id="calMode">${mode === 'week' ? t('month') : t('week')}</button>`)}
       <div class="section-title" style="margin-bottom:8px">${esc(title)}</div>
       ${grid(d, start, days)}
     </div>
     <div class="card">
-      ${sectionHead('Без даты', 'черновики из брифа и разбора метаданных — перетащите на день или нажмите')}
+      ${sectionHead(t('unplannedTitle'), t('unplannedSub'))}
       ${d.unplanned.length ? `<div class="cal-day" data-day="" style="display:flex;flex-wrap:wrap;gap:6px">
-        ${d.unplanned.map(chip).join('')}</div>` : empty('все черновики уже в календаре — новые появляются из брифа и «Разбора метаданных»')}
+        ${d.unplanned.map(chip).join('')}</div>` : empty(t('unplannedEmpty'))}
     </div>
     ${editor(d)}
-    ${notice('Время показано в часовом поясе браузера, хранится в UTC. Лучшее время ниши — корреляция, не гарантия.')}`;
+    ${notice(t('tzNote'))}`;
 
   const move = (delta) => {
     if (mode === 'week') anchor.setDate(anchor.getDate() + 7 * delta);
@@ -165,7 +184,7 @@ async function viewCalendar() {
   });
   $('#calSave')?.addEventListener('click', () => {
     const v = $('#calWhen').value;
-    if (!v) { toast('Укажите дату и время', 'err'); return; }
+    if (!v) { toast(t('pickDate'), 'err'); return; }
     plan(selected, new Date(v).toISOString());
   });
   $('#calUnplan')?.addEventListener('click', () => plan(selected, null));

@@ -16,6 +16,7 @@ from application import metadata_review as MR
 from application import search as Q
 from application import transcripts as TR
 from domain import idea_verdicts as IV
+from domain.i18n import tr
 from domain.users import LOCAL_USER_ID
 
 HOOK_WORDS = 75          # ~30 seconds of speech
@@ -52,7 +53,7 @@ def _hook(conn, video_id, skipped):
                 "text": " ".join(words[:HOOK_WORDS])}
     _skip(skipped, "hook", "no transcript stored -- transcripts are never fetched automatically")
     return {"available": False,
-            "action": "Вставьте транскрипт на экране «Транскрипты» — крючок добавится в бриф."}
+            "action": tr("Вставьте транскрипт на экране «Транскрипты» — крючок добавится в бриф.")}
 
 
 def _angle(niche, channel_id):

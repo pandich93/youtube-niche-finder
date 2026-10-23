@@ -1,23 +1,28 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, q, num, compact, mult, ago, esc, toast, sectionHead, notice, empty, barList, scatterChart, sponsorBlock, state, nicheTemplateRiskBlock, nichePolicyBlock, outlierTraitsBlock, mountProfit } from '../ui.js';
 import { view, plabel, nicheOverviewBlock, render } from '../shared.js';
+import { dict } from '../i18n.js';
+import ru from '../i18n/ru/niche.js';
+import en from '../i18n/en/niche.js';
+
+const t = dict({ ru, en });
 
 /* Доля хитов по тегам одной группы -- barList из tag_stats. Группа вводится
    свободным текстом (теги произвольные: theme/trigger/format/...), поэтому
    запоминаем последнюю выбранную в localStorage. */
 function tagStatsSection(stats, tagGroup) {
   const body = stats.found === false
-    ? empty(stats.hint || 'тегов в этой группе пока нет')
-    : barList((stats.tags || []).map((t) => ({
-        name: t.tag, value: t.hitRate, display: `${t.hitRate}%`,
-        tip: `${t.tag}: ${t.videos} видео, hitRate ${t.hitRate}%, lift ${t.lift ?? '—'}`,
+    ? empty(stats.hint || t('tagsEmpty'))
+    : barList((stats.tags || []).map((s) => ({
+        name: s.tag, value: s.hitRate, display: `${s.hitRate}%`,
+        tip: t('tagTip', { tag: s.tag, videos: s.videos, rate: s.hitRate, lift: s.lift ?? '—' }),
       })));
   return `
     <div class="card">
-      ${sectionHead('Доля хитов по тегам', stats.found === false ? '' :
-          `группа «${esc(tagGroup)}» · база по нише ${stats.baseRate}%`,
+      ${sectionHead(t('tagStatsTitle'), stats.found === false ? '' :
+          t('tagStatsSub', { group: esc(tagGroup), rate: stats.baseRate }),
         `<input type="text" id="tagGroupInput" value="${esc(tagGroup)}"
-           placeholder="группа тегов" style="width:140px">`)}
+           placeholder="${esc(t('tagGroupPlaceholder'))}" style="width:140px">`)}
       ${body}
     </div>`;
 }
@@ -34,23 +39,24 @@ function insightsPanelHtml(d) {
   const requests = d.requests || [];
   const ideas = d.video_ideas || [];
   const s = d.sentiment;
-  const meta = d.cached ? 'из кеша' : `квота потрачена: ${d.quotaSpent ?? 0}`;
+  const meta = d.cached ? t('fromCache') : t('quotaSpentMeta', { spent: d.quotaSpent ?? 0 });
   if (!pains.length && !requests.length && !ideas.length) {
-    return empty(`LLM не нашёл значимых сигналов в комментариях (${meta})`);
+    return empty(t('insightsEmpty', { meta }));
   }
   return `
     <div style="border:1px solid var(--border);border-radius:10px;padding:12px">
       ${s ? `<div class="row-sub" style="margin-bottom:8px">
-        Тональность: ${Math.round(s.positive * 100)}% позитив ·
-        ${Math.round(s.neutral * 100)}% нейтрально ·
-        ${Math.round(s.negative * 100)}% негатив · ${meta}</div>` : ''}
-      ${pains.length ? `<div style="margin-bottom:8px"><b>Боли</b>
+        ${t('sentiment', {
+          pos: Math.round(s.positive * 100), neu: Math.round(s.neutral * 100),
+          neg: Math.round(s.negative * 100), meta,
+        })}</div>` : ''}
+      ${pains.length ? `<div style="margin-bottom:8px"><b>${t('pains')}</b>
         <ul style="margin:4px 0 0 18px">${pains.map((p) => `<li>${esc(p.text)}
           (~${p.count_estimate})${p.quotes?.[0] ? ` <span class="row-sub">«${esc(p.quotes[0])}»</span>` : ''}</li>`).join('')}</ul></div>` : ''}
-      ${requests.length ? `<div style="margin-bottom:8px"><b>Запросы</b>
+      ${requests.length ? `<div style="margin-bottom:8px"><b>${t('requests')}</b>
         <ul style="margin:4px 0 0 18px">${requests.map((r) => `<li>${esc(r.topic)}
           <span class="row-sub">«${esc(r.evidence)}»</span></li>`).join('')}</ul></div>` : ''}
-      ${ideas.length ? `<div><b>Идеи видео</b>
+      ${ideas.length ? `<div><b>${t('videoIdeas')}</b>
         <ul style="margin:4px 0 0 18px">${ideas.map((i) => `<li>${esc(i.title)}
           <span class="row-sub">— ${esc(i.why)}</span></li>`).join('')}</ul></div>` : ''}
     </div>`;
@@ -63,7 +69,7 @@ function wireCommentInsights() {
     if (!panel) return;
     if (!panel.hidden) { panel.hidden = true; return; }
     panel.hidden = false;
-    panel.innerHTML = empty('Загружаю… (тратит квоту YouTube и, если включён LLM, деньги)');
+    panel.innerHTML = empty(t('insightsLoadingVideo'));
     btn.disabled = true;
     try {
       const d = await api(`/api/videos/${encodeURIComponent(videoId)}/insights`,
@@ -81,7 +87,7 @@ function wireCommentInsights() {
     if (!panel) return;
     if (!panel.hidden) { panel.hidden = true; return; }
     panel.hidden = false;
-    panel.innerHTML = empty('Загружаю…');
+    panel.innerHTML = empty(t('loading'));
     nicheBtn.disabled = true;
     try {
       const d = await api(`/api/niches/${encodeURIComponent(nicheBtn.dataset.slug)}/insights`);
@@ -96,31 +102,35 @@ function wireCommentInsights() {
 
 /* Пробелы в контенте (план 03): вопросы зрителей из комментариев топовых видео
    ниши, на которые в базе ещё нет видео. Экран читает только кэш (GET, 0 квоты);
-   комментарии непрочитанных видео -- строго по кнопке (POST, 1 unit на видео). */
-const GAP_STATUS = { free: ['свободно', 'chip-good'], partial: ['частично', 'chip-warn'] };
-const GAP_SKIP = {
-  'not-fetched': 'комментарии ещё не читали',
-  'quota-exhausted': 'квота YouTube кончилась',
-  'no-comments': 'комментариев нет',
-  'llm-unavailable': 'LLM недоступен',
-  error: 'ошибка',
-};
+   комментарии непрочитанных видео -- строго по кнопке (POST, 1 unit на видео).
+   Функции, а не константы: подписи переводятся при каждом рендере. */
+const gapStatus = () => ({ free: [t('gapFree'), 'chip-good'], partial: [t('gapPartial'), 'chip-warn'] });
+const gapSkip = () => ({
+  'not-fetched': t('skipNotFetched'),
+  'quota-exhausted': t('skipQuotaExhausted'),
+  'no-comments': t('skipNoComments'),
+  'llm-unavailable': t('skipLlmUnavailable'),
+  error: t('skipError'),
+});
 
 function gapItemHtml(g) {
-  const st = GAP_STATUS[g.status] || [g.status, ''];
+  const st = gapStatus()[g.status] || [g.status, ''];
   const src = g.sourceVideos[0];
   const near = g.nearestVideo || g.nearestTranscript;
   return `<li style="white-space:normal;margin-bottom:10px">
     <div><span class="chip ${st[1]}">${esc(st[0])}</span> <b>${esc(g.topic)}</b></div>
-    <div class="row-sub">вопросов: ${g.askers} · лайков: ${compact(g.likes)} · видео-источников: ${g.sourceVideos.length}
-      · спрос ${esc(g.demand)}${g.coverage != null ? ` · покрытие ${Math.round(g.coverage * 100)}%` : ''}</div>
+    <div class="row-sub">${t('gapStats', {
+      askers: g.askers, likes: compact(g.likes), sources: g.sourceVideos.length, demand: esc(g.demand),
+    })}${g.coverage != null ? t('gapCoverage', { pct: Math.round(g.coverage * 100) }) : ''}</div>
     ${g.examples.filter((e) => e !== g.topic).map((e) => `<div class="row-sub">«${esc(e)}»</div>`).join('')}
-    ${near ? `<div class="row-sub">Ближе всего: ${g.nearestVideo
-      ? `<a href="https://www.youtube.com/watch?v=${esc(g.nearestVideo.videoId)}" target="_blank" rel="noopener">${esc(g.nearestVideo.title)}</a>`
-      : `транскрипт «${esc(g.nearestTranscript.title || g.nearestTranscript.videoId)}»`}
-      (${Math.round((near.similarity || 0) * 100)}%)</div>` : ''}
+    ${near ? `<div class="row-sub">${t('gapNearest', {
+      target: g.nearestVideo
+        ? `<a href="https://www.youtube.com/watch?v=${esc(g.nearestVideo.videoId)}" target="_blank" rel="noopener">${esc(g.nearestVideo.title)}</a>`
+        : t('gapNearestTranscript', { title: esc(g.nearestTranscript.title || g.nearestTranscript.videoId) }),
+      pct: Math.round((near.similarity || 0) * 100),
+    })}</div>` : ''}
     <a class="btn btn-ghost btn-sm" style="margin-top:4px"
-       href="#/brief/${encodeURIComponent(src)}?gap=${encodeURIComponent(g.topic)}">В бриф</a>
+       href="#/brief/${encodeURIComponent(src)}?gap=${encodeURIComponent(g.topic)}">${t('toBrief')}</a>
   </li>`;
 }
 
@@ -129,22 +139,24 @@ function gapsBlock(d, slug) {
   const notRead = (d.skippedVideos || []).filter((s) => s.reason === 'not-fetched').length;
   const other = (d.skippedVideos || []).filter((s) => s.reason !== 'not-fetched');
   const base = d.coverageBase || {};
-  const sub = `${d.mode === 'llm' ? 'вопросы выделил LLM' : 'вопросы отобраны правилами'}
-    · проверено по ${compact(base.videos)} видео и ${compact(base.transcripts)} транскриптам ниши`;
+  const sub = t('gapsSub', {
+    mode: d.mode === 'llm' ? t('gapsModeLlm') : t('gapsModeRules'),
+    videos: compact(base.videos), transcripts: compact(base.transcripts),
+  });
   const btn = notRead ? `<button class="btn btn-ghost btn-sm" id="gapsFetch" data-slug="${esc(slug)}" type="button">
-    Прочитать комментарии: ${notRead} видео (квота ~${notRead}${d.mode === 'llm' ? ' + LLM' : ''})</button>` : '';
+    ${t('gapsFetchBtn', { count: notRead, llm: d.mode === 'llm' ? ' + LLM' : '' })}</button>` : '';
   const gaps = d.gaps || [];
+  const skip = gapSkip();
   return `<div class="card" id="gapsCard">
-    ${sectionHead('Пробелы в контенте', sub, btn)}
-    ${d.modeNote ? `<div class="section-sub">Без LLM: больше шума и пропусков, особенно не на английском и русском.</div>` : ''}
+    ${sectionHead(t('gapsTitle'), sub, btn)}
+    ${d.modeNote ? `<div class="section-sub">${t('gapsNoLlm')}</div>` : ''}
     ${gaps.length ? `<ul class="digest-list">${gaps.map(gapItemHtml).join('')}</ul>`
-      : empty(notRead ? 'комментарии топовых видео ещё не читали — нажмите кнопку выше'
-        : 'в комментариях не нашлось вопросов, на которые нет видео')}
-    ${d.coveredCount ? `<div class="section-sub">Уже закрыто видео из базы: ${d.coveredCount}.</div>` : ''}
-    ${other.length ? `<div class="section-sub">Пропущено видео: ${other.map((s) =>
-      `«${esc(s.title || s.videoId)}» — ${esc(GAP_SKIP[s.reason] || s.reason)}`).join('; ')}</div>` : ''}
-    <div class="section-sub">Пробел реален настолько, насколько полна база: покрытие проверяется только по собранному здесь.
-      ${d.quotaSpent ? ` Потрачено квоты: ${d.quotaSpent}.` : ''}</div>
+      : empty(notRead ? t('gapsEmptyNotRead') : t('gapsEmptyNone'))}
+    ${d.coveredCount ? `<div class="section-sub">${t('gapsCovered', { count: d.coveredCount })}</div>` : ''}
+    ${other.length ? `<div class="section-sub">${t('gapsSkipped', { list: other.map((s) =>
+      t('gapsSkippedItem', { title: esc(s.title || s.videoId), reason: esc(skip[s.reason] || s.reason) })).join('; ') })}</div>` : ''}
+    <div class="section-sub">${t('gapsCaveat')}
+      ${d.quotaSpent ? t('gapsQuotaSpent', { spent: d.quotaSpent }) : ''}</div>
   </div>`;
 }
 
@@ -152,15 +164,15 @@ function wireGaps() {
   const btn = $('#gapsFetch');
   if (!btn) return;
   btn.addEventListener('click', async () => {
-    btn.disabled = true; btn.textContent = 'Читаю комментарии…';
+    btn.disabled = true; btn.textContent = t('readingComments');
     try {
       const d = await api(`/api/niches/${encodeURIComponent(btn.dataset.slug)}/content-gaps`,
         { method: 'POST', body: {} });
       $('#gapsCard').outerHTML = gapsBlock(d, btn.dataset.slug);
       wireGaps();
-      toast(`Готово, квоты потрачено: ${d.quotaSpent || 0}`, 'ok');
+      toast(t('gapsDone', { spent: d.quotaSpent || 0 }), 'ok');
     } catch (e) {
-      btn.disabled = false; btn.textContent = 'Повторить';
+      btn.disabled = false; btn.textContent = t('retry');
       toast(e.message, 'err');
     }
   });
@@ -172,7 +184,7 @@ function wireGaps() {
 function thumbCard(e, sub) {
   return `<article class="vcard">
     <a class="thumb" href="https://www.youtube.com/watch?v=${esc(e.videoId)}" target="_blank" rel="noopener">
-      ${e.thumbnail ? `<img src="${esc(e.thumbnail)}" alt="" loading="lazy">` : '<div class="thumb-fallback">без обложки</div>'}</a>
+      ${e.thumbnail ? `<img src="${esc(e.thumbnail)}" alt="" loading="lazy">` : `<div class="thumb-fallback">${t('noThumb')}</div>`}</a>
     <div class="vcard-title">${esc(e.title || e.videoId)}</div>
     <div class="vcard-meta">${sub}</div>
   </article>`;
@@ -180,21 +192,22 @@ function thumbCard(e, sub) {
 
 function thumbStylesBlock(d, slug) {
   if (!d) return '';
-  const head = sectionHead('Стили превью', 'похожие по картинке превью ниши, сгруппированные, и как каждая группа заходит',
-    `<input type="text" id="thumbQuery" placeholder="найти превью: red arrow, shocked face" style="width:260px">`);
+  const head = sectionHead(t('thumbStylesTitle'), t('thumbStylesSub'),
+    `<input type="text" id="thumbQuery" placeholder="${esc(t('thumbQueryPlaceholder'))}" style="width:260px">`);
   const embedBtn = `<button class="btn btn-ghost btn-sm" id="thumbEmbed" data-slug="${esc(slug)}" type="button">
-    Посчитать векторы превью ниши (до 100, квота не тратится)</button>`;
+    ${t('thumbEmbedBtn')}</button>`;
   const body = d.found
     ? d.styles.map((s) => `<div style="margin-bottom:14px">
-        <div class="row-sub"><b>Стиль ${s.style}</b> · ${num(s.videos)} видео (${Math.round(s.share * 100)}%)
-          · медиана множителя ${s.medianOutlierScore != null ? mult(s.medianOutlierScore) : '—'}
-          · медиана просмотров ${compact(s.medianViews)}</div>
+        <div class="row-sub">${t('styleLine', {
+          style: s.style, videos: num(s.videos), share: Math.round(s.share * 100),
+          mult: s.medianOutlierScore != null ? mult(s.medianOutlierScore) : '—',
+          views: compact(s.medianViews),
+        })}</div>
         <div class="cards">${s.examples.map((e) => thumbCard(e,
-          `${compact(e.views)} просмотров${e.outlierScore != null ? ` · ${mult(e.outlierScore)}` : ''}`)).join('')}</div>
+          `${t('viewsCount', { views: compact(e.views) })}${e.outlierScore != null ? ` · ${mult(e.outlierScore)}` : ''}`)).join('')}</div>
       </div>`).join('')
-      + `<div class="section-sub">Группы — это похожий вид превью, а не правило. Медиана множителя — связь, не причина.
-          CLIP сравнивает стиль и содержимое картинки, а не надписи на ней.</div>`
-    : `${empty(`векторы есть у ${num(d.embedded)} из ${num(d.videos)} превью, нужно хотя бы 12`)}${embedBtn}`;
+      + `<div class="section-sub">${t('stylesCaveat')}</div>`
+    : `${empty(t('stylesNotEnough', { embedded: num(d.embedded), total: num(d.videos) }))}${embedBtn}`;
   return `<div class="card" id="thumbStylesCard">${head}<div id="thumbSearchOut"></div>${body}</div>`;
 }
 
@@ -204,25 +217,25 @@ function wireThumbStyles(slug) {
     const out = $('#thumbSearchOut');
     const query = input.value.trim();
     if (!query) { out.innerHTML = ''; return; }
-    out.innerHTML = empty('Ищу… (первый поиск скачивает текстовую модель, ~0.25 ГБ)');
+    out.innerHTML = empty(t('thumbSearching'));
     try {
       const r = await api(`/api/thumbnails/search${q({ q: query, niche: slug, limit: 8 })}`);
       out.innerHTML = r.results.length
         ? `<div class="cards" style="margin-bottom:14px">${r.results.map((e) => thumbCard(e,
-            `сходство ${Math.round(e.similarity * 100)}% · ${compact(e.views)} просмотров`)).join('')}</div>`
-        : empty(r.hint || 'ничего похожего');
+            t('similarityViews', { pct: Math.round(e.similarity * 100), views: compact(e.views) }))).join('')}</div>`
+        : empty(r.hint || t('nothingSimilar'));
     } catch (e) { out.innerHTML = notice(esc(e.message)); }
   });
   const btn = $('#thumbEmbed');
   if (btn) btn.addEventListener('click', async () => {
-    btn.disabled = true; btn.textContent = 'Считаю… (около секунды на превью)';
+    btn.disabled = true; btn.textContent = t('thumbEmbedding');
     try {
       const r = await api(`/api/thumbnails/embed${q({ limit: 100, niche: btn.dataset.slug })}`, { method: 'POST' });
-      toast(`Готово: ${r.embedded} векторов, не прочитано ${r.failed}`, 'ok');
+      toast(t('thumbEmbedDone', { embedded: r.embedded, failed: r.failed }), 'ok');
       const d = await api(`/api/niches/${encodeURIComponent(slug)}/thumbnail-styles`);
       $('#thumbStylesCard').outerHTML = thumbStylesBlock(d, slug);
       wireThumbStyles(slug);
-    } catch (e) { btn.disabled = false; btn.textContent = 'Повторить'; toast(e.message, 'err'); }
+    } catch (e) { btn.disabled = false; btn.textContent = t('retry'); toast(e.message, 'err'); }
   });
 }
 
@@ -230,9 +243,9 @@ function nicheVideoTagsSection(videos, tagsByVideo, tagGroup, nicheSlug) {
   if (!videos.length) return '';
   return `
     <div class="card">
-      ${sectionHead('Видео ниши', `теги группы «${esc(tagGroup)}» — правится вручную`,
+      ${sectionHead(t('nicheVideosTitle'), t('nicheVideosSub', { group: esc(tagGroup) }),
         `<button class="btn btn-ghost btn-sm" id="nicheInsightsBtn" data-slug="${esc(nicheSlug)}">
-           Инсайты по нише из кеша</button>`)}
+           ${t('nicheInsightsBtn')}</button>`)}
       <div id="nicheInsightsPanel" hidden style="margin-bottom:12px"></div>
       <div class="rows">${videos.map((v) => `
         <div class="row" data-video-id="${esc(v.videoId)}" style="align-items:flex-start;flex-direction:column;gap:8px">
@@ -241,16 +254,16 @@ function nicheVideoTagsSection(videos, tagsByVideo, tagGroup, nicheSlug) {
               <div class="row-title">
                 <a href="https://www.youtube.com/watch?v=${esc(v.videoId)}" target="_blank" rel="noopener">${esc(v.title)}</a>
               </div>
-              <div class="row-sub">${compact(v.views)} просмотров · ${mult(v.outlierScore)}</div>
+              <div class="row-sub">${t('viewsCount', { views: compact(v.views) })} · ${mult(v.outlierScore)}</div>
               <div class="tag-editor" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-                ${(tagsByVideo[v.videoId] || []).map((t) => `
-                  <span class="chip tag-chip" data-tag="${esc(t)}">${esc(t)}
-                    <a href="#" class="tag-remove" data-tag="${esc(t)}" title="убрать тег">×</a>
+                ${(tagsByVideo[v.videoId] || []).map((tag) => `
+                  <span class="chip tag-chip" data-tag="${esc(tag)}">${esc(tag)}
+                    <a href="#" class="tag-remove" data-tag="${esc(tag)}" title="${esc(t('removeTag'))}">×</a>
                   </span>`).join('')}
-                <input type="text" class="tag-add-input" placeholder="+ тег" style="width:100px">
+                <input type="text" class="tag-add-input" placeholder="${esc(t('addTagPlaceholder'))}" style="width:100px">
               </div>
             </div>
-            <button class="btn btn-ghost btn-sm insights-btn" data-insights-video-id="${esc(v.videoId)}">Инсайты из комментариев</button>
+            <button class="btn btn-ghost btn-sm insights-btn" data-insights-video-id="${esc(v.videoId)}">${t('commentInsightsBtn')}</button>
           </div>
           <div class="insights-panel" data-insights-video-id="${esc(v.videoId)}" hidden style="width:100%"></div>
         </div>`).join('')}</div>
@@ -279,7 +292,7 @@ function wireNicheTagEditor(slug, tagGroup) {
 
     rowEl.querySelectorAll('.tag-remove').forEach((a) => a.addEventListener('click', async (e) => {
       e.preventDefault();
-      try { await writeTags(videoId, current().filter((t) => t !== a.dataset.tag)); }
+      try { await writeTags(videoId, current().filter((tag) => tag !== a.dataset.tag)); }
       catch (err) { toast(err.message, 'err'); }
     }));
 
@@ -301,17 +314,20 @@ function proposedTagsSection(proposed) {
   if (!proposed.length) return '';
   return `
     <div class="card">
-      ${sectionHead('Предложенные теги', 'LLM предложил теги вне таксономии ниши — подтвердите или отклоните')}
+      ${sectionHead(t('proposedTitle'), t('proposedSub'))}
       <div class="rows">${proposed.map((p) => `
         <div class="row" data-proposed-video-id="${esc(p.videoId)}" data-tag-group="${esc(p.tagGroup)}" data-tag="${esc(p.tag)}">
           <div class="row-main">
             <div class="row-title">${esc(p.tag)} <span class="chip">${esc(p.tagGroup)}</span></div>
-            <div class="row-sub">видео <a href="https://www.youtube.com/watch?v=${esc(p.videoId)}"
-              target="_blank" rel="noopener">${esc(p.videoId)}</a> · ${ago(p.createdAt)}</div>
+            <div class="row-sub">${t('proposedVideo', {
+              link: `<a href="https://www.youtube.com/watch?v=${esc(p.videoId)}"
+              target="_blank" rel="noopener">${esc(p.videoId)}</a>`,
+              ago: ago(p.createdAt),
+            })}</div>
           </div>
           <div class="row-metrics">
-            <button class="btn btn-ghost btn-sm proposed-accept">принять</button>
-            <button class="btn btn-ghost btn-sm proposed-reject">отклонить</button>
+            <button class="btn btn-ghost btn-sm proposed-accept">${t('accept')}</button>
+            <button class="btn btn-ghost btn-sm proposed-reject">${t('reject')}</button>
           </div>
         </div>`).join('')}</div>
     </div>`;
@@ -324,7 +340,7 @@ function wireProposedTags() {
       try {
         await api('/api/tags/proposed/resolve', { method: 'POST',
           body: { videoId, tagGroup, tag, accept } });
-        toast(accept ? 'Тег принят' : 'Тег отклонён', 'ok');
+        toast(accept ? t('tagAccepted') : t('tagRejected'), 'ok');
         render();
       } catch (e) { toast(e.message, 'err'); }
     };
@@ -341,11 +357,11 @@ let scatterFilters = { channels: '', includeShorts: true };
 function scatterSection(videos, filters) {
   return `
     <div class="card">
-      ${sectionHead('Просмотры по датам публикации', 'цвет — канал; полый контур — моложе 30 дней; крупный контур — аномалия', `
-        <input type="text" id="scatterChannels" placeholder="ID каналов через запятую"
+      ${sectionHead(t('scatterTitle'), t('scatterSub'), `
+        <input type="text" id="scatterChannels" placeholder="${esc(t('scatterChannelsPlaceholder'))}"
           value="${esc(filters.channels)}" style="width:220px">
         <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)">
-          <input type="checkbox" id="scatterHideShorts" ${filters.includeShorts ? '' : 'checked'}> скрыть Shorts
+          <input type="checkbox" id="scatterHideShorts" ${filters.includeShorts ? '' : 'checked'}> ${t('hideShorts')}
         </label>`)}
       ${scatterChart(videos)}
     </div>`;
@@ -381,24 +397,24 @@ async function viewNiche(slug) {
     api(`/api/niches/${encodeURIComponent(slug)}/content-gaps`).catch(() => null),
     api(`/api/niches/${encodeURIComponent(slug)}/thumbnail-styles`).catch(() => null),
   ]);
-  if (!d.found) { view.innerHTML = notice(esc(d.hint || 'ниша не найдена')); return; }
+  if (!d.found) { view.innerHTML = notice(esc(d.hint || t('nicheNotFound'))); return; }
 
   const tagsByVideo = {};
-  for (const t of (videoTags.tags || [])) {
-    if (t.tagGroup !== tagGroup) continue;
-    (tagsByVideo[t.videoId] ||= []).push(t.tag);
+  for (const tg of (videoTags.tags || [])) {
+    if (tg.tagGroup !== tagGroup) continue;
+    (tagsByVideo[tg.videoId] ||= []).push(tg.tag);
   }
 
   view.innerHTML = nicheOverviewBlock(d,
-    sectionHead(`Ниша: ${slug}`, `${esc(d.query || '')} · ${plabel(state.period)}`, `
-      <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.tsv">Экспорт TSV</a>
-      <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.csv">Экспорт CSV</a>`))
+    sectionHead(t('nicheTitle', { slug }), `${esc(d.query || '')} · ${plabel(state.period)}`, `
+      <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.tsv">${t('exportTsv')}</a>
+      <a class="btn btn-ghost btn-sm" href="/api/niche/${encodeURIComponent(slug)}/export.csv">${t('exportCsv')}</a>`))
     + nicheTemplateRiskBlock(risk)
     + '<div id="nichePolicy"></div>'
     + '<div id="nicheTraits"></div>'
     + '<div id="nicheProfit"></div>'
     + scatterSection(scatter.videos || [], scatterFilters)
-    + sponsorBlock(sponsors, 'Спонсоры ниши', plabel(state.period))
+    + sponsorBlock(sponsors, t('nicheSponsors'), plabel(state.period))
     + gapsBlock(gaps, slug)
     + thumbStylesBlock(thumbStyles, slug)
     + tagStatsSection(stats, tagGroup)

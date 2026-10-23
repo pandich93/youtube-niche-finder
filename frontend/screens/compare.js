@@ -1,6 +1,11 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { api, num, esc, sectionHead, notice, empty, trajectoryChart } from '../ui.js';
 import { view } from '../shared.js';
+import { dict } from '../i18n.js';
+import ru from '../i18n/ru/compare.js';
+import en from '../i18n/en/compare.js';
+
+const t = dict({ ru, en });
 
 /* ------------------------------------------- Сравнение траекторий (план 20) */
 
@@ -14,30 +19,28 @@ function saveBasket(ids) {
 async function viewCompare(arg) {
   const ids = (arg || '').split(',').map((x) => decodeURIComponent(x).trim()).filter(Boolean).slice(0, 5);
   if (!ids.length) {
-    view.innerHTML = empty('добавьте видео ссылкой «сравнить» на любой карточке видео');
+    view.innerHTML = empty(t('emptyBasket'));
     return;
   }
   saveBasket(ids);
   const d = await api(`/api/videos/trajectory?ids=${ids.map(encodeURIComponent).join(',')}`);
   const without = (id) => `#/compare/${ids.filter((x) => x !== id).map(encodeURIComponent).join(',')}`;
   view.innerHTML = `
-    ${d.missing.length ? notice(`Нет в базе: ${d.missing.map(esc).join(', ')}`, 'warn') : ''}
+    ${d.missing.length ? notice(t('missing', { ids: d.missing.map(esc).join(', ') }), 'warn') : ''}
     <div class="card">
-      ${sectionHead('Сравнение траекторий', 'просмотры по возрасту видео — в одном возрасте, а не в одну дату')}
+      ${sectionHead(t('title'), t('sub'))}
       ${trajectoryChart(d.videos)}
-      <div class="section-sub" style="margin-top:10px">Точки — снимки воркера: каждые 3 часа первую неделю, потом раз
-        в сутки до 30 дней. Пунктир — сколько набрало бы обычное видео этого канала к тому же возрасту (медиана канала ×
-        кривая взросления), это оценка niche-finder. Квота не тратится.</div>
+      <div class="section-sub" style="margin-top:10px">${t('chartNote')}</div>
     </div>
     <div class="card">
-      ${sectionHead('Видео в сравнении', `${d.videos.length} из 5 — ещё добавляются ссылкой «сравнить» на карточках`)}
+      ${sectionHead(t('basketTitle'), t('basketSub', { n: d.videos.length }))}
       <div class="rows">${d.videos.map((v) => `<div class="row">
         <div class="row-main">
           <div class="row-title"><a href="https://www.youtube.com/watch?v=${esc(v.videoId)}" target="_blank" rel="noopener">${esc(v.title || v.videoId)}</a></div>
-          <div class="row-sub">${v.channelId ? `<a href="#/channel/${esc(v.channelId)}">${esc(v.channelTitle || v.channelId)}</a> · ` : ''}${num(v.views)} просмотров
-            · снимков ${num(v.points.length)}${v.baselineMedianViews ? ` · медиана канала ${num(v.baselineMedianViews)}` : ''}</div>
+          <div class="row-sub">${v.channelId ? `<a href="#/channel/${esc(v.channelId)}">${esc(v.channelTitle || v.channelId)}</a> · ` : ''}${t('views', { views: num(v.views) })}
+            · ${t('snapshots', { snaps: num(v.points.length) })}${v.baselineMedianViews ? ` · ${t('channelMedian', { median: num(v.baselineMedianViews) })}` : ''}</div>
         </div>
-        <a class="btn btn-ghost btn-sm" href="${without(v.videoId)}">Убрать</a>
+        <a class="btn btn-ghost btn-sm" href="${without(v.videoId)}">${t('remove')}</a>
       </div>`).join('')}</div>
     </div>`;
 }

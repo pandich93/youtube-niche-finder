@@ -40,6 +40,12 @@ ROUTES = [
     "compare/avid000,avid001",
 ]
 
+LOCALES = ["ru", "en"]
+
+# Кириллица, допустимая в английском интерфейсе: данные из seed_demo.py
+# (название канала), а не текст интерфейса.
+DATA_CYRILLIC = ["Нейросети по-русски"]
+
 READY_JS = """() => {
   const v = document.querySelector('#view');
   return !!v && !v.querySelector('.skeleton-page') && v.textContent.trim().length > 0;
@@ -123,6 +129,22 @@ def browser():
         b.close()
 
 
+def _new_page(browser, locale="ru"):
+    """Страница с выбранным языком интерфейса: nf.locale в localStorage ставится
+    до загрузки скриптов. Проверки текста ниже написаны по-русски -- по умолчанию ru.
+    Закрывать через page.context.close()."""
+    ctx = browser.new_context(viewport={"width": 1400, "height": 900}, locale="en-US")
+    ctx.add_init_script(f"localStorage.setItem('nf.locale', '{locale}')")
+    return ctx.new_page()
+
+
+def _ui_cyrillic(text):
+    """Куски кириллицы, которые не объясняются данными из seed_demo.py."""
+    # слова одной строки: аватар «Н» и название канала под ним -- разные куски
+    pieces = re.findall(r"[А-Яа-яЁё][А-Яа-яЁё\-]*(?:[ \t]+[А-Яа-яЁё][А-Яа-яЁё\-]*)*", text)
+    return sorted({p for p in pieces if not any(p in d for d in DATA_CYRILLIC)})
+
+
 def _is_benign_console(text):
     # Ответ 4xx/5xx браузер сам пишет в консоль как "Failed to load resource".
     # 4xx для экранов -- штатно (например, 428 без ключа YouTube), а 5xx
@@ -150,9 +172,10 @@ def test_routes_list_matches_router_js():
     )
 
 
+@pytest.mark.parametrize("locale", LOCALES)
 @pytest.mark.parametrize("route", ROUTES)
-def test_screen_renders_without_errors(browser, base_url, route):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
+def test_screen_renders_without_errors(browser, base_url, route, locale):
+    page = _new_page(browser, locale)
     problems = []
     page.on("console", lambda m: m.type == "error" and not _is_benign_console(m.text)
             and problems.append(f"console.error: {m.text}"))
@@ -165,12 +188,84 @@ def test_screen_renders_without_errors(browser, base_url, route):
         page.wait_for_load_state("networkidle")
         SHOTS.mkdir(exist_ok=True)
         shot = re.sub(r"[^\w.-]+", "_", route)
-        page.screenshot(path=str(SHOTS / f"{shot}.png"), full_page=True)
+        page.screenshot(path=str(SHOTS / f"{shot}.{locale}.png"), full_page=True)
         text = page.inner_text("#view")
+        chrome = page.inner_text(".sidebar") + "\n" + page.inner_text(".topbar")
     finally:
-        page.close()
-    assert "Не удалось загрузить данные" not in text, text[:500]
+        page.context.close()
+    assert "Не удалось загрузить данные" not in text and "Could not load the data" not in text, text[:500]
     assert not problems, "\n".join(problems)
+    if locale == "en":
+        # кнопка языка законно показывает «Русский» -- остальное должно быть английским
+        left = _ui_cyrillic(text + "\n" + chrome.replace("Русский", ""))
+        assert not left, f"#/{route} (en): русский текст в интерфейсе: {left}"
+
+
+def test_dictionaries_match_and_every_key_used_exists(browser, base_url):
+    """У каждого неймспейса одинаковые ключи и {плейсхолдеры} в ru и en, и каждый
+    t('ключ') в коде есть в словаре своего модуля."""
+    i18n = ROOT / "frontend" / "i18n"
+    names = sorted(p.stem for p in (i18n / "ru").glob("*.js"))
+    page = _new_page(browser, "ru")
+    try:
+        page.goto(f"{base_url}/#/overview")
+        dicts = page.evaluate("""async (names) => {
+          const out = {};
+          for (const ns of names) out[ns] = {
+            ru: (await import(`/i18n/ru/${ns}.js`)).default,
+            en: (await import(`/i18n/en/${ns}.js`)).default };
+          return out;
+        }""", names)
+    finally:
+        page.context.close()
+
+    def flat(v):
+        return " ".join(v.values()) if isinstance(v, dict) else str(v)
+
+    errors = []
+    for ns, d in dicts.items():
+        for k in sorted(set(d["ru"]) ^ set(d["en"])):
+            errors.append(f"{ns}.{k}: есть только в {'ru' if k in d['ru'] else 'en'}")
+        for k in set(d["ru"]) & set(d["en"]):
+            ph = [sorted(set(re.findall(r"\{(\w+)\}", flat(d[loc][k])))) for loc in ("ru", "en")]
+            if ph[0] != ph[1]:
+                errors.append(f"{ns}.{k}: плейсхолдеры ru {ph[0]} != en {ph[1]}")
+
+    imp = re.compile(r"import\s+ru\s+from\s+'[./]*i18n/ru/(\w+)\.js'")
+    for path in (ROOT / "frontend").rglob("*.js"):
+        # i18n.js -- сама библиотека: в её комментарии пример импорта и t('title')
+        if "i18n" in path.parts or "tests" in path.parts or path.name == "i18n.js":
+            continue
+        src = path.read_text(encoding="utf-8")
+        m = imp.search(src)
+        if not m:
+            continue
+        keys = dicts.get(m.group(1), {}).get("en", {})
+        for key in set(re.findall(r"\bt\(\s*'(\w+)'", src)):
+            if key not in keys:
+                errors.append(f"{path.relative_to(ROOT).as_posix()}: t('{key}') нет в словаре {m.group(1)}")
+    assert not errors, "\n".join(sorted(errors))
+
+
+def test_language_switch_rerenders_without_reload(browser, base_url):
+    page = _new_page(browser, "en")
+    problems = []
+    page.on("pageerror", lambda e: problems.append(str(e)))
+    try:
+        page.goto(f"{base_url}/#/overview")
+        page.wait_for_function(READY_JS, timeout=30000)
+        assert page.inner_text("#crumbSection") == "Overview"
+        page.evaluate("window.__sameDocument = true")
+        page.click("#langToggle")
+        page.wait_for_function("() => document.querySelector('#crumbSection').textContent === 'Обзор'",
+                               timeout=15000)
+        state = page.evaluate("""() => ({ lang: document.documentElement.lang,
+          same: window.__sameDocument === true, stored: localStorage.getItem('nf.locale'),
+          nav: document.querySelector('#nav .nav-item .nav-label').textContent })""")
+    finally:
+        page.context.close()
+    assert state == {"lang": "ru", "same": True, "stored": "ru", "nav": "Обзор"}, state
+    assert not problems, problems
 
 
 @pytest.mark.parametrize("route,expected", [
@@ -206,14 +301,14 @@ def test_screen_renders_without_errors(browser, base_url, route):
      ["Бриф под пробел", "how to start a tiny AI lab?"]),
 ])
 def test_content_gaps_parts_are_on_screen(browser, base_url, route, expected):
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    page = _new_page(browser)
     try:
         page.goto(f"{base_url}/#/{route}")
         page.wait_for_function(READY_JS, timeout=30000)
         page.wait_for_load_state("networkidle")
         text = page.inner_text("#view")
     finally:
-        page.close()
+        page.context.close()
     # Подписи плиток и заголовки таблиц CSS выводит заглавными, inner_text
     # отдаёт уже преобразованный текст -- сравниваем без регистра.
     for part in expected:
@@ -223,7 +318,7 @@ def test_content_gaps_parts_are_on_screen(browser, base_url, route, expected):
 def test_sign_in_screen_when_multi_user_mode_has_no_session(browser, base_url):
     # План 15: сервер с NF_MULTI_USER=1 без сессии -- дашборд показывает вход, а не
     # сыплет ошибками 401 по экранам. Ответ /api/auth/me подменяем.
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    page = _new_page(browser)
     problems = []
     page.on("pageerror", lambda e: problems.append(str(e)))
     page.route("**/api/auth/me", lambda r: r.fulfill(
@@ -233,14 +328,14 @@ def test_sign_in_screen_when_multi_user_mode_has_no_session(browser, base_url):
         page.wait_for_selector("#signInForm", timeout=30000)
         text = page.inner_text("#view")
     finally:
-        page.close()
+        page.context.close()
     assert "Вход в niche-finder" in text and not problems
 
 
 
 def test_token_section_shows_only_with_sign_in(browser, base_url):
     # План 15 (5.7-5.8): без входа раздела токенов нет, с входом -- есть.
-    page = browser.new_page(viewport={"width": 1400, "height": 900})
+    page = _new_page(browser)
     page.route("**/api/auth/me", lambda r: r.fulfill(status=200, content_type="application/json",
         body='{"multiUser": true, "user": {"id": 2, "email": "a@x", "isAdmin": false}, "quota": null}'))
     page.route("**/api/auth/tokens", lambda r: r.fulfill(status=200, content_type="application/json",
@@ -250,5 +345,5 @@ def test_token_section_shows_only_with_sign_in(browser, base_url):
         page.wait_for_selector("#apiTokens .card", timeout=30000)
         text = page.inner_text("#apiTokens")
     finally:
-        page.close()
+        page.context.close()
     assert "Личные токены" in text and "ext" in text

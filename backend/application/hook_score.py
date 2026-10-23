@@ -22,6 +22,7 @@ from application import llm_gateway as gw
 from domain import hook_scoring as HS
 from domain import periods as P
 from domain import transcripts as TRD
+from domain.i18n import tr
 from infrastructure.llm import factory
 
 LLM_HOOK_TTL_DAYS = int(os.environ.get("LLM_HOOK_TTL_DAYS", "30"))
@@ -151,8 +152,8 @@ def hook_report(video_id: str, niche: str = None, llm: bool = False,
         conn.close()
     if not row:
         return {"videoId": video_id, "found": True, "hasTranscript": False,
-                "hint": "No transcript saved for this video -- paste one on the "
-                        "Транскрипты screen (request_transcript / save_transcript) first."}
+                "hint": tr("Для этого видео не сохранён транскрипт -- сначала вставьте его на "
+                           "экране «Транскрипты» (request_transcript / save_transcript).")}
 
     hook = _hook_of(row["text"])
     result = _score_of(hook)
@@ -187,8 +188,8 @@ def niche_hook_benchmark(niche: str, outlier_threshold: float = OUTLIER_FROM,
         conn.close()
     if not rows:
         return {"niche": niche, "found": False, "quotaUsed": 0,
-                "hint": "No saved transcripts for videos in this niche -- paste some on the "
-                        "Транскрипты screen first."}
+                "hint": tr("Для видео этой ниши нет сохранённых транскриптов -- сначала "
+                           "вставьте их на экране «Транскрипты».")}
 
     from application import discovery as trends
     channel_ids = sorted({r["channel_id"] for r in rows})[:MAX_BENCHMARK_CHANNELS]

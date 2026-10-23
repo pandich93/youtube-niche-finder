@@ -20,6 +20,7 @@ to the top by accident. The weights are a judgement, not a measurement: the
 screen shows the breakdown and lets you sort by any column. An estimate of
 niche-finder, not YouTube data, and a correlation, not a promise.
 """
+from domain.i18n import tr
 
 WEIGHTS = {"demand": 25, "supply": 20, "newcomers": 20, "rpm": 15, "template": 10, "policy": 10}
 LABELS = {"demand": "Спрос", "supply": "Предложение", "newcomers": "Новички пробиваются",
@@ -45,7 +46,7 @@ def score(m: dict) -> dict:
     breakdown, known = [], 0
     for key, weight in WEIGHTS.items():
         v = values[key]
-        breakdown.append({"key": key, "label": LABELS[key], "weight": weight, "value": v,
+        breakdown.append({"key": key, "label": tr(LABELS[key]), "weight": weight, "value": v,
                           "points": None if v is None else _points(key, v), "contribution": None})
         known += weight if v is not None else 0
     coverage = round(known / sum(WEIGHTS.values()), 2)
