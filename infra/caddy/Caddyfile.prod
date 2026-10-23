@@ -7,6 +7,10 @@
 #                             OAuth protected-resource metadata it advertises
 #   everything else        -> the dashboard and /api (web)
 {$NF_DOMAIN} {
+	# Prometheus scrapes web:8080/metrics inside the compose network
+	# (docs/hosting.md, "Monitoring"); it is not for the internet
+	respond /metrics 404
+
 	@mcp path /mcp /mcp/* /.well-known/oauth-protected-resource /.well-known/oauth-protected-resource/*
 	handle @mcp {
 		# no `encode` here: MCP answers may be an event stream

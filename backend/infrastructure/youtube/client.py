@@ -161,7 +161,13 @@ def _reserve(path: str) -> list:
                 db.incr_meta(conn, key, n)
             elif not db.incr_meta_capped(conn, key, n, limit):
                 conn.rollback()
-                raise _refusal(kind, int(db.get_meta(conn, key) or 0), limit, uid is not None)
+                refusal = _refusal(kind, int(db.get_meta(conn, key) or 0), limit, uid is not None)
+                if isinstance(refusal, SharedPoolExhausted):
+                    # the whole server is out, not one user: tell the operator
+                    # (at most once per NF_OPERATOR_ALERT_HOURS; never raises)
+                    from infrastructure import observability
+                    observability.operator_alert(f"youtube-{kind}", str(refusal))
+                raise refusal
         conn.commit()
     except QuotaExceeded:
         raise

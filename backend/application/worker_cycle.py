@@ -22,7 +22,10 @@ Default daily budget (well inside the free tier):
 Configure with env vars (see .env.example). Set WORKER_QUERIES to keep a set of
 topics continuously fresh, e.g. "ai automation,faceless history,нейросети".
 """
+import json
+import logging
 import os
+import re
 import signal
 import sys
 import time
@@ -47,6 +50,7 @@ from application import thumbnail_search as thumbsearch_mod
 from application import topic_watch as topic_mod
 from domain import periods as P
 from domain.users import LOCAL_USER_ID
+from infrastructure import observability
 from infrastructure.llm import factory as llm_factory
 from infrastructure.llm.null import NullProvider
 from infrastructure.redact import redact
@@ -127,6 +131,10 @@ def _handle_stop(signum, frame):
 def log(msg):
     # every line, tracebacks included, goes through redact(): a secret that
     # reached an exception's text must not reach the container log
+    # (NF_LOG_FORMAT=json: the JSON formatter redacts it the same way)
+    if observability.json_logs():
+        logging.getLogger("niche-finder.worker").info(msg)
+        return
     print(f"[{datetime.now(timezone.utc).isoformat(timespec='seconds')}] {redact(msg)}",
           flush=True)
 
@@ -172,18 +180,48 @@ def _llm_enrichment_enabled() -> bool:
     return not isinstance(llm_factory.get_provider(), NullProvider)
 
 
+def _step_key(name) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
+
+
+def _record_step(name, outcome, seconds):
+    """Each step's last outcome and duration in meta, for /metrics (plan
+    P1-14: the worker is another process). Never stops the worker."""
+    key = _step_key(name)
+    try:
+        conn = db.get_conn()
+        try:
+            db.set_meta(conn, f"worker_step_{key}", json.dumps(
+                {"at": datetime.now(timezone.utc).isoformat(), "outcome": outcome,
+                 "seconds": round(seconds, 3)}))
+            if outcome == "failed":
+                db.incr_meta(conn, f"worker_step_failures_{key}", 1)
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        log(f"{name}: could not record the step ({type(e).__name__})")
+
+
 def _safe(name, fn):
+    started, outcome = time.monotonic(), "failed"
     try:
         result = fn()
         log(f"{name}: {result}")
+        outcome = "ok"
         return result
     except yt.QuotaExceeded as e:
+        outcome = "quota"
         log(f"{name}: QUOTA EXCEEDED -- backing off until tomorrow ({e})")
         _set_meta("worker_quota_blocked_until", P.pacific_date_key())
         return None
-    except Exception:
+    except Exception as e:
         log(f"{name}: FAILED\n{traceback.format_exc()}")
+        observability.operator_alert(f"worker-step:{_step_key(name)}",
+                                     f"worker step '{name}' failed: {type(e).__name__}: {str(e)[:300]}")
         return None
+    finally:
+        _record_step(name, outcome, time.monotonic() - started)
 
 
 def cycle():
@@ -315,7 +353,17 @@ def _wait_for_lock() -> bool:
     return False
 
 
+def _heartbeat():
+    """The end of a cycle, for /metrics: a worker that stopped cycling is
+    noticed by the age of this, not by the worker itself."""
+    try:
+        _set_meta("worker_last_cycle", datetime.now(timezone.utc).isoformat())
+    except Exception as e:
+        log(f"heartbeat: could not record ({type(e).__name__})")
+
+
 def main():
+    observability.setup("worker")
     if not API_KEY:
         log("YOUTUBE_API_KEY is not set -- the worker has nothing to collect.\n"
             "  Docker:     put the key in .env next to docker-compose.yml, then "
@@ -342,6 +390,7 @@ def main():
         f"| {embed_status} | {enrich_status}")
     while not _stop:
         cycle()
+        _heartbeat()
         for _ in range(60):
             if _stop:
                 break

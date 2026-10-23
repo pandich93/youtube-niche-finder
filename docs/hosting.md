@@ -23,6 +23,7 @@ The production setup is `docker-compose.prod.yml`, layered on top of the usual
 - [First start](#first-start)
 - [Connect an MCP client](#connect-an-mcp-client)
 - [Backups](#backups)
+- [Monitoring](#monitoring)
 - [Restore from a backup](#restore-from-a-backup)
 - [Updates](#updates)
 - [Moving a local copy to the server](#moving-a-local-copy-to-the-server)
@@ -149,6 +150,67 @@ another machine. The dumps contain accounts, sessions and encrypted secrets:
 protect them like the server itself. Keep a copy of `.env` (with
 `OWN_TOKENS_KEY`) somewhere safe too: without the key, the restored secrets
 cannot be read.
+
+## Monitoring
+
+**Logs.** The production file writes logs as one JSON object per line
+(`NF_LOG_FORMAT=json`), to stderr. Secrets are masked, and lines carry no
+emails or IP addresses. A request line holds the method, the route template
+(for example `/api/videos/{video_id}`), the status, the duration and the
+account id. `make prod-logs` shows them; any log shipper that reads Docker
+logs can collect them.
+
+**Operator alerts.** Some problems need you, not the people using the
+server: the shared YouTube quota is spent for the day, or a worker step
+failed. These alerts go to the Telegram bot or webhook in `.env`
+(`NOTIFY_TELEGRAM_*` or `NOTIFY_WEBHOOK_URL`), at most once per kind every
+`NF_OPERATOR_ALERT_HOURS` (6 by default). They are always logged as warnings
+too. `NF_OPERATOR_ALERTS=0` turns them off.
+
+**Metrics.** Set `NF_METRICS_TOKEN` to a long random string and restart
+`web`. Then `http://web:8080/metrics` answers in Prometheus text format to
+`Authorization: Bearer <the token>`. Caddy answers 404 for `/metrics` from
+outside, so only a Prometheus on the compose network can reach it:
+
+```yaml
+scrape_configs:
+  - job_name: niche-finder
+    metrics_path: /metrics
+    authorization: {credentials: "<NF_METRICS_TOKEN>"}
+    static_configs: [{targets: ["web:8080"]}]
+```
+
+What it reports, all numbers and no names:
+
+| Metric | Meaning |
+| --- | --- |
+| `nf_http_requests_total{route,method,status}`, `nf_http_request_duration_seconds` | dashboard and API requests |
+| `nf_youtube_units_used_today`, `nf_youtube_units_daily_limit`, `nf_youtube_search_calls_today` | the shared YouTube quota |
+| `nf_llm_cost_usd_today`, `nf_llm_daily_budget_usd` | the LLM spend |
+| `nf_worker_last_cycle_timestamp_seconds` | when the worker last finished a cycle |
+| `nf_worker_step_last_ok{step}`, `nf_worker_step_last_duration_seconds{step}`, `nf_worker_step_failures{step}` | each worker step |
+| `nf_users{state}` | accounts, active and disabled |
+
+The worker cannot report its own death, so the alert for it comes from
+Prometheus. After each cycle the worker sleeps for five minutes; set the
+threshold well above your longest cycle (the daily refresh is the long one,
+and `nf_worker_step_last_duration_seconds` shows how long it takes):
+
+```yaml
+groups:
+  - name: niche-finder
+    rules:
+      - alert: WorkerStopped
+        expr: time() - nf_worker_last_cycle_timestamp_seconds > 3600
+      - alert: ApiErrors
+        expr: sum(rate(nf_http_requests_total{status=~"5.."}[10m])) > 0.1
+      - alert: YouTubeQuotaNearlySpent
+        expr: nf_youtube_units_used_today / nf_youtube_units_daily_limit > 0.9
+```
+
+**Sentry.** Set `SENTRY_DSN` (and `SENTRY_ENVIRONMENT` if you want) to send
+unhandled errors from `web`, `worker` and `mcp-http`. Cookies, headers, query
+strings and addresses are removed before sending, and secrets are masked.
 
 ## Restore from a backup
 

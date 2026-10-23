@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Logs, metrics and operator alerts for a hosted copy** (multi-user plan
+  P1-14, [docs/hosting.md](docs/hosting.md#monitoring)).
+  - `NF_LOG_FORMAT=json` writes one JSON object per log line on stderr, with
+    secrets masked and no emails or addresses; request lines name the route
+    template, not the path. The production file turns it on.
+  - `NF_METRICS_TOKEN` opens `/metrics` (Prometheus) on the dashboard: requests
+    by route and status, the shared YouTube quota, the LLM spend, each worker
+    step's last outcome and duration, the worker's last cycle. Caddy keeps it
+    off the internet.
+  - Operator alerts to the `.env` notifier when the shared YouTube pool is
+    spent or a worker step fails, at most once per kind every
+    `NF_OPERATOR_ALERT_HOURS`.
+  - `SENTRY_DSN` sends unhandled errors to Sentry without cookies, headers,
+    query strings or addresses (new dependency `sentry-sdk`).
 - **Hosting on your own domain** (`docker-compose.prod.yml`, `make prod-up`,
   [docs/hosting.md](docs/hosting.md)). Caddy is the only service published,
   on ports 80 and 443, and gets a Let's Encrypt certificate for `NF_DOMAIN`.

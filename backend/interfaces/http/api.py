@@ -23,7 +23,7 @@ from urllib.parse import quote
 
 from fastapi import Body, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
@@ -57,6 +57,7 @@ from application import niche_clusters as NCL
 from application import niche_export as NE
 from application import niche_ranking as NRK
 from application import notify_settings as NS
+from application import ops_metrics as OPS
 from application import outlier_traits as OT
 from application import own_channels as OWN
 from application import packaging as PKG
@@ -77,6 +78,7 @@ from domain import i18n
 from domain import plans as PD
 from domain.i18n import tr
 from domain.users import LOCAL_USER_ID, multi_user_enabled
+from infrastructure import observability as OBS
 from infrastructure import quota_owner
 from infrastructure.categories import repository as C
 from infrastructure.redact import redact
@@ -90,6 +92,7 @@ FRONTEND_DIR = Path(os.environ.get("FRONTEND_DIR")
 # levels to keep resolving to <project root>/frontend. Docker always sets
 # FRONTEND_DIR=/frontend explicitly, so this only matters for local runs.
 
+OBS.setup("web")
 db.init_db()
 C.seed_fallback()
 
@@ -1887,6 +1890,43 @@ async def _no_cache_static(request, call_next):
     if not request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
     return response
+
+
+# ------------------------------------------------- наблюдаемость (P1-14)
+#
+# Объявлено последним, поэтому снаружи всех остальных middleware: считает и
+# 401/403/429 от них. Метка маршрута -- шаблон (/api/videos/{video_id}), не
+# сам путь: ни id, ни запрос в метрики и строку доступа не попадают.
+
+@app.middleware("http")
+async def observe_requests(request, call_next):
+    started, status = time.perf_counter(), 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        return response
+    finally:
+        if request.url.path.startswith("/api/"):
+            route = getattr(request.scope.get("route"), "path", None) or "unmatched"
+            seconds = time.perf_counter() - started
+            OBS.inc("nf_http_requests_total", method=request.method, route=route, status=status)
+            OBS.observe("nf_http_request_duration_seconds", seconds, route=route)
+            OBS.access(request.method, route, status, seconds,
+                       getattr(request.state, "user_id", None))
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(request: Request):
+    """Prometheus scrape (P1-14). Off (404) unless NF_METRICS_TOKEN is set;
+    then only for `Authorization: Bearer <that token>`. Numbers only: no
+    names, emails or addresses."""
+    token = os.environ.get("NF_METRICS_TOKEN", "").strip()
+    if not token:
+        raise HTTPException(status_code=404)
+    got = request.headers.get("authorization", "")
+    if got[:7].lower() != "bearer " or not hmac.compare_digest(got[7:].strip(), token):
+        raise HTTPException(status_code=401, headers={"WWW-Authenticate": "Bearer"})
+    return PlainTextResponse(OBS.render(OPS.collect()), media_type="text/plain; version=0.0.4")
 
 
 if FRONTEND_DIR.is_dir():

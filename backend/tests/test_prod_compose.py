@@ -108,6 +108,9 @@ def test_caddy_routes_mcp_and_its_metadata_to_mcp_http():
     for path in ("/mcp", "/mcp/*", "/.well-known/oauth-protected-resource/*"):
         assert f" {path}" in matcher
     assert caddy.index("reverse_proxy mcp-http:8765") < caddy.index("reverse_proxy web:8080")
+    # P1-14: Prometheus scrapes web:8080/metrics inside compose, never through the proxy
+    assert "respond /metrics 404" in caddy
+    assert OVER["web"]["environment"]["NF_LOG_FORMAT"] == "${NF_LOG_FORMAT:-json}"
     assert OVER["proxy"]["volumes"][0] == "./infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro"
 
 

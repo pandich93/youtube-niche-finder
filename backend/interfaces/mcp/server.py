@@ -1694,6 +1694,8 @@ def exposure_problem(transport: str, host: str):
 
 
 def run():
+    from infrastructure import observability
+    observability.setup("mcp")
     transport = os.environ.get("MCP_TRANSPORT", "stdio")
     if transport == "stdio":
         mcp.run()
