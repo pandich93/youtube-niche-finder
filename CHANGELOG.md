@@ -62,6 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   alert scan, thumbnail vectors, the niche map; over HTTP and MCP) and
   resolving the background LLM's proposed tags need an admin, and the buttons
   are hidden from other users. Single-user mode is unchanged.
+- **Multi-user mode: password guessing is slowed down.** After 5 failed
+  sign-ins for one email the next waits 1, 2, 4 ... up to 15 minutes; 30
+  failures from one address close sign-in from it for 15 minutes (HTTP 429,
+  counters in Postgres). New and changed passwords refuse common long ones,
+  keyboard runs and the email's own name. Behind a reverse proxy set
+  `NF_TRUSTED_PROXIES` so limits count each real client, not the proxy.
 
 ## [0.4.0] - 2026-10-04
 

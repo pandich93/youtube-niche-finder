@@ -10,7 +10,10 @@
 От чужих сайтов в браузере прикрывает local_only_guard: проверка Host и
 обязательный JSON или X-NF-Client у POST/PUT/PATCH/DELETE.
 """
+import functools
 import hmac
+import ipaddress
+import logging
 import os
 import re
 import time
@@ -106,9 +109,52 @@ app = FastAPI(title="niche-finder", docs_url="/api/docs", openapi_url="/api/open
 # RATE_LIMIT_PER_MINUTE=0 выключает лимитер совсем.
 RATE_LIMIT_PER_MINUTE = int(os.environ.get("RATE_LIMIT_PER_MINUTE", "600") or 0)
 
-# client host -> времена запросов за последнюю минуту. На 127.0.0.1 ключей
-# всегда один-два, так что чистить словарь целиком незачем.
+# client -> времена запросов за последнюю минуту. Локально ключей один-два; на
+# публичном сервере их может быть сколько угодно, поэтому, когда словарь больше
+# _RATE_MAX_KEYS, из него выбрасываются клиенты без запросов за минуту (P0-03).
 _rate_hits = defaultdict(deque)
+_RATE_MAX_KEYS = 10_000
+
+
+@functools.lru_cache(maxsize=8)
+def _trusted_proxies(value: str) -> tuple:
+    """NF_TRUSTED_PROXIES: addresses or subnets of the reverse proxy in front
+    of the API (multi-user plan P0-03). '*' is refused: anyone could then
+    claim any address in X-Forwarded-For."""
+    nets = []
+    for part in value.replace(",", " ").split():
+        if part == "*":
+            logging.getLogger(__name__).warning(
+                "NF_TRUSTED_PROXIES='*' is ignored: name the proxy's address or subnet")
+            continue
+        try:
+            nets.append(ipaddress.ip_network(part, strict=False))
+        except ValueError:
+            logging.getLogger(__name__).warning("NF_TRUSTED_PROXIES: %r is not an address", part)
+    return tuple(nets)
+
+
+def _is_trusted(addr: str, nets: tuple) -> bool:
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return False
+    return any(ip in net for net in nets)
+
+
+def _client_ip(request) -> str:
+    """The client's address. Behind a proxy listed in NF_TRUSTED_PROXIES it is
+    the nearest X-Forwarded-For hop that is not a trusted proxy itself; from
+    anyone else the header is ignored, so it cannot be forged."""
+    host = request.client.host if request.client else "unknown"
+    nets = _trusted_proxies(os.environ.get("NF_TRUSTED_PROXIES", ""))
+    if not nets or not _is_trusted(host, nets):
+        return host
+    hops = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    for hop in reversed(hops):
+        if not _is_trusted(hop, nets):
+            return hop
+    return hops[0] if hops else host
 
 
 @app.middleware("http")
@@ -118,14 +164,17 @@ async def rate_limit(request, call_next):
     if RATE_LIMIT_PER_MINUTE <= 0 or not request.url.path.startswith("/api/"):
         return await call_next(request)
 
-    client = request.client.host if request.client else "unknown"
+    client = _client_ip(request)
     # plan 15 (5.10): a signed-in user has their own window, so several people
-    # behind one address do not throttle each other (sign-in itself stays
-    # limited per address, which also slows password guessing)
+    # behind one address do not throttle each other (sign-in itself has its
+    # own limits per email and address: application/auth.py login)
     user = getattr(request.state, "user", None)
     if user:
         client = f"user:{user['id']}"
     now = time.monotonic()
+    if len(_rate_hits) > _RATE_MAX_KEYS:
+        for idle in [k for k, h in _rate_hits.items() if not h or h[-1] <= now - 60.0]:
+            del _rate_hits[idle]
     hits = _rate_hits[client]
     while hits and hits[0] <= now - 60.0:
         hits.popleft()
@@ -1177,7 +1226,12 @@ def auth_login(request: Request, response: Response, payload: dict = Body(...)):
     """Accounts are created by an admin (`cli.py create-user`). The session
     token goes only into the HttpOnly cookie, never into the JSON body."""
     try:
-        s = AUTH.login(str(payload.get("email") or ""), str(payload.get("password") or ""))
+        s = AUTH.login(str(payload.get("email") or ""), str(payload.get("password") or ""),
+                       client_ip=_client_ip(request))
+    except AUTH.LoginThrottled as e:
+        raise HTTPException(status_code=429, headers={"Retry-After": str(e.retry_after)},
+                            detail=tr("Слишком много неудачных попыток входа. Повторите через "
+                                      "{retry_after} с.", retry_after=e.retry_after))
     except AUTH.AuthError as e:
         raise HTTPException(status_code=401, detail=str(e))
     response.set_cookie(AUTH_COOKIE, s["token"], max_age=AUTH.SESSION_DAYS * 86400, path="/",

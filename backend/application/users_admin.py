@@ -128,6 +128,8 @@ def _erase(user_id: int, email: str, actor_id: int, action: str) -> dict:
         conn.execute("DELETE FROM meta WHERE (key LIKE ? OR key LIKE ?) AND key LIKE ?",
                      ("yt\\_units\\_%", "search\\_calls\\_%", f"%\\_u{user_id}"))
         conn.execute("DELETE FROM meta WHERE key = ?", (DG._last_sent_key(user_id),))
+        # the sign-in counter is keyed by email, not user_id (multi-user plan P0-03)
+        conn.execute("DELETE FROM login_attempts WHERE kind = 'email' AND key = ?", (email,))
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         _log(conn, actor_id, action, user_id, email)
         conn.commit()

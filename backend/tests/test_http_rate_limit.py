@@ -42,6 +42,20 @@ def test_over_the_limit_gives_429_with_retry_after(monkeypatch):
     _reset()
 
 
+def test_idle_keys_are_dropped_when_the_table_grows(monkeypatch):
+    # multi-user plan P0-03: one key per address on a public server
+    import time
+    _reset()
+    monkeypatch.setattr(api, "RATE_LIMIT_PER_MINUTE", 100)
+    monkeypatch.setattr(api, "_RATE_MAX_KEYS", 10)
+    old = time.monotonic() - 120
+    for i in range(50):
+        api._rate_hits[f"198.51.100.{i}"].append(old)
+    assert client.get("/api/health").status_code == 200
+    assert len(api._rate_hits) == 1                    # only the live client is left
+    _reset()
+
+
 def test_limiter_does_not_count_frontend_static_files(monkeypatch):
     """Одна загрузка дашборда стоит десятка файлов -- если считать и их,
     бюджет выгорает на ровном месте."""

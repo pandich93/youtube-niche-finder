@@ -38,6 +38,7 @@ def _clean(monkeypatch):
     for table in db.PERSONAL_TABLES:
         conn.execute(f"DELETE FROM {table} WHERE user_id <> 1")
     conn.execute("DELETE FROM admin_actions")
+    conn.execute("DELETE FROM login_attempts")
     conn.execute("DELETE FROM users WHERE id != 1")
     conn.execute("UPDATE users SET is_admin = 1, disabled_at = NULL WHERE id = 1")
     conn.commit()
@@ -120,6 +121,8 @@ def test_delete_removes_only_that_users_rows(monkeypatch):
             conn.execute("INSERT INTO meta (key, value) VALUES (?, '5')", (key,))
     conn.execute("INSERT INTO transcripts (video_id, text, created_by) VALUES ('vdel1', 'hi', ?) "
                  "ON CONFLICT (video_id) DO UPDATE SET created_by = excluded.created_by", (ann,))
+    for email in ("ann@example.com", "bob@example.com"):          # keyed by email, not user_id
+        db.record_login_failure(conn, "email", email, db.now_iso(), "2000-01-01")
     conn.commit()
     conn.close()
 
@@ -138,6 +141,9 @@ def test_delete_removes_only_that_users_rows(monkeypatch):
         row = conn.execute("SELECT created_by FROM transcripts WHERE video_id = 'vdel1'").fetchone()
         assert row is not None and row["created_by"] is None   # the corpus stays, now the operator's
         assert conn.execute("SELECT 1 FROM users WHERE id = ?", (ann,)).fetchone() is None
+        counters = {r["key"] for r in conn.execute(
+            "SELECT key FROM login_attempts WHERE kind = 'email'").fetchall()}
+        assert "ann@example.com" not in counters and "bob@example.com" in counters
         log = conn.execute("SELECT admin_id, action, target_email FROM admin_actions").fetchall()
         assert [(r["admin_id"], r["action"], r["target_email"]) for r in log] == [
             (boss, "delete", "ann@example.com")]
