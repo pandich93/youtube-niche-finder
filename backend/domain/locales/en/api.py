@@ -38,4 +38,7 @@ MESSAGES = {
     "Папка фронта не найдена: {path}": "Frontend folder not found: {path}",
     "Задайте FRONTEND_DIR или смонтируйте ./frontend в контейнер":
         "Set FRONTEND_DIR or mount ./frontend into the container",
+    # multi-user plan P0-03: sign-in throttled after failed attempts
+    "Слишком много неудачных попыток входа. Повторите через {retry_after} с.":
+        "Too many failed sign-in attempts. Try again in {retry_after} s.",
 }

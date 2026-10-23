@@ -44,8 +44,20 @@ What the server does for you:
 
 - **Accounts.**
   - Accounts exist only by invitation: `cli.py create-user`.
-  - Passwords are scrypt hashes and must be at least 10 characters.
+  - Passwords are scrypt hashes and must be at least 10 characters. Common
+    long passwords (`password123`, `1234567890`, keyboard and alphabet runs,
+    one repeated character) and passwords containing the email's name are
+    refused. Nothing is sent to a breach service.
   - A wrong password and an unknown email get the same answer.
+  - **Guessing is slowed down.** After 5 failed sign-ins for one email in
+    15 minutes, the next attempt waits 1 minute, then 2, 4, up to 15. This
+    applies to the right password too, so guessing cannot simply continue.
+    After 30 failures from one address (any emails), sign-in from it is closed
+    for 15 minutes. The answer is HTTP 429 with `Retry-After`, the same for a
+    known and an unknown email. There is no permanent lock, which would let
+    anyone lock out someone else's account. The counters live in Postgres
+    (`login_attempts`), so restarts do not reset them. The limits can be tuned
+    with `NF_LOGIN_MAX_FAILS`, `NF_LOGIN_MAX_IP_FAILS` and `NF_LOGIN_WINDOW_MIN`.
 - **Sessions.**
   - A session is a random token in an `HttpOnly`, `SameSite=Strict` cookie, and
     the database keeps only its SHA-256.
@@ -94,7 +106,11 @@ What you have to do before you give anyone an account:
 1. **Put it behind HTTPS.** Use a reverse proxy (Caddy, nginx) with a real
    certificate. Set `NF_COOKIE_SECURE=1` and add your domain to
    `NF_ALLOWED_HOSTS`. Do not publish port 8080 or Postgres (5433) to the
-   internet.
+   internet. Set `NF_TRUSTED_PROXIES` to the proxy's address or subnet (for
+   example the compose network, `172.16.0.0/12`). Then the request limit and
+   the sign-in limits count each real client from `X-Forwarded-For` instead
+   of lumping everyone together as the proxy. Never use `*` (it is ignored):
+   anyone could then claim any address.
 2. **Set `OWN_TOKENS_KEY`** (a Fernet key) and keep it only in `.env`. Losing
    it makes stored tokens unreadable. Leaking it exposes them.
 3. **Back up Postgres.** It now holds accounts, sessions and encrypted

@@ -31,6 +31,7 @@ def _clean(monkeypatch):
     conn = db.get_conn()
     conn.execute("DELETE FROM sessions")
     conn.execute("DELETE FROM api_tokens")
+    conn.execute("DELETE FROM login_attempts")
     conn.execute("DELETE FROM users WHERE id != 1")
     conn.commit()
     conn.close()
@@ -168,6 +169,114 @@ def test_you_cannot_revoke_someone_elses_token(multi):
     _, b = _signed_in("b@example.com")
     tid = a.post("/api/auth/tokens", json={}).json()["id"]
     assert b.delete(f"/api/auth/tokens/{tid}").status_code == 404
+
+
+# ------------------------------------------------- sign-in throttle (multi-user plan P0-03)
+
+def _login(c, email, password):
+    return c.post("/api/auth/login", json={"email": email, "password": password})
+
+
+def _fail(c, email, times):
+    for _ in range(times):
+        assert _login(c, email, "not the password").status_code == 401
+
+
+def _age_failures(seconds):
+    """Pretend the failures happened `seconds` earlier."""
+    from datetime import datetime, timedelta
+    conn = db.get_conn()
+    for row in conn.execute("SELECT kind, key, last_failure_at FROM login_attempts").fetchall():
+        older = (datetime.fromisoformat(row["last_failure_at"]) - timedelta(seconds=seconds))
+        conn.execute("UPDATE login_attempts SET last_failure_at = ? WHERE kind = ? AND key = ?",
+                     (older.isoformat(), row["kind"], row["key"]))
+    conn.commit()
+    conn.close()
+
+
+def test_repeated_failures_for_one_email_are_throttled(multi):
+    from domain import login_throttle as LT
+    A.create_user("ann@example.com", PW)
+    c = client()
+    _fail(c, "ann@example.com", LT.MAX_EMAIL_FAILS)
+    r = _login(c, "ann@example.com", "still guessing")
+    assert r.status_code == 429 and 0 < int(r.headers["Retry-After"]) <= 60
+    # an unknown email answers the same way: the throttle does not reveal accounts
+    _fail(c, "nobody@example.com", LT.MAX_EMAIL_FAILS)
+    unknown = _login(c, "nobody@example.com", "still guessing")
+    assert unknown.status_code == 429 and unknown.json().keys() == r.json().keys()
+
+
+def test_throttle_blocks_even_the_right_password(multi):
+    from domain import login_throttle as LT
+    A.create_user("ann@example.com", PW)
+    c = client()
+    _fail(c, "ann@example.com", LT.MAX_EMAIL_FAILS)
+    assert _login(c, "ann@example.com", PW).status_code == 429
+
+
+def test_success_resets_the_email_counter(multi):
+    from domain import login_throttle as LT
+    A.create_user("ann@example.com", PW)
+    c = client()
+    _fail(c, "ann@example.com", LT.MAX_EMAIL_FAILS)
+    _age_failures(61)                                   # the one-minute wait is over
+    assert _login(c, "ann@example.com", PW).status_code == 200
+    _fail(c, "ann@example.com", LT.MAX_EMAIL_FAILS - 1)   # a fresh count, not a longer wait
+    assert _login(c, "ann@example.com", PW).status_code == 200
+
+
+def test_one_address_trying_many_emails_is_throttled(multi, monkeypatch):
+    from domain import login_throttle as LT
+    monkeypatch.setattr(LT, "MAX_IP_FAILS", 6)
+    A.create_user("ann@example.com", PW)
+    c = client()
+    for i in range(6):                                  # one try per email: no email counter trips
+        _fail(c, f"guess{i}@example.com", 1)
+    r = _login(c, "ann@example.com", PW)
+    assert r.status_code == 429 and "Retry-After" in r.headers
+    other = TestClient(api.app, headers={"X-NF-Client": "tests"}, client=("203.0.113.9", 5000))
+    assert _login(other, "ann@example.com", PW).status_code == 200   # another address signs in
+
+
+def test_forwarded_for_counts_only_from_a_trusted_proxy(multi, monkeypatch):
+    from domain import login_throttle as LT
+    monkeypatch.setattr(LT, "MAX_IP_FAILS", 3)
+    A.create_user("ann@example.com", PW)
+    proxy = TestClient(api.app, headers={"X-NF-Client": "tests"}, client=("10.0.0.2", 5000))
+
+    def via(c, real_ip):
+        return lambda email, pw: c.post("/api/auth/login", json={"email": email, "password": pw},
+                                        headers={"X-Forwarded-For": real_ip})
+
+    # untrusted: the header is ignored, every client counts as the proxy
+    for i in range(3):
+        assert via(proxy, f"198.51.100.{i}")(f"g{i}@example.com", "nope nope nope").status_code == 401
+    assert via(proxy, "198.51.100.77")("ann@example.com", PW).status_code == 429
+    # trusted proxy: each real client has its own count
+    conn = db.get_conn()
+    conn.execute("DELETE FROM login_attempts")
+    conn.commit()
+    conn.close()
+    monkeypatch.setenv("NF_TRUSTED_PROXIES", "10.0.0.0/8")
+    for i in range(3):
+        assert via(proxy, "198.51.100.1")(f"g{i}@example.com", "nope nope nope").status_code == 401
+    assert via(proxy, "198.51.100.1")("ann@example.com", PW).status_code == 429
+    assert via(proxy, "198.51.100.2")("ann@example.com", PW).status_code == 200
+
+
+def test_a_forged_forwarded_for_is_ignored_and_star_is_refused(monkeypatch):
+    from starlette.requests import Request
+    monkeypatch.setenv("NF_TRUSTED_PROXIES", "*")
+
+    def req(host, xff):
+        return Request({"type": "http", "client": (host, 1), "headers": [
+            (b"x-forwarded-for", xff.encode())]})
+
+    assert api._client_ip(req("198.51.100.5", "1.2.3.4")) == "198.51.100.5"
+    monkeypatch.setenv("NF_TRUSTED_PROXIES", "10.0.0.2, 10.0.0.3")
+    # client -> 10.0.0.3 -> 10.0.0.2 -> app; a hop the client wrote itself is further left
+    assert api._client_ip(req("10.0.0.2", "6.6.6.6, 198.51.100.5, 10.0.0.3")) == "198.51.100.5"
 
 
 if __name__ == "__main__":
