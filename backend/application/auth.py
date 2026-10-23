@@ -15,8 +15,10 @@ from datetime import datetime, timedelta, timezone
 
 import infrastructure.postgres as db
 from application import plans as PL
+from domain import login_throttle as LT
+from domain import password_policy as PP
 
-MIN_PASSWORD_LEN = 10
+MIN_PASSWORD_LEN = PP.MIN_LENGTH
 SESSION_DAYS = 30
 _N, _R, _P, _DKLEN = 2 ** 14, 8, 1, 32
 _FAIL = "wrong email or password"
@@ -26,6 +28,15 @@ _DUMMY_HASH = None
 
 class AuthError(ValueError):
     pass
+
+
+class LoginThrottled(AuthError):
+    """Too many failed sign-ins for this email or from this address; the same
+    for a known and an unknown email (multi-user plan P0-03)."""
+
+    def __init__(self, retry_after: int):
+        self.retry_after = retry_after
+        super().__init__(f"too many failed sign-ins; try again in {retry_after} s")
 
 
 def _b64(b):
@@ -55,16 +66,17 @@ def _norm(email: str) -> str:
     return (email or "").strip().lower()
 
 
-def _check_password(password):
-    if not password or len(password) < MIN_PASSWORD_LEN:
-        raise AuthError(f"the password needs at least {MIN_PASSWORD_LEN} characters")
+def _check_password(password, email: str = None):
+    problem = PP.problem(password, email)
+    if problem:
+        raise AuthError(problem)
 
 
 def create_user(email: str, password: str, is_admin: bool = False) -> int:
     email = _norm(email)
     if not email:
         raise AuthError("email is required")
-    _check_password(password)
+    _check_password(password, email)
     conn = db.get_conn()
     try:
         if conn.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
@@ -81,7 +93,7 @@ def create_user(email: str, password: str, is_admin: bool = False) -> int:
 def set_password(email: str, password: str) -> int:
     """Set or change a password; ends every session and revokes every API
     token of that user."""
-    _check_password(password)
+    _check_password(password, email)
     conn = db.get_conn()
     try:
         row = conn.execute("UPDATE users SET password_hash = ? WHERE email = ? RETURNING id",
@@ -120,18 +132,46 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
-def login(email: str, password: str) -> dict:
+def _wait(conn, kind: str, key: str, now: datetime) -> int:
+    failures, last = db.login_failures(conn, kind, key)
+    last = datetime.fromisoformat(last) if last else None
+    wait = LT.email_wait if kind == "email" else LT.ip_wait
+    return wait(failures, last, now)
+
+
+def _failed(conn, keys, now: datetime):
+    stamp = now.isoformat()
+    for kind, key in keys:
+        db.record_login_failure(conn, kind, key, stamp, (now - LT.WINDOW).isoformat())
+    db.purge_login_failures(conn, (now - timedelta(days=1)).isoformat())
+    conn.commit()
+
+
+def login(email: str, password: str, client_ip: str = None) -> dict:
+    """A session for the right password. Failed attempts are counted per
+    email and per client address (multi-user plan P0-03): past the limits
+    LoginThrottled says how long to wait -- before the password is even
+    checked, so guessing cannot go on, and alike for a known and an unknown
+    email. A success clears the email's counter."""
     global _DUMMY_HASH
+    now = datetime.now(timezone.utc)
+    keys = [("email", _norm(email))] + ([("ip", client_ip)] if client_ip else [])
     conn = db.get_conn()
     try:
+        wait = max(_wait(conn, kind, key, now) for kind, key in keys)
+        if wait:
+            raise LoginThrottled(wait)
         row = conn.execute("SELECT id, password_hash FROM users WHERE email = ?",
                            (_norm(email),)).fetchone()
         if not row or not row["password_hash"]:
             _DUMMY_HASH = _DUMMY_HASH or hash_password(secrets.token_hex(8))
             verify_password(password or "", _DUMMY_HASH)
+            _failed(conn, keys, now)
             raise AuthError(_FAIL)
         if not verify_password(password or "", row["password_hash"]):
+            _failed(conn, keys, now)
             raise AuthError(_FAIL)
+        db.clear_login_failures(conn, "email", _norm(email))
         token = secrets.token_urlsafe(32)
         expires = datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS)
         conn.execute("DELETE FROM sessions WHERE expires_at::timestamptz < now()")

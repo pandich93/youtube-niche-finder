@@ -43,4 +43,7 @@ MESSAGES = {
     "он или администратор.":
         "Another user saved this video's transcript; only they or an administrator "
         "can re-index it.",
+    # multi-user plan P0-03: sign-in throttled after failed attempts
+    "Слишком много неудачных попыток входа. Повторите через {retry_after} с.":
+        "Too many failed sign-in attempts. Try again in {retry_after} s.",
 }

@@ -29,6 +29,7 @@ def _clean():
     conn = db.get_conn()
     conn.execute("DELETE FROM sessions")
     conn.execute("DELETE FROM api_tokens")
+    conn.execute("DELETE FROM login_attempts")
     conn.execute("DELETE FROM users WHERE id != 1")
     conn.execute("UPDATE users SET password_hash = NULL WHERE id = 1")
     conn.commit()
@@ -47,6 +48,17 @@ def test_scrypt_hash_verifies_and_is_salted():
 def test_short_passwords_are_refused():
     with pytest.raises(A.AuthError):
         A.create_user("a@example.com", "short")
+
+
+def test_common_passwords_are_refused():
+    # multi-user plan P0-03: long enough is not hard enough
+    for weak in ("password123", "1234567890", "qwertyuiop"):
+        with pytest.raises(A.AuthError):
+            A.create_user("weak@example.com", weak)
+    uid = A.create_user("weak@example.com", "correct horse battery")
+    with pytest.raises(A.AuthError):
+        A.set_password("weak@example.com", "Weak-and-weak@example")   # the email's own name
+    assert A.set_password("weak@example.com", "a different horse") == uid
 
 
 # ------------------------------------------------------------ users

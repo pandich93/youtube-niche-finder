@@ -459,6 +459,19 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
+-- multi-user plan P0-03: failed sign-ins per email and per client address,
+-- so guessing slows down across restarts and processes (domain/login_throttle.py)
+CREATE TABLE IF NOT EXISTS login_attempts (
+    kind TEXT NOT NULL,            -- 'email' | 'ip'
+    key TEXT NOT NULL,             -- normalised email or client address
+    failures INTEGER NOT NULL DEFAULT 0,
+    first_failure_at TEXT,
+    last_failure_at TEXT,
+    PRIMARY KEY (kind, key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_login_attempts_last ON login_attempts(last_failure_at);
+
 -- plan 15 (5.9): each user's own alert delivery. Secrets (bot token, webhook
 -- URL) are Fernet-encrypted with OWN_TOKENS_KEY. No row for user 1 = the
 -- NOTIFY_* settings from .env, as before.

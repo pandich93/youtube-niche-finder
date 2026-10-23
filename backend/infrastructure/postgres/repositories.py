@@ -189,6 +189,37 @@ def set_meta(conn, key: str, value):
         "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, str(value)))
 
 
+def login_failures(conn, kind: str, key: str):
+    """(failures, last_failure_at) of one sign-in counter, or (0, None)."""
+    row = conn.execute("SELECT failures, last_failure_at FROM login_attempts "
+                       "WHERE kind = ? AND key = ?", (kind, key)).fetchone()
+    return (row["failures"], row["last_failure_at"]) if row else (0, None)
+
+
+def record_login_failure(conn, kind: str, key: str, now: str, stale_before: str) -> int:
+    """One more failed sign-in; a counter whose last failure is older than
+    stale_before starts again at 1. One statement, so concurrent processes
+    never lose a failure (like incr_meta). Returns the new count."""
+    row = conn.execute(
+        "INSERT INTO login_attempts (kind, key, failures, first_failure_at, last_failure_at) "
+        "VALUES (?, ?, 1, ?, ?) ON CONFLICT (kind, key) DO UPDATE SET "
+        "failures = CASE WHEN login_attempts.last_failure_at < ? THEN 1 "
+        "ELSE login_attempts.failures + 1 END, "
+        "first_failure_at = CASE WHEN login_attempts.last_failure_at < ? "
+        "THEN excluded.first_failure_at ELSE login_attempts.first_failure_at END, "
+        "last_failure_at = excluded.last_failure_at RETURNING failures",
+        (kind, key, now, now, stale_before, stale_before)).fetchone()
+    return row["failures"]
+
+
+def clear_login_failures(conn, kind: str, key: str):
+    conn.execute("DELETE FROM login_attempts WHERE kind = ? AND key = ?", (kind, key))
+
+
+def purge_login_failures(conn, before: str):
+    conn.execute("DELETE FROM login_attempts WHERE last_failure_at < ?", (before,))
+
+
 def incr_meta(conn, key: str, n: int):
     """Add n to an integer counter in meta, creating it if missing. One
     statement, so concurrent web/worker/MCP processes never lose an update
