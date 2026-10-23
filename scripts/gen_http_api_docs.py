@@ -179,6 +179,11 @@ SUMMARY = {
     "POST /api/admin/plans/{plan_id}/restore": ("plan", "Admin: bring an archived plan back."),
     "GET /api/admin/users": ("plan", "Admin: all users with their current plan."),
     "PUT /api/admin/users/{user_id}/plan": ("plan", "Admin: put a user on a plan, optionally until a date."),
+    "POST /api/admin/users": ("plan", "Admin: create an account; its one-time password is in the answer only."),
+    "POST /api/admin/users/{user_id}/disable": ("plan", "Admin: block an account; its sessions and API tokens end at once."),
+    "POST /api/admin/users/{user_id}/enable": ("plan", "Admin: unblock an account; the person signs in again."),
+    "DELETE /api/admin/users/{user_id}": ("plan", "Admin: delete an account and all of its data (`confirmEmail` must match)."),
+    "DELETE /api/auth/me": ("auth", "Delete your own account and all of your data; needs your `password` and a dashboard sign-in."),
 }
 
 # Anything not listed here only reads the local database: zero quota, no LLM.

@@ -327,6 +327,38 @@ def cmd_users(args):
     out(auth.list_users())
 
 
+def _account_call(fn, *args):
+    """multi-user plan P0-04: the operator acts on accounts by email."""
+    from application import users_admin as UA
+    try:
+        out(fn(UA.by_email(args[0]), *args[1:]))
+    except UA.UserNotFound:
+        print(f"error: no user {args[0]}", file=sys.stderr)
+        sys.exit(1)
+    except UA.UserAdminError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+def cmd_disable_user(args):
+    from application import users_admin as UA
+    _account_call(lambda uid: UA.set_disabled(UA.OPERATOR, uid, True), args.email)
+
+
+def cmd_enable_user(args):
+    from application import users_admin as UA
+    _account_call(lambda uid: UA.set_disabled(UA.OPERATOR, uid, False), args.email)
+
+
+def cmd_delete_user(args):
+    from application import users_admin as UA
+    if not args.yes:
+        print(tr("Удаление необратимо: учётная запись и все её данные. Повторите с --yes."),
+              file=sys.stderr)
+        sys.exit(1)
+    _account_call(lambda uid: UA.delete(UA.OPERATOR, uid, args.email), args.email)
+
+
 def cmd_seed(args):
     # cli.py now lives at backend/interfaces/cli/ (two levels deeper than the
     # old flat backend/cli.py), so climb back up to backend/ before reaching
@@ -367,6 +399,16 @@ def main():
     p.add_argument("--password-stdin", action="store_true", help=tr("читать пароль из stdin"))
     p.set_defaults(fn=cmd_set_password)
     sub.add_parser("users", help=tr("список пользователей")).set_defaults(fn=cmd_users)
+    p = sub.add_parser("disable-user", help=tr("заблокировать: сессии и токены перестают работать"))
+    p.add_argument("email")
+    p.set_defaults(fn=cmd_disable_user)
+    p = sub.add_parser("enable-user", help=tr("разблокировать"))
+    p.add_argument("email")
+    p.set_defaults(fn=cmd_enable_user)
+    p = sub.add_parser("delete-user", help=tr("удалить учётную запись и все её данные"))
+    p.add_argument("email")
+    p.add_argument("--yes", action="store_true", help=tr("подтвердить: удаление необратимо"))
+    p.set_defaults(fn=cmd_delete_user)
     p = sub.add_parser("create-token", help=tr("личный токен для расширения и MCP по HTTP"))
     p.add_argument("email")
     p.add_argument("--name", default=None)

@@ -93,12 +93,21 @@ async function viewAdmin() {
     <div class="card" style="margin-top:12px">
       ${sectionHead(t('usersTitle'), t('usersSub'))}
       ${table([
-        { label: 'Email', render: (u) => `${esc(u.email)}${u.isAdmin ? ` <span class="chip">${t('adminChip')}</span>` : ''}` },
+        { label: 'Email', render: (u) => `${esc(u.email)}${u.isAdmin ? ` <span class="chip">${t('adminChip')}</span>` : ''}${u.disabled ? ` <span class="chip">${t('disabledChip')}</span>` : ''}` },
         { label: t('colPlan'), render: (u) => (u.isAdmin ? unlimited : `<select class="uplan" data-id="${u.id}">${options(u.plan.id)}</select>`) },
         { label: t('colUntil'), render: (u) => (u.isAdmin ? '' : `<input type="date" class="uexp" data-id="${u.id}" value="${u.expiresAt ? u.expiresAt.slice(0, 10) : ''}">`) },
         { label: t('colToday'), render: (u) => `${u.today.ytUnits} units · $${u.today.llmUsd}` },
         { label: '', render: (u) => (u.isAdmin ? '' : `<button class="btn btn-ghost btn-sm usave" data-id="${u.id}">${t('saveUser')}</button>`) },
+        // многопользовательский план P0-04: блокировка и удаление; себя -- только на странице «Тариф»
+        { label: '', render: (u) => (u.id === me.user.id ? '' : `<button class="btn btn-ghost btn-sm ublock" data-id="${u.id}" data-on="${u.disabled ? 0 : 1}">${u.disabled ? t('enableUser') : t('disableUser')}</button>
+            ${u.id === 1 ? '' : `<button class="btn btn-ghost btn-sm udel" data-id="${u.id}" data-email="${esc(u.email)}">${t('deleteUser')}</button>`}`) },
       ], users)}
+      <form id="userNew" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+        <input type="email" name="email" required placeholder="${esc(t('newUserEmail'))}" style="width:240px">
+        <label><input type="checkbox" name="isAdmin"> ${t('newUserAdmin')}</label>
+        <button class="btn btn-sm" type="submit">${t('createUser')}</button>
+      </form>
+      <div id="userNewResult"></div>
     </div>`;
 
   const editor = view.querySelector('#planEditor');
@@ -123,6 +132,33 @@ async function viewAdmin() {
       render();
     } catch (e) { toast(e.message, 'err'); }
   }));
+  view.querySelectorAll('.ublock').forEach((b) => b.addEventListener('click', async () => {
+    const on = b.dataset.on === '1';
+    try {
+      await api(`/api/admin/users/${b.dataset.id}/${on ? 'disable' : 'enable'}`, { method: 'POST' });
+      toast(on ? t('userDisabled') : t('userEnabled'), 'ok'); render();
+    } catch (e) { toast(e.message, 'err'); }
+  }));
+  view.querySelectorAll('.udel').forEach((b) => b.addEventListener('click', async () => {
+    const typed = prompt(t('deleteUserConfirm', { email: b.dataset.email }));
+    if (typed === null) return;
+    try {
+      await api(`/api/admin/users/${b.dataset.id}`, { method: 'DELETE', body: { confirmEmail: typed } });
+      toast(t('userDeleted'), 'ok'); render();
+    } catch (e) { toast(e.message, 'err'); }
+  }));
+  view.querySelector('#userNew').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    try {
+      const made = await api('/api/admin/users', { method: 'POST',
+        body: { email: f.get('email'), isAdmin: f.get('isAdmin') === 'on' } });
+      await render();
+      // пароль показывается один раз: перерисовка выше его не стирает
+      view.querySelector('#userNewResult').innerHTML = notice(t('userCreated', {
+        email: esc(made.email), password: `<code>${esc(made.password)}</code>` }));
+    } catch (err) { toast(err.message, 'err'); }
+  });
   view.querySelectorAll('.usave').forEach((b) => b.addEventListener('click', async () => {
     const id = b.dataset.id;
     const exp = view.querySelector(`.uexp[data-id="${id}"]`).value;

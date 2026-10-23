@@ -52,7 +52,25 @@ async function viewPlan() {
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">
       ${d.plans.map((p) => card(p, p.id === d.plan.id, d.catalog)).join('')}
+    </div>
+    <div class="card" style="margin-top:12px">
+      ${sectionHead(t('deleteTitle'), t('deleteSub'))}
+      <form id="deleteMe" style="display:flex;gap:8px;flex-wrap:wrap">
+        <input type="password" name="password" required autocomplete="current-password"
+          placeholder="${esc(t('passwordPlaceholder'))}" style="width:240px">
+        <button class="btn btn-ghost btn-sm" type="submit">${t('deleteMe')}</button>
+      </form>
     </div>`;
+  // многопользовательский план P0-04: удалить свою учётную запись и все свои данные
+  view.querySelector('#deleteMe').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!confirm(t('deleteConfirm'))) return;
+    try {
+      await api('/api/auth/me', { method: 'DELETE', body: { password: new FormData(e.target).get('password') } });
+      toast(t('deleted'), 'ok');
+      setTimeout(() => location.reload(), 800);
+    } catch (err) { toast(err.message, 'err'); }
+  });
   view.querySelectorAll('.choose').forEach((b) => b.addEventListener('click', async () => {
     try {
       await api('/api/plan/choose', { method: 'POST', body: { planId: Number(b.dataset.id) } });

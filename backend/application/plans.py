@@ -391,7 +391,8 @@ def set_archived(plan_id, archived: bool) -> dict:
 def list_users() -> list:
     conn = db.get_conn()
     try:
-        rows = conn.execute("SELECT id, email, is_admin, created_at FROM users ORDER BY id").fetchall()
+        rows = conn.execute("SELECT id, email, is_admin, created_at, disabled_at FROM users "
+                            "ORDER BY id").fetchall()
     finally:
         conn.close()
     out = []
@@ -399,7 +400,7 @@ def list_users() -> list:
         ent = plan_for(r["id"])
         daily = usage(r["id"])["daily"]
         out.append({"id": r["id"], "email": r["email"], "isAdmin": bool(r["is_admin"]),
-                    "createdAt": r["created_at"],
+                    "createdAt": r["created_at"], "disabled": r["disabled_at"] is not None,
                     "plan": {"id": ent.plan_id, "name": ent.name}, "expiresAt": ent.expires_at,
                     "today": {"ytUnits": daily["yt_units"], "llmUsd": daily["llm_usd"]}})
     return out

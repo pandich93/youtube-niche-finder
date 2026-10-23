@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Blocking and deleting accounts** (multi-user mode). On the Admin page an
+  admin creates an account (its one-time password is shown once), blocks or
+  unblocks it (sessions and API tokens, MCP included, stop at once) and
+  deletes it by typing the email back; the same from the command line:
+  `disable-user`, `enable-user`, `delete-user EMAIL --yes`. People delete their
+  own account on the Plan page with their password, as the privacy page
+  promises. Deleting removes every row with that user's id and their quota
+  counters, revokes their own channels' OAuth tokens at Google, and leaves the
+  shared YouTube data; each action is logged in `admin_actions`.
 - **English interface.** The dashboard, API errors and hints, score tooltips,
   plan labels, alerts, the digest, `/privacy`, `/terms` and the Chrome
   extension now come in Russian and English. The dashboard picks the language
