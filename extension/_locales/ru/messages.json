@@ -1,7 +1,7 @@
 {
   "localeCode": { "message": "ru" },
   "extName": { "message": "niche-finder — аналитика YouTube" },
-  "extDescription": { "message": "Оутлаеры, скорость просмотров, теги и аналитика канала поверх YouTube. Данные берутся из локального niche-finder, наружу ничего не уходит." },
+  "extDescription": { "message": "Оутлаеры, скорость просмотров, теги и аналитика канала на YouTube из локального niche-finder. Наружу ничего не уходит." },
 
   "errBackendOffline": { "message": "бэкенд не отвечает ($URL$). Запущен ли он? make dev", "placeholders": { "url": { "content": "$1" } } },
   "errUnknownCommand": { "message": "неизвестная команда" },

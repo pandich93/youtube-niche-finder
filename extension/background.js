@@ -21,9 +21,10 @@ const DEFAULTS = {
 const t = (key, subs) => chrome.i18n.getMessage(
   key, subs === undefined ? undefined : [].concat(subs).map(String)) || key;
 
-// Язык подсказок сервера -- тот же, что у интерфейса расширения: ru для
-// русскоязычных и соседних локалей браузера, иначе en (заголовок X-NF-Locale).
-const NF_LOCALE = /^(ru|uk|be|kk|uz|ky|tg)(?:[-_]|$)/i.test(chrome.i18n.getUILanguage() || '') ? 'ru' : 'en';
+// Язык подсказок сервера -- тот же, что у интерфейса расширения: localeCode
+// из messages.json, который Chrome реально выбрал (заголовок X-NF-Locale).
+// Иначе uk/be/kk получали бы английское расширение с русскими подсказками.
+const NF_LOCALE = chrome.i18n.getMessage('localeCode') === 'ru' ? 'ru' : 'en';
 
 const TTL = { video: 120e3, channel: 300e3, deep: 300e3, batch: 600e3, health: 30e3, comments: 1800e3,
              stats: 60e3, why: 1800e3 };
