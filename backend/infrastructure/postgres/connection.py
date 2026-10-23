@@ -184,6 +184,36 @@ class _PGConn:
             pass
 
 
+_LOCKS = {}
+
+
+def hold_lock(name: str) -> bool:
+    """Take a session-level Postgres advisory lock named name (per schema, so
+    test schemas and other installs on the same database do not collide) and
+    keep it while this process lives, on its own connection outside the pool.
+    False when another process holds it. If this process dies, its connection
+    goes and Postgres releases the lock (multi-user plan P1-11)."""
+    if name in _LOCKS:
+        return True
+    raw = psycopg2.connect(_dsn())
+    raw.autocommit = True
+    cur = raw.cursor()
+    cur.execute("SELECT pg_try_advisory_lock(hashtext(%s))", (f"{name}:{_schema()}",))
+    got = bool(cur.fetchone()[0])
+    cur.close()
+    if not got:
+        raw.close()
+        return False
+    _LOCKS[name] = raw
+    return True
+
+
+def release_lock(name: str):
+    raw = _LOCKS.pop(name, None)
+    if raw is not None:
+        raw.close()
+
+
 def get_conn() -> _PGConn:
     raw = _pool().getconn()
     schema = _schema()

@@ -7,6 +7,7 @@ without needing a separate "already processed" cursor.
 """
 import json
 import os
+from datetime import datetime, timedelta, timezone
 
 import infrastructure.postgres as db
 from application import channel_tracking as T
@@ -22,6 +23,14 @@ from infrastructure.notify.null import NullNotifier
 DEFAULT_SILENCE_DAYS = A.SILENCE_DAYS_DEFAULT
 DEFAULT_PERIOD = "30d"
 NOTIFY_MAX_PER_CYCLE = int(os.environ.get("NOTIFY_MAX_PER_CYCLE", "10"))
+# multi-user plan P1-11: only this recent a history is read for delivery, so a
+# person who turns notifications on (or a new install) gets news, not a backlog,
+# and the worker does not read every event ever raised for every user
+NOTIFY_WINDOW_DAYS = int(os.environ.get("NOTIFY_WINDOW_DAYS", "7") or 7)
+
+
+def _delivery_since() -> str:
+    return (datetime.now(timezone.utc) - timedelta(days=NOTIFY_WINDOW_DAYS)).isoformat()
 DASHBOARD_URL = os.environ.get("NOTIFY_DASHBOARD_URL", "http://127.0.0.1:8080").rstrip("/")
 # instant (one message per event, default) | digest (only the daily summary,
 # application/digest.py) | both
@@ -342,7 +351,8 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, user_id: int = LOCAL_USER
         # this user's channels only, to this user's own Telegram/webhook (plan 15, 5.9)
         rows = conn.execute(
             "SELECT e.id, e.kind, e.ref_id, e.payload, e.created_at, NULL AS seen_at FROM events e "
-            "WHERE " + DELIVERABLE_TO_USER + " ORDER BY e.created_at ASC", (user_id, user_id)
+            "WHERE " + DELIVERABLE_TO_USER + " AND e.created_at >= ? ORDER BY e.created_at ASC",
+            (user_id, user_id, _delivery_since())
         ).fetchall()
         events = [_shape_event(r) for r in rows]
         keys = [str(e["id"]) for e in events]
