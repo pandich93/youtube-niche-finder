@@ -95,6 +95,9 @@ def test_mcp_http_starts_with_the_stack_and_advertises_the_domain():
     assert over["environment"]["NF_MULTI_USER"] == "1"
     assert over["environment"]["MCP_PUBLIC_URL"].startswith("https://${NF_DOMAIN")
     assert not BASE["mcp-http"].get("ports")
+    # P1-15: the local service may run without sign-in (unpublished), the hosted one never
+    assert BASE["mcp-http"]["environment"]["MCP_ALLOW_UNAUTHENTICATED"] == "1"
+    assert over["environment"]["MCP_ALLOW_UNAUTHENTICATED"] == "0"
 
 
 def test_caddy_routes_mcp_and_its_metadata_to_mcp_http():

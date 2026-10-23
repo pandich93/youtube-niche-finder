@@ -55,6 +55,8 @@ services:
     environment:
       NF_MULTI_USER: "1"
       NF_LOG_FORMAT: "${NF_LOG_FORMAT:-json}"
+      # tokens are required here; never start without them (P1-15)
+      MCP_ALLOW_UNAUTHENTICATED: "0"
       MCP_PUBLIC_URL: "https://${NF_DOMAIN:?set NF_DOMAIN in .env}"
 
   proxy:

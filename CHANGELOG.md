@@ -63,6 +63,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **MCP over HTTP without sign-in stays on loopback** (multi-user plan P1-15).
+  Without `NF_MULTI_USER=1` there is no sign-in and every tool acts as user 1,
+  so `server.py` now refuses to listen on any other address unless
+  `MCP_ALLOW_UNAUTHENTICATED=1`, and `MCP_HOST` defaults to `127.0.0.1`
+  instead of `0.0.0.0`. The compose `mcp-http` service (not published) sets
+  the opt-in and works as before; the production file turns it off.
 - **Whose data a call touches is always named** (multi-user plan P1-01). No
   use case in `application/` falls back to user 1 any more: `user_id` is a
   required keyword argument, and a call that forgets it fails instead of
