@@ -25,3 +25,5 @@ backups/
 frontend/tests/screenshots/
 # release builds (scripts/package_extension.sh)
 dist/
+# local Claude Code MCP servers (per-machine, e.g. Windows `cmd /c npx`)
+.mcp.json
