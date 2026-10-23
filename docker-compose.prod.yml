@@ -1,0 +1,93 @@
+# niche-finder -- production overrides for a hosted copy (multi-user plan P1-13)
+#
+# Layered on top of docker-compose.yml, never used alone:
+#   make prod-up
+#   # = docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build \
+#   #     postgres web worker mcp-http proxy backup
+#
+# What changes compared with a copy on your own machine (docs/hosting.md):
+#   - Caddy (`proxy`) is the only thing published: ports 80 and 443 on
+#     NF_DOMAIN, with a Let's Encrypt certificate it renews by itself. The
+#     dashboard (8080) and Postgres (5433) are no longer published at all,
+#     not even on 127.0.0.1.
+#   - Accounts are on (NF_MULTI_USER=1), the sign-in cookie is Secure, the API
+#     answers to NF_DOMAIN, and the request and sign-in limits count each
+#     client by X-Forwarded-For from the proxy (NF_TRUSTED_PROXIES).
+#   - MCP over HTTP runs all the time behind the same domain, at /mcp, and
+#     accepts only personal API tokens.
+#   - `backup` dumps the database every BACKUP_INTERVAL_HOURS into
+#     BACKUP_DIR, checks that each dump restores, and keeps the newest
+#     BACKUP_KEEP.
+#
+# Required in .env: NF_DOMAIN, POSTGRES_PASSWORD (compose refuses to start
+# without them), YOUTUBE_API_KEY, OWN_TOKENS_KEY. The checklist is in
+# SECURITY.md, "What you have to do before you give anyone an account".
+
+services:
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD in .env}"
+
+  web:
+    ports: !reset []
+    environment:
+      NF_MULTI_USER: "1"
+      NF_COOKIE_SECURE: "1"
+      # NF_DOMAIN plus any extra names from .env's NF_ALLOWED_HOSTS
+      NF_ALLOWED_HOSTS: "${NF_DOMAIN:?set NF_DOMAIN in .env, e.g. NF_DOMAIN=niches.example.com},${NF_ALLOWED_HOSTS:-}"
+      # Only containers on this compose network can reach web:8080 (the port
+      # is not published), so trusting Docker's private ranges means trusting
+      # the proxy. Never '*'.
+      NF_TRUSTED_PROXIES: "${NF_TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16}"
+
+  worker:
+    environment:
+      NF_MULTI_USER: "1"
+
+  mcp-http:
+    profiles: !reset []
+    environment:
+      NF_MULTI_USER: "1"
+      MCP_PUBLIC_URL: "https://${NF_DOMAIN:?set NF_DOMAIN in .env}"
+
+  proxy:
+    image: caddy:2-alpine
+    container_name: niche-finder-proxy
+    restart: unless-stopped
+    depends_on:
+      - web
+      - mcp-http
+    environment:
+      NF_DOMAIN: "${NF_DOMAIN:?set NF_DOMAIN in .env}"
+    volumes:
+      - ./infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+
+  backup:
+    # the database's own image, so pg_dump always matches the server version
+    image: pgvector/pgvector:pg16
+    container_name: niche-finder-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["sh", "/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: "${POSTGRES_USER:-niches}"
+      PGPASSWORD: "${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD in .env}"
+      PGDATABASE: "${POSTGRES_DB:-niches}"
+      BACKUP_INTERVAL_HOURS: "${BACKUP_INTERVAL_HOURS:-24}"
+      BACKUP_KEEP: "${BACKUP_KEEP:-14}"
+      BACKUP_VERIFY: "${BACKUP_VERIFY:-1}"
+      TZ: "${TZ:-Asia/Tashkent}"
+    volumes:
+      - ./infra/backup/backup.sh:/backup.sh:ro
+      # a host folder, so the dumps are easy to copy off the server
+      - "${BACKUP_DIR:-./backups}:/backups"

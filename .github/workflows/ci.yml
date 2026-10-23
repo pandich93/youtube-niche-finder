@@ -207,3 +207,16 @@ jobs:
 
       - name: Build web/worker images
         run: docker compose build
+
+      # docs/hosting.md: the production layer must still merge with the base
+      # file, Caddy must accept its config, and the backup script must parse.
+      - name: Check the production setup
+        env:
+          NF_DOMAIN: niches.example.com
+          POSTGRES_PASSWORD: ci-only
+        run: |
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config -q
+          docker run --rm -e NF_DOMAIN \
+            -v "$PWD/infra/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" \
+            caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          sh -n infra/backup/backup.sh

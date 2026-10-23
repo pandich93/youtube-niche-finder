@@ -1,0 +1,4 @@
+# Shell scripts run inside Linux containers (infra/backup/backup.sh is mounted
+# into the backup service), so they keep LF even in a Windows checkout with
+# core.autocrlf=true -- a CRLF line ending breaks `sh`.
+*.sh text eol=lf

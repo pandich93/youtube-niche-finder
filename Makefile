@@ -15,7 +15,7 @@ PYTHON  ?= $(shell command -v python3.13 || command -v python3.12 || \
 RUFF_VERSION ?= 0.16.9
 RUFF    ?= uvx ruff@$(RUFF_VERSION)
 
-.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli api-docs extension-zip
+.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli api-docs extension-zip prod-up prod-down prod-logs prod-cli prod-backup
 
 doctor: ## проверить ключ, сеть и базу (начните отсюда)
 	$(COMPOSE) run --rm mcp python cli.py doctor
@@ -132,3 +132,22 @@ local-run:      ## run the MCP server on the host
 # иначе хостовый uvicorn перехватит порт и проброс контейнера тихо отвалится.
 dev:    ## run the HTTP dashboard on the host, no Docker (needs: make local-install + NICHE_DATABASE_URL in .env)
 	cd backend && ./.venv/bin/python -m uvicorn api:app --reload --host 127.0.0.1 --port 8080
+
+# Сервер для других людей (docs/hosting.md): Caddy с настоящим сертификатом на
+# NF_DOMAIN, наружу только 80/443, вход по аккаунтам, бэкапы по расписанию.
+PROD = $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
+
+prod-up:        ## production: everything behind Caddy on NF_DOMAIN, with backups (docs/hosting.md)
+	$(PROD) up -d --build postgres web worker mcp-http proxy backup
+
+prod-down:      ## production: stop everything (data and backups stay)
+	$(PROD) down
+
+prod-logs:      ## production: follow the logs
+	$(PROD) logs -f --tail 100 web worker mcp-http proxy backup
+
+prod-cli:       ## production: a CLI command, e.g. make prod-cli ARGS="create-user you@example.com --admin"
+	$(PROD) exec web python cli.py $(ARGS)
+
+prod-backup:    ## production: one backup right now, with the restore check
+	$(PROD) run --rm backup once
