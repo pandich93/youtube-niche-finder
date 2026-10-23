@@ -602,7 +602,13 @@ MIGRATIONS = {
     # human accepts them -- see application/tags.py resolve_proposed_tag().
     "video_tags": {
         "proposed": "INTEGER",
+        # multi-user plan P0-02: who added the row; only they or an admin may
+        # replace or remove it. NULL = the operator (worker, CLI, older rows).
+        "created_by": "BIGINT",
     },
+    # multi-user plan P0-02: the shared transcript's first author; only they or
+    # an admin may replace or re-index it. NULL = the operator / older rows.
+    "transcripts": {"created_by": "BIGINT"},
     # plan 02: a draft born from an outlier brief points back at that outlier.
     "drafts": {
         "source_video_id": "TEXT",

@@ -91,15 +91,19 @@ def test_transcript_queues_are_separate(ab):
 def test_reindexing_a_transcript_touches_only_your_own_queue(ab, monkeypatch):
     a, b = ab
     from application import transcripts as TR
-    monkeypatch.setattr(TR, "save_transcript", lambda vid, text, language=None, user_id=1:
+    monkeypatch.setattr(TR, "save_transcript",
+                        lambda vid, text, language=None, user_id=1, may_overwrite=True:
                         {"videoId": vid, "userId": user_id})
+    uid_b = [u["id"] for u in AUTH.list_users() if u["email"] == "b@example.com"][0]
     conn = db.get_conn()
-    conn.execute("INSERT INTO transcripts (video_id, text, created_at) VALUES (?,?,?) "
-                 "ON CONFLICT (video_id) DO NOTHING", ("httpisov1", "hello", db.now_iso()))
+    # b saved it: only its author (or an admin) may re-index a shared transcript (P0-02)
+    conn.execute("INSERT INTO transcripts (video_id, text, created_at, created_by) VALUES (?,?,?,?) "
+                 "ON CONFLICT (video_id) DO UPDATE SET created_by = excluded.created_by",
+                 ("httpisov1", "hello", db.now_iso(), uid_b))
     conn.commit()
     conn.close()
-    uid_b = [u["id"] for u in AUTH.list_users() if u["email"] == "b@example.com"][0]
     assert b.post("/api/transcripts/httpisov1/reindex").json()["userId"] == uid_b
+    assert a.post("/api/transcripts/httpisov1/reindex").status_code == 403
 
 
 def test_alert_read_marks_are_separate(ab):

@@ -263,7 +263,8 @@ PROTECTED_TAG_SOURCES = ("manual", "claude-mcp")
 
 def upsert_video_tag(conn, video_id: str, tag_group: str, tag: str, source: str,
                      created_at: str = None, protected_sources=PROTECTED_TAG_SOURCES,
-                     proposed: bool = False) -> bool:
+                     proposed: bool = False, created_by: int = None,
+                     may_overwrite: bool = True) -> bool:
     """Insert or update one (video_id, tag_group, tag) row. A brand new row
     always writes; overwriting an existing row is blocked only when that
     row's source is protected and `source` is not. Returns whether the row
@@ -272,18 +273,26 @@ def upsert_video_tag(conn, video_id: str, tag_group: str, tag: str, source: str,
     proposed=True (stage 03) marks a tag the LLM invented outside the
     niche's existing taxonomy -- it lands in the table so a reviewer can see
     it, but application.tags.tag_stats excludes it until accepted (see
-    resolve_proposed_tag)."""
+    resolve_proposed_tag).
+
+    created_by / may_overwrite (multi-user plan P0-02): a new row records its
+    author; with may_overwrite=False an existing row is updated only when
+    that author wrote it -- a regular user cannot re-source someone else's
+    tag or quietly accept their proposal by repeating it."""
     cur = conn._conn.cursor()
     cur.execute(
-        "INSERT INTO video_tags (video_id, tag_group, tag, source, created_at, proposed) "
-        "VALUES (%(video_id)s, %(tag_group)s, %(tag)s, %(source)s, %(created_at)s, %(proposed)s) "
+        "INSERT INTO video_tags (video_id, tag_group, tag, source, created_at, proposed, "
+        "created_by) VALUES (%(video_id)s, %(tag_group)s, %(tag)s, %(source)s, %(created_at)s, "
+        "%(proposed)s, %(created_by)s) "
         "ON CONFLICT (video_id, tag_group, tag) DO UPDATE SET "
         "source=excluded.source, created_at=excluded.created_at, proposed=excluded.proposed "
         "WHERE NOT (video_tags.source IN %(protected)s AND excluded.source NOT IN %(protected)s) "
+        "AND (%(may_overwrite)s OR video_tags.created_by = %(created_by)s) "
         "RETURNING 1",
         {"video_id": video_id, "tag_group": tag_group, "tag": tag, "source": source,
          "created_at": created_at or now_iso(), "protected": tuple(protected_sources),
-         "proposed": 1 if proposed else 0},
+         "proposed": 1 if proposed else 0, "created_by": created_by,
+         "may_overwrite": bool(may_overwrite)},
     )
     written = cur.fetchone() is not None
     cur.close()
@@ -292,11 +301,13 @@ def upsert_video_tag(conn, video_id: str, tag_group: str, tag: str, source: str,
 
 def replace_video_tags(conn, video_id: str, tag_group: str, tags: list, source: str,
                        created_at: str = None,
-                       protected_sources=PROTECTED_TAG_SOURCES) -> dict:
+                       protected_sources=PROTECTED_TAG_SOURCES,
+                       created_by: int = None, may_overwrite: bool = True) -> dict:
     """Make `tags` the full tag set for (video_id, tag_group): upsert each,
     delete whatever else was in this group -- except rows protected against
     `source` (same rule as upsert_video_tag), which are left untouched even
-    though they're not in the new list."""
+    though they're not in the new list. With may_overwrite=False only the
+    rows `created_by` wrote are removed (multi-user plan P0-02)."""
     is_protected_writer = source in protected_sources
     tags = list(dict.fromkeys(t for t in tags if t))
 
@@ -306,6 +317,9 @@ def replace_video_tags(conn, video_id: str, tag_group: str, tags: list, source: 
     if not is_protected_writer:
         sql += " AND source NOT IN %(protected)s"
         params["protected"] = tuple(protected_sources)
+    if not may_overwrite:
+        sql += " AND created_by = %(created_by)s"
+        params["created_by"] = created_by
     if tags:
         sql += " AND tag NOT IN %(keep)s"
         params["keep"] = tuple(tags)
@@ -315,7 +329,8 @@ def replace_video_tags(conn, video_id: str, tag_group: str, tags: list, source: 
     created_at = created_at or now_iso()
     written = blocked = 0
     for tag in tags:
-        if upsert_video_tag(conn, video_id, tag_group, tag, source, created_at, protected_sources):
+        if upsert_video_tag(conn, video_id, tag_group, tag, source, created_at, protected_sources,
+                            created_by=created_by, may_overwrite=may_overwrite):
             written += 1
         else:
             blocked += 1

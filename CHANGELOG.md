@@ -46,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - The YouTube API key is no longer put in request URLs: it goes in the
   `X-Goog-Api-Key` header. Network errors no longer carry the URL, and logs and
   HTTP 500 answers mask secrets. Rotate a key that may have been logged.
+- **Multi-user mode: shared data and the server's own work.** A transcript or a
+  curated tag can be replaced or removed only by the user who added it or an
+  admin; pasting over someone else's transcript returns the existing one.
+  Starting the server's scheduled work by hand (refresh, AI enrichment, the
+  alert scan, thumbnail vectors, the niche map; over HTTP and MCP) and
+  resolving the background LLM's proposed tags need an admin, and the buttons
+  are hidden from other users. Single-user mode is unchanged.
 
 ## [0.4.0] - 2026-10-04
 

@@ -38,4 +38,9 @@ MESSAGES = {
     "Папка фронта не найдена: {path}": "Frontend folder not found: {path}",
     "Задайте FRONTEND_DIR или смонтируйте ./frontend в контейнер":
         "Set FRONTEND_DIR or mount ./frontend into the container",
+    # multi-user plan P0-02: a shared transcript belongs to its first author
+    "Транскрипт этого видео сохранил другой пользователь; пересчитать его может "
+    "он или администратор.":
+        "Another user saved this video's transcript; only they or an administrator "
+        "can re-index it.",
 }

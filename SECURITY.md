@@ -133,9 +133,23 @@ What you have to do before you give anyone an account:
 
 Known limits (by design, worth knowing before you invite anyone):
 
-- **Everyone who signs in can change shared public data.** That covers pasting
-  or re-pasting a video's transcript (one shared copy), curated tags,
-  recomputing the niche map and naming niches by collecting them.
+- **Shared data has an owner.** A video's transcript (one shared copy) and its
+  curated tags are shared by everyone. Any signed-in user may add them, but
+  only the person who added a transcript or a tag, or an admin, may replace,
+  re-index or remove it; pasting over someone else's transcript returns the
+  existing one (`alreadyExists`). Rows from before this rule, the worker and
+  the CLI have no owner and are the admins'. Accepting or rejecting the
+  background LLM's proposed tags is for admins. Naming niches by collecting
+  them is still open to everyone.
+- **The server's own work is for admins.** Refreshing stats, AI enrichment,
+  the alert scan, thumbnail vectors and recomputing the niche map run on the
+  worker's schedule; starting them by hand (`/api/refresh`, `/api/enrich/*`,
+  `/api/events/scan`, `/api/thumbnails/embed`, `/api/niche-clusters/recompute`
+  and the MCP tools `refresh_stats`, `enrich_channels`, `tag_new_videos`,
+  `scan_for_alerts`, `embed_thumbnails`) needs an admin, by session or API
+  token. The first author of a transcript can still paste junk or a prompt
+  injection into it, and the LLM hook review of that text is cached for
+  everyone; an admin can replace it.
 - **Admins.** `users.is_admin` guards `/api/admin/*` (tariffs and users'
   tariffs): only an admin signed in to the dashboard, never an API token.
   Admins are not limited by tariffs.
