@@ -47,7 +47,24 @@ and `main` are supported.
 What the server does for you:
 
 - **Accounts.**
-  - Accounts exist only by invitation: `cli.py create-user`.
+  - Without mail (`SMTP_HOST`, `SMTP_FROM`) accounts exist only by invitation:
+    `cli.py create-user` or the admin screen. With mail and
+    `NF_REGISTRATION=open` (the default) anyone can sign up, but only with an
+    address they can read: the password is set from a one-time link mailed to
+    it, so nobody can take someone else's email.
+  - Sign-up and "forgot password" answer the same whether the address is known
+    or not. A known address gets a "you already have an account" email with a
+    reset link instead of a second account; a blocked one gets nothing.
+  - Mailed links (sign-up and email change: 24 hours, reset: 1 hour) are
+    random, single use, and the database keeps only their SHA-256
+    (`email_tokens`). The token travels in the URL fragment, so it is not in
+    server or proxy logs. A new link of the same kind replaces the old one.
+  - At most `NF_MAIL_PER_IP_HOUR` (10) emails per client address and
+    `NF_MAIL_PER_EMAIL_HOUR` (3) per recipient each hour, so the server cannot
+    be used to flood an inbox. The links point at `NF_PUBLIC_URL` or
+    `https://NF_DOMAIN`, never at a host a request names, when either is set.
+  - Changing the email needs the password, and the change happens only when
+    the link mailed to the new address is opened.
   - Passwords are scrypt hashes and must be at least 10 characters. Common
     long passwords (`password123`, `1234567890`, keyboard and alphabet runs,
     one repeated character) and passwords containing the email's name are
@@ -65,9 +82,12 @@ What the server does for you:
 - **Sessions.**
   - A session is a random token in an `HttpOnly`, `SameSite=Strict` cookie, and
     the database keeps only its SHA-256.
-  - Changing a password ends every session of that user.
-  - Without a session, `/api` answers 401. Only sign-in, `/api/health` and the
-    Google OAuth return are open.
+  - Changing a password ends every session of that user (the profile screen
+    keeps the browser it was changed in signed in); a reset by link ends all
+    of them.
+  - Without a session, `/api` answers 401. Only sign-in, sign-up and password
+    reset by link, email confirmation, `/api/health` and the Google OAuth
+    return are open.
 - **No CSRF token, on purpose.** Two layers stand in for it:
   - The browser never sends the `SameSite=Strict` session cookie on a request
     that starts on another site.

@@ -28,7 +28,7 @@ function isAdmin() {
 }
 
 function routeAllowed(name) {
-  if (name === 'plan') return me.multiUser;
+  if (name === 'plan' || name === 'profile') return me.multiUser;
   if (name === 'admin') return me.multiUser && !!me.user?.isAdmin;
   const f = ROUTE_FEATURE[name];
   return !f || featureOn(f);

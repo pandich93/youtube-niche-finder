@@ -15,10 +15,5 @@ export default {
   p90d: '90 дней',
   pAll: 'всё время',
   reload: 'Обновить',
-  signInCrumb: 'Вход',
-  signInTitle: 'Вход в niche-finder',
-  signInSub: 'аккаунт выдаёт администратор этого сервера',
-  passwordPlaceholder: 'пароль',
-  signIn: 'Войти',
   sessionExpired: 'Сессия закончилась — войдите снова.',
 };
