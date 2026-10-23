@@ -256,29 +256,80 @@ def logout(token: str) -> None:
 TOKEN_PREFIX = "nf_"
 
 
-def create_api_token(user_id: int, name: str = None) -> dict:
+# multi-user plan P1-03: what a token may do, and for how long. read = GET
+# routes, write = routes that change something, mcp = MCP over HTTP.
+TOKEN_SCOPES = ("read", "write", "mcp")
+TOKEN_DAYS_DEFAULT = 90
+TOKEN_DAYS_MAX = 365
+
+
+def _token_scopes(scopes) -> list:
+    if scopes is None:
+        return list(TOKEN_SCOPES)
+    if isinstance(scopes, str):
+        scopes = scopes.replace(" ", ",").split(",")
+    picked = [x.strip().lower() for x in scopes if x and x.strip()]
+    unknown = sorted(set(picked) - set(TOKEN_SCOPES))
+    if unknown:
+        raise AuthError(f"unknown token scope {', '.join(unknown)}; use {', '.join(TOKEN_SCOPES)}")
+    if not picked:
+        raise AuthError("a token needs at least one scope: " + ", ".join(TOKEN_SCOPES))
+    return [x for x in TOKEN_SCOPES if x in picked]
+
+
+def _token_expiry(days):
+    """ISO time the token stops working; None = never (asked for with 0)."""
+    if days is None:
+        days = TOKEN_DAYS_DEFAULT
+    try:
+        days = int(days)
+    except (TypeError, ValueError):
+        raise AuthError("expiresInDays must be a whole number of days") from None
+    if days == 0:
+        return None
+    if not 1 <= days <= TOKEN_DAYS_MAX:
+        raise AuthError(f"expiresInDays must be 1..{TOKEN_DAYS_MAX}, or 0 for no expiry")
+    return (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+
+
+def _expired(expires_at) -> bool:
+    if not expires_at:
+        return False
+    try:
+        return datetime.fromisoformat(expires_at) <= datetime.now(timezone.utc)
+    except ValueError:
+        return True          # unreadable expiry: fail closed
+
+
+def create_api_token(user_id: int, name: str = None, expires_in_days=None, scopes=None) -> dict:
+    """A new personal token, shown once. expires_in_days: 1..365, default 90,
+    0 = no expiry; scopes: any of read, write, mcp (default all three)."""
+    picked, expires_at = _token_scopes(scopes), _token_expiry(expires_in_days)
     PL.ensure_room(user_id, "api_tokens")
     token = TOKEN_PREFIX + secrets.token_urlsafe(32)
     conn = db.get_conn()
     try:
-        row = conn.execute("INSERT INTO api_tokens (user_id, token_hash, name, created_at) "
-                           "VALUES (?,?,?,?) RETURNING id",
+        row = conn.execute("INSERT INTO api_tokens (user_id, token_hash, name, created_at, "
+                           "expires_at, scopes) VALUES (?,?,?,?,?,?) RETURNING id",
                            (user_id, _token_hash(token), (name or "").strip()[:80] or None,
-                            db.now_iso())).fetchone()
+                            db.now_iso(), expires_at, ",".join(picked))).fetchone()
         conn.commit()
     finally:
         conn.close()
-    return {"id": row["id"], "token": token, "name": name,
-            "note": "shown once -- copy it now; only its hash is stored"}
+    return {"id": row["id"], "token": token, "name": name, "expiresAt": expires_at,
+            "scopes": picked, "note": "shown once -- copy it now; only its hash is stored"}
 
 
 def list_api_tokens(user_id: int) -> list:
     conn = db.get_conn()
     try:
         return [{"id": r["id"], "name": r["name"], "createdAt": r["created_at"],
-                 "lastUsedAt": r["last_used_at"]}
-                for r in conn.execute("SELECT id, name, created_at, last_used_at FROM api_tokens "
-                                      "WHERE user_id = ? ORDER BY id", (user_id,)).fetchall()]
+                 "lastUsedAt": r["last_used_at"], "expiresAt": r["expires_at"],
+                 "expired": _expired(r["expires_at"]),
+                 "scopes": [x for x in (r["scopes"] or "").split(",") if x]}
+                for r in conn.execute("SELECT id, name, created_at, last_used_at, expires_at, scopes "
+                                      "FROM api_tokens WHERE user_id = ? ORDER BY id",
+                                      (user_id,)).fetchall()]
     finally:
         conn.close()
 
@@ -295,14 +346,18 @@ def revoke_api_token(user_id: int, token_id: int) -> bool:
 
 
 def user_for_api_token(token: str):
-    """{id, email, isAdmin} for a live API token, else None."""
+    """{id, email, isAdmin, scopes} for a live API token, else None. An
+    expired token is no token (multi-user plan P1-03); callers check the
+    scope they need with token_allows()."""
     if not token or not token.startswith(TOKEN_PREFIX):
         return None
     conn = db.get_conn()
     try:
+        now = db.now_iso()
         row = conn.execute(
-            "UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ? RETURNING user_id",
-            (db.now_iso(), _token_hash(token))).fetchone()
+            "UPDATE api_tokens SET last_used_at = ? WHERE token_hash = ? "
+            "AND (expires_at IS NULL OR expires_at > ?) RETURNING user_id, scopes",
+            (now, _token_hash(token), now)).fetchone()
         if not row:
             return None
         u = conn.execute("SELECT id, email, is_admin FROM users WHERE id = ? "
@@ -310,4 +365,12 @@ def user_for_api_token(token: str):
         conn.commit()
     finally:
         conn.close()
-    return {"id": u["id"], "email": u["email"], "isAdmin": bool(u["is_admin"])} if u else None
+    if not u:
+        return None
+    return {"id": u["id"], "email": u["email"], "isAdmin": bool(u["is_admin"]),
+            "scopes": [x for x in (row["scopes"] or "").split(",") if x]}
+
+
+def token_allows(user: dict, scope: str) -> bool:
+    """Whether the token behind `user` (from user_for_api_token) has `scope`."""
+    return scope in (user or {}).get("scopes", ())

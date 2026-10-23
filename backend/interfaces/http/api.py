@@ -300,6 +300,15 @@ async def session_guard(request, call_next):
     if user:
         request.state.user_id, request.state.user = user["id"], user
     path = request.url.path
+    if user and request.state.via == "token" and path.startswith("/api/"):
+        # P1-03: a token reads with `read` and changes things with `write`
+        need = "read" if request.method in ("GET", "HEAD", "OPTIONS") else "write"
+        if not AUTH.token_allows(user, need):
+            with i18n.use_locale(_header_locale(request)):
+                detail = tr("У этого API-токена нет права «{scope}». Создайте токен с ним "
+                            "на экране «MCP».", scope=need)
+            return JSONResponse(status_code=403, content={
+                "error": "TokenScope", "scope": need, "detail": detail})
     if (path.startswith("/api/") and path not in _PUBLIC_API and not user
             and request.method != "OPTIONS"):
         with i18n.use_locale(_header_locale(request)):
@@ -1313,8 +1322,15 @@ def api_tokens_list(request: Request):
 
 @app.post("/api/auth/tokens")
 def api_tokens_create(request: Request, payload: dict = Body(default={})):
-    """A personal token for the extension or MCP over HTTP, shown ONCE."""
-    return AUTH.create_api_token(_session_user(request), payload.get("name"))
+    """A personal token for the extension or MCP over HTTP, shown ONCE.
+    expiresInDays: 1..365 (default 90), 0 = no expiry; scopes: any of read,
+    write, mcp (default all)."""
+    try:
+        return AUTH.create_api_token(_session_user(request), payload.get("name"),
+                                     expires_in_days=payload.get("expiresInDays"),
+                                     scopes=payload.get("scopes"))
+    except AUTH.AuthError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.delete("/api/auth/tokens/{token_id}")

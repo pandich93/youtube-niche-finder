@@ -795,12 +795,15 @@ def test_the_token_verifier_maps_a_token_to_its_user(monkeypatch):
 
     from application import auth
     from interfaces.mcp import auth as mcp_auth
-    monkeypatch.setattr(auth, "user_for_api_token",
-                        lambda t: {"id": 42, "email": "a@x", "isAdmin": False} if t == "nf_ok" else None)
+    users = {"nf_ok": {"id": 42, "email": "a@x", "isAdmin": False, "scopes": ["read", "mcp"]},
+             "nf_web_only": {"id": 43, "email": "b@x", "isAdmin": False, "scopes": ["read", "write"]}}
+    monkeypatch.setattr(auth, "user_for_api_token", users.get)
     v = mcp_auth.ApiTokenVerifier()
     tok = anyio.run(v.verify_token, "nf_ok")
     assert tok.client_id == "42" and mcp_auth.SCOPE in tok.scopes
     assert anyio.run(v.verify_token, "nf_bad") is None
+    # P1-03: a token without the mcp scope is no MCP token
+    assert anyio.run(v.verify_token, "nf_web_only") is None
 
 
 def test_tools_act_as_the_tokens_user(monkeypatch):

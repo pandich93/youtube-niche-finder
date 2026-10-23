@@ -146,7 +146,9 @@ def test_an_api_token_is_shown_once_and_stored_only_as_a_hash():
     conn.close()
     assert t["token"] not in repr(rows)
     assert A.list_api_tokens(uid) == [{"id": t["id"], "name": "extension",
-                                       "createdAt": rows[0]["created_at"], "lastUsedAt": None}]
+                                       "createdAt": rows[0]["created_at"], "lastUsedAt": None,
+                                       "expiresAt": rows[0]["expires_at"], "expired": False,
+                                       "scopes": ["read", "write", "mcp"]}]
 
 
 def test_an_api_token_resolves_to_its_user_until_revoked():

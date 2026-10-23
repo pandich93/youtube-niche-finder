@@ -2,6 +2,8 @@
 Keys are the exact Russian source passed to domain.i18n.tr()."""
 
 MESSAGES = {
+    "У этого API-токена нет права «{scope}». Создайте токен с ним на экране «MCP».":
+        "This API token lacks the “{scope}” scope. Create one that has it on the MCP screen.",
     "нужно поле channel_id": "the channel_id field is required",
     "нужно поле channel": "the channel field is required",
     "нужно поле query": "the query field is required",

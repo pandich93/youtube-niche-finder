@@ -3,6 +3,10 @@ notification. Keys are the exact Russian source passed to domain.i18n.tr();
 the language is NF_DEFAULT_LOCALE (from the environment or .env)."""
 
 MESSAGES = {
+    "срок жизни в днях, 1..365 (по умолчанию 90); 0 -- бессрочный":
+        "lifetime in days, 1..365 (default 90); 0 = no expiry",
+    "права через запятую: read, write, mcp (по умолчанию все)":
+        "comma-separated scopes: read, write, mcp (default all)",
     # the module docstring, shown by --help
     """Командная строка к niche-finder -- чтобы проверить и погонять всё
 без подключения к Claude Desktop.
