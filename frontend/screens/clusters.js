@@ -1,6 +1,7 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, num, mult, esc, toast, sectionHead, empty, table, saturationChip } from '../ui.js';
 import { view } from '../shared.js';
+import { isAdmin } from '../plan-state.js';
 import { dict } from '../i18n.js';
 import ru from '../i18n/ru/clusters.js';
 import en from '../i18n/en/clusters.js';
@@ -14,7 +15,7 @@ async function viewNicheClusters() {
   view.innerHTML = `
     <div class="card">
       ${sectionHead(t('title'), t('sub'),
-        `<button class="btn btn-ghost btn-sm" id="clustersRecomputeBtn">${t('recompute')}</button>`)}
+        isAdmin() ? `<button class="btn btn-ghost btn-sm" id="clustersRecomputeBtn">${t('recompute')}</button>` : '')}
       ${d.clusters.length ? table([
         { label: t('colName'), wrap: true, render: (c) => `<b>${esc(c.name)}</b>
           ${c.description ? `<div class="row-sub">${esc(c.description)}</div>` : ''}` },
@@ -27,7 +28,7 @@ async function viewNicheClusters() {
       ], d.clusters) : empty(d.hint || t('empty'))}
     </div>`;
 
-  $('#clustersRecomputeBtn').addEventListener('click', async () => {
+  $('#clustersRecomputeBtn')?.addEventListener('click', async () => {
     const btn = $('#clustersRecomputeBtn');
     btn.disabled = true;
     btn.textContent = t('computing');

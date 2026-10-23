@@ -442,7 +442,8 @@ def test_valid_bodies_reach_the_application(stub):
     assert req.kwargs["compare_group"] == "a"
     save = stub("TR", "save_transcript")
     client.post("/api/transcripts/v1/save", json={"text": "hello", "language": "en"})
-    assert save.args == ("v1", "hello") and save.kwargs == {"language": "en", "user_id": 1}
+    assert save.args == ("v1", "hello") and save.kwargs == {"language": "en", "user_id": 1,
+                                                            "may_overwrite": True}
     many = stub("I", "inspect_videos")
     client.post("/api/inspect/videos", json={"ids": ["a", "b"], "fetch": False})
     assert many.args == (None, ["a", "b"]) and many.kwargs == {"fetch": False}

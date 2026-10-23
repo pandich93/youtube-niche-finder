@@ -57,13 +57,33 @@ MCP_TOOL_FEATURES = {"own_channels": "own_channels", "own_vs_niche": "own_channe
                      "rpm_calibration": ("own_channels", "own_revenue")}
 
 
+# multi-user plan P0-02: work on the shared corpus or the server's own schedule
+# (the worker does it anyway) -- a regular token is refused, an admin's is not
+MCP_ADMIN_TOOLS = {"refresh_stats", "enrich_channels", "tag_new_videos", "scan_for_alerts",
+                   "embed_thumbnails"}
+
+
+def may_overwrite() -> bool:
+    """Whether this caller may replace or remove what other users added to the
+    shared corpus (tags): an admin's token, or stdio / no sign-in (the local
+    operator)."""
+    tok = get_access_token()
+    if not (tok and tok.client_id and tok.client_id.isdigit()):
+        return True
+    from application import auth
+    return auth.is_admin(int(tok.client_id))
+
+
 def blocked_feature(user_id: int, method, params):
-    """The tariff feature a token's user lacks for this MCP message, else None."""
-    from application import plans
+    """The tariff feature a token's user lacks for this MCP message, "admin"
+    for an admin-only tool, else None."""
+    from application import auth, plans
     features = plans.plan_for(user_id).features
     if not features["api_access"]:
         return "api_access"
     if method == "tools/call":
+        if (params or {}).get("name") in MCP_ADMIN_TOOLS and not auth.is_admin(user_id):
+            return "admin"
         needed = MCP_TOOL_FEATURES.get((params or {}).get("name")) or ()
         for feature in ((needed,) if isinstance(needed, str) else needed):
             if not features[feature]:
@@ -102,8 +122,8 @@ async def quota_owner_middleware(ctx, call_next):
     feature = await to_thread.run_sync(blocked_feature, uid, getattr(ctx, "method", None),
                                        getattr(ctx, "params", None))
     if feature:
-        from domain.plans import FeatureOff
-        raise FeatureOff(feature)
+        from domain.plans import AdminOnly, FeatureOff
+        raise AdminOnly() if feature == "admin" else FeatureOff(feature)
     reset = quota_owner.set_owner(uid)
     try:
         return await call_next(ctx)

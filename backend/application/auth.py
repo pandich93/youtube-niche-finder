@@ -107,6 +107,15 @@ def list_users() -> list:
         conn.close()
 
 
+def is_admin(user_id: int) -> bool:
+    conn = db.get_conn()
+    try:
+        row = conn.execute("SELECT is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
+    finally:
+        conn.close()
+    return bool(row and row["is_admin"])
+
+
 def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 

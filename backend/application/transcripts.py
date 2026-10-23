@@ -61,19 +61,43 @@ def list_transcript_queue(status: str = None, user_id: int = LOCAL_USER_ID) -> l
     } for r in rows]
 
 
+class TranscriptNotYours(PermissionError):
+    """Someone else's shared transcript (multi-user plan P0-02)."""
+
+
 def save_transcript(video_id: str, raw_text: str, language: str = None,
-                    user_id: int = LOCAL_USER_ID) -> dict:
+                    user_id: int = LOCAL_USER_ID, may_overwrite: bool = True) -> dict:
     """Parse -> chunk -> embed -> store, all synchronous (fastembed is
     local, no network). Any failure writes status='error' with the message
     instead of raising, so a bad paste shows up in the queue with a
-    "Повторить" button rather than a 500."""
+    "Повторить" button rather than a 500.
+
+    The transcript is shared (multi-user plan P0-02): its first author is
+    recorded, and with may_overwrite=False (a regular user, not its author)
+    an existing transcript is kept -- the caller gets it back with
+    alreadyExists, and their own request is answered by it. The interfaces
+    pass True for an admin and in single-user mode."""
     conn = db.get_conn()
-    conn.execute(
-        "INSERT INTO transcript_requests (user_id, video_id, status, created_at) "
-        "VALUES (?, ?, 'pending', ?) ON CONFLICT (user_id, video_id) DO NOTHING",
-        (user_id, video_id, db.now_iso()))
-    conn.commit()
-    conn.close()
+    try:
+        conn.execute(
+            "INSERT INTO transcript_requests (user_id, video_id, status, created_at) "
+            "VALUES (?, ?, 'pending', ?) ON CONFLICT (user_id, video_id) DO NOTHING",
+            (user_id, video_id, db.now_iso()))
+        existing = conn.execute(
+            "SELECT created_by, word_count, has_timestamps FROM transcripts WHERE video_id = ?",
+            (video_id,)).fetchone()
+        if existing and not may_overwrite and existing["created_by"] != user_id:
+            conn.execute("UPDATE transcript_requests SET status='ready', error=NULL "
+                         "WHERE video_id = ? AND user_id = ?", (video_id, user_id))
+            chunks = conn.execute("SELECT COUNT(*) AS n FROM transcript_chunks WHERE video_id = ?",
+                                  (video_id,)).fetchone()["n"]
+            conn.commit()
+            return {"videoId": video_id, "status": "ready", "alreadyExists": True,
+                    "chunks": chunks, "wordCount": existing["word_count"],
+                    "hasTimestamps": bool(existing["has_timestamps"])}
+        conn.commit()
+    finally:
+        conn.close()
 
     try:
         parsed = TR.parse_transcript(raw_text)
@@ -90,12 +114,13 @@ def save_transcript(video_id: str, raw_text: str, language: str = None,
         try:
             conn.execute(
                 "INSERT INTO transcripts (video_id, language, text, has_timestamps, "
-                "word_count, created_at) VALUES (?,?,?,?,?,?) ON CONFLICT (video_id) DO UPDATE "
+                "word_count, created_at, created_by) VALUES (?,?,?,?,?,?,?) "
+                "ON CONFLICT (video_id) DO UPDATE "
                 "SET language=excluded.language, text=excluded.text, "
                 "has_timestamps=excluded.has_timestamps, word_count=excluded.word_count, "
                 "created_at=excluded.created_at",
                 (video_id, language, raw_text, 1 if parsed["hasTimestamps"] else 0,
-                 parsed["wordCount"], db.now_iso()))
+                 parsed["wordCount"], db.now_iso(), user_id))
             conn.execute("DELETE FROM transcript_chunks WHERE video_id = ?", (video_id,))
             for idx, (c, vec) in enumerate(zip(chunks, vecs)):
                 conn.execute(
@@ -123,18 +148,23 @@ def save_transcript(video_id: str, raw_text: str, language: str = None,
         return {"videoId": video_id, "status": "error", "error": str(e)}
 
 
-def reindex_transcript(video_id: str, user_id: int = LOCAL_USER_ID) -> dict:
+def reindex_transcript(video_id: str, user_id: int = LOCAL_USER_ID,
+                       may_overwrite: bool = True) -> dict:
     """Re-chunk + re-embed an already-saved transcript -- for after a chunk
     size or embedding model change. No re-paste needed, the raw text is
-    already stored."""
+    already stored. Only its author or an admin (may_overwrite) may do it:
+    TranscriptNotYours otherwise (multi-user plan P0-02)."""
     conn = db.get_conn()
-    row = conn.execute("SELECT text, language FROM transcripts WHERE video_id=?",
+    row = conn.execute("SELECT text, language, created_by FROM transcripts WHERE video_id=?",
                        (video_id,)).fetchone()
     conn.close()
     if not row:
         return {"videoId": video_id, "status": "error",
                "error": "no saved transcript for this video yet"}
-    return save_transcript(video_id, row["text"], language=row["language"], user_id=user_id)
+    if not may_overwrite and row["created_by"] != user_id:
+        raise TranscriptNotYours(video_id)
+    return save_transcript(video_id, row["text"], language=row["language"], user_id=user_id,
+                           may_overwrite=True)
 
 
 def search_transcripts(query: str, niche: str = None, compare_group: str = None,

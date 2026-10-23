@@ -20,6 +20,13 @@ function featureOn(key) {
   return !me.multiUser || !me.plan || me.plan.features?.[key] !== false;
 }
 
+// многопользовательский план P0-02: ручной запуск работы сервера (пересчёт,
+// обновление, эмбеддинги) и разбор предложений LLM -- только администратору;
+// без NF_MULTI_USER оператор и есть администратор
+function isAdmin() {
+  return !me.multiUser || !!me.user?.isAdmin;
+}
+
 function routeAllowed(name) {
   if (name === 'plan') return me.multiUser;
   if (name === 'admin') return me.multiUser && !!me.user?.isAdmin;
@@ -58,4 +65,4 @@ addEventListener('nf:api-write', () => {
   timer = setTimeout(refreshMe, 1000);
 });
 
-export { setMe, getMe, featureOn, routeAllowed, applyNav, renderPlanLine, refreshMe };
+export { setMe, getMe, featureOn, isAdmin, routeAllowed, applyNav, renderPlanLine, refreshMe };

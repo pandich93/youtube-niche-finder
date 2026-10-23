@@ -948,9 +948,13 @@ def tag_videos(items: list, source: str, replace: bool = False) -> dict:
     source must be 'manual', 'claude-mcp' or 'llm' -- an 'llm' write never
     overwrites or deletes a tag set by 'manual' or 'claude-mcp'.
     replace=True makes an item's tags the full set for that video+group
-    (still subject to the same protection). Zero quota, local only."""
+    (still subject to the same protection). Tags are shared: on a server with
+    accounts, replace removes only tags this user added (an admin: any).
+    Zero quota, local only."""
+    from interfaces.mcp import auth as mcp_auth
     try:
-        return tags_uc.tag_videos(items, source=source, replace=replace)
+        return tags_uc.tag_videos(items, source=source, replace=replace, user_id=_uid(),
+                                  may_overwrite=mcp_auth.may_overwrite())
     except ValueError as e:
         return {"error": str(e)}
 
@@ -994,8 +998,11 @@ def list_proposed_tags(niche: str) -> list:
     idempotent_hint=True, open_world_hint=False))
 def resolve_proposed_tag(video_id: str, tag_group: str, tag: str, accept: bool) -> dict:
     """Accept (joins the niche's taxonomy, counted by tag_stats from now on)
-    or reject (deleted outright) one row from list_proposed_tags."""
-    return tags_uc.resolve_proposed_tag(video_id, tag_group, tag, accept)
+    or reject (deleted outright) one row from list_proposed_tags. On a server
+    with accounts the background LLM's proposals are the admin's to resolve."""
+    from interfaces.mcp import auth as mcp_auth
+    return tags_uc.resolve_proposed_tag(video_id, tag_group, tag, accept, user_id=_uid(),
+                                        may_overwrite=mcp_auth.may_overwrite())
 
 
 @mcp.tool(annotations=ToolAnnotations(
