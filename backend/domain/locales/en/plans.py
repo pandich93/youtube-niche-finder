@@ -13,10 +13,12 @@ MESSAGES = {
     "Сохранённое": "Saved items",
     "Черновики и брифы": "Drafts and briefs",
     "API-токены": "API tokens",
+    "Ручные запуски в час": "Manual runs per hour",
 
     # ------------------------------------------------------------- units
     "запросов": "searches",
     "шт.": "items",
+    "раз": "times",
 
     # --------------------------------------------------- feature labels
     "Мои каналы": "My channels",
@@ -50,4 +52,9 @@ MESSAGES = {
     "запускает только администратор сервера.":
         "The background collector does this on schedule; only the server's administrator "
         "can run it by hand.",
+    # multi-user plan P2-11: a regular user's manual runs past the hourly limit
+    "Вручную это можно запускать не больше {limit} раз в час -- снова можно через "
+    "{minutes} мин. Остальное сделает фоновый сборщик по расписанию.":
+        "You can run this by hand at most {limit} time(s) an hour -- try again in {minutes} min. "
+        "The background collector does the rest on schedule.",
 }

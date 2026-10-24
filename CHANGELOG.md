@@ -22,6 +22,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   says whose eyes you are using; `/api/auth/me` returns `impersonation`.
   The start (with the reason), the end and the expiry go into the action log
   (group `support`).
+- **Manual runs for regular users, with a limit** (multi-user plan P2-11). A
+  new tariff limit `manual_runs` ("Ручные запуски в час", default
+  `NF_USER_MANUAL_RUNS_PER_HOUR=0` = admins only, as before) lets a regular
+  user refresh stats (`POST /api/refresh`) and run the alert scan
+  (`POST /api/events/scan`) by hand -- over their own watchlist only, on their
+  own YouTube quota, that many times an hour per operation. Past the limit the
+  answer is `429` with `Retry-After`; the counter (`manual_runs`, personal,
+  under RLS) is in Postgres under an advisory lock, so it holds across
+  restarts, replicas and parallel requests, and a failed run does not count.
+  `GET /api/manual-runs` tells the dashboard when the next run is allowed: the
+  "Обновить сейчас" button on "Данные" and the new "Проверить сейчас" on
+  "Алерты" show "Снова можно в HH:MM". Admins are never limited. AI
+  labelling, thumbnail vectors and the niche map stay admin-only; the decision
+  table is in [docs/manual-runs.md](docs/manual-runs.md).
 
 ## [0.5.0] - 2026-10-24
 

@@ -6,8 +6,9 @@ A limit is a number or None (no limit); 0 means "not at all". A key missing
 from a stored plan takes the catalog default, so a key added to the code later
 never locks existing plans: daily limits default to the NF_USER_DAILY_* values
 from .env (0 there has always meant "no limit"), tracked and own channels to
-NF_USER_MAX_TRACKED_CHANNELS / NF_USER_MAX_OWN_CHANNELS, other count limits to
-None and features to on.
+NF_USER_MAX_TRACKED_CHANNELS / NF_USER_MAX_OWN_CHANNELS, manual runs to
+NF_USER_MANUAL_RUNS_PER_HOUR (0 there means "admins only"), other count limits
+to None and features to on.
 """
 import math
 import os
@@ -30,6 +31,15 @@ def _env_usd(name, default):
     except ValueError:
         value = default
     return value or None
+
+
+def _env_count(name, default):
+    """Как _env_int, но 0 так и остаётся нулём («совсем нельзя»), а не «без
+    лимита»: для лимита, у которого прежнее поведение -- запрет."""
+    try:
+        return max(0, int(os.environ.get(name) or default))
+    except ValueError:
+        return default
 
 
 def _none():
@@ -60,6 +70,12 @@ LIMITS = {
                "default": _none},
     "api_tokens": {"label": "API-токены", "unit": "шт.", "kind": "count", "type": int,
                    "default": _none},
+    # multi-user plan P2-11: ручные запуски работы сервера (обновить статистику,
+    # проверить алерты) -- по своим каналам, столько раз в час на каждую
+    # операцию (domain/manual_runs.py). 0 -- только администратор, как до P2-11;
+    # null -- без лимита. По умолчанию NF_USER_MANUAL_RUNS_PER_HOUR, а там 0.
+    "manual_runs": {"label": "Ручные запуски в час", "unit": "раз", "kind": "hourly",
+                    "type": int, "default": lambda: _env_count("NF_USER_MANUAL_RUNS_PER_HOUR", 0)},
 }
 
 FEATURES = {

@@ -53,6 +53,7 @@ from application import inspection as I
 from application import language_gaps as LG
 from application import library as L
 from application import locale_prefs as LP
+from application import manual_runs as MRUN
 from application import maturity_curve
 from application import metadata_review as MR
 from application import niche_clusters as NCL
@@ -79,6 +80,7 @@ from application import trajectory as TJ
 from application import transcripts as TR
 from application import users_admin as UA
 from domain import i18n
+from domain import manual_runs as DMR
 from domain import plans as PD
 from domain.i18n import tr
 from domain.users import LOCAL_USER_ID, multi_user_enabled
@@ -556,6 +558,16 @@ async def _quota_exceeded(request, exc):
 async def _plan_limit(request, exc):
     return JSONResponse(status_code=403, content={"error": "PlanLimit", "limit": exc.key,
                                                   "max": exc.max, "detail": str(exc)})
+
+
+@app.exception_handler(DMR.ManualRunLimited)
+async def _manual_run_limited(request, exc):
+    """P2-11: ручной запуск чаще лимита тарифа -- 429 с Retry-After и временем,
+    когда можно снова (nextAt, UTC), для кнопки дашборда."""
+    return JSONResponse(status_code=429, headers={"Retry-After": str(exc.retry_after)},
+                        content={"error": "ManualRunLimit", "operation": exc.operation,
+                                 "limit": exc.limit, "retryAfter": exc.retry_after,
+                                 "nextAt": exc.at.isoformat(), "detail": str(exc)})
 
 
 @app.exception_handler(PD.FeatureOff)
@@ -1048,9 +1060,14 @@ def mark_events_seen(request: Request, payload: dict = Body(default={})):
 @app.post("/api/events/scan")
 def scan_events(request: Request):
     """Manual trigger -- the worker already runs this on WORKER_ALERTS_INTERVAL_MIN,
-    this is for "check right now" from the dashboard/popup without waiting."""
-    require_admin(request)
-    return AL.scan()
+    this is for "check right now" from the dashboard/popup without waiting.
+    An admin scans every watchlist; a regular user (P2-11, plan limit
+    `manual_runs`) only their own channels, a few times an hour."""
+    if _is_admin(request):
+        require_admin(request)
+        return AL.scan()
+    return _user_run(request, "scan",
+                     lambda uid: AL.scan(channel_ids=T.user_channel_ids(user_id=uid)))
 
 
 # ------------------------------------------------------ topic alerts (plan 19)
@@ -1578,6 +1595,32 @@ def require_admin(request):
     _as_system()
 
 
+def _user_run(request, operation, run):
+    """P2-11: ручной запуск обычного пользователя -- по его каналам и в лимит
+    тарифа `manual_runs`. Лимит 0 -- 403, как до P2-11 (только администратор);
+    исчерпан -- 429 с Retry-After (_manual_run_limited). Запуск, который упал
+    (нет ключа, кончилась квота), не в счёт. Работает в области пользователя
+    (RLS), квоту и LLM платит он сам (quota_owner)."""
+    uid = _uid(request)
+    try:
+        run_id = MRUN.start(operation, user_id=uid)
+    except PD.AdminOnly as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    try:
+        return run(uid)
+    except BaseException:
+        MRUN.release(run_id, user_id=uid)
+        raise
+
+
+@app.get("/api/manual-runs")
+def manual_runs_status(request: Request):
+    """P2-11: which manual runs (refresh, scan) this user may start now and,
+    past the plan's hourly limit, when the next one is allowed (nextAt, UTC).
+    An admin is never limited; perHour 0 means admins only."""
+    return MRUN.status(user_id=_uid(request), is_admin=_is_admin(request))
+
+
 def _as_system():
     """P1-02: дальше этот маршрут работает за всех, как worker, -- ролью
     владельца, без политик RLS. Без reset: синхронный маршрут идёт в потоке
@@ -2033,13 +2076,24 @@ def collect_niche(payload: dict = Body(...)):
 
 @app.post("/api/refresh")
 def refresh(request: Request, payload: dict = Body(default={})):
-    require_admin(request)
-    _need_key()
-    stats_res = collector.refresh_stats(API_KEY, scope=payload.get("scope", "recent"),
-                                        period=payload.get("period", "30d"),
-                                        limit=int(payload.get("limit", 1000)))
-    chan_res = collector.refresh_channels(API_KEY, only_tracked=True)
-    return {"videos": stats_res, "channels": chan_res}
+    """Fresh counters now instead of waiting for the worker. An admin
+    refreshes the corpus (scope/period/limit, every tracked channel); a
+    regular user (P2-11, plan limit `manual_runs`) refreshes only their own
+    watchlist and its videos from `period`, on their own YouTube quota."""
+    if _is_admin(request):
+        require_admin(request)
+        _need_key()
+        stats_res = collector.refresh_stats(API_KEY, scope=payload.get("scope", "recent"),
+                                            period=payload.get("period", "30d"),
+                                            limit=int(payload.get("limit", 1000)))
+        chan_res = collector.refresh_channels(API_KEY, only_tracked=True)
+        return {"videos": stats_res, "channels": chan_res}
+
+    def mine(uid):
+        _need_key()
+        return collector.refresh_watchlist(API_KEY, T.user_channel_ids(user_id=uid),
+                                           period=payload.get("period") or "30d")
+    return _user_run(request, "refresh", mine)
 
 
 @app.post("/api/videos/{video_id}/comments")
