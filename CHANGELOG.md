@@ -73,6 +73,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   quotas stay on Pacific Time (YouTube units and searches) and UTC (LLM spend), now said so
   in `backend/README.md`.
 
+### Security
+
+- **Row-Level Security holds against arbitrary SQL** (multi-user plan P1-02,
+  the rest of it). With `POSTGRES_APP_PASSWORD` in `.env`, the dashboard and
+  MCP open the connections for people's requests with the login
+  `NF_DB_APP_ROLE` (`<POSTGRES_USER>_app`) instead of `SET ROLE` from the
+  owner's login. It is not the owner and cannot become it, so `RESET ROLE` or
+  `SET ROLE` no longer lift the policies.
+  - The user a session names in `app.user_id` now needs a signature
+    (`app.user_sig`): SHA-256 over a secret only the owner reads, the number
+    and the connection's process id. Without it a session sees no personal
+    rows, so `set_config` cannot name someone else. Old policies are rewritten
+    at start.
+  - The services make the role a login with that password themselves at
+    start; nothing else changes in `.env` or the compose files. Without the
+    password everything works as before (`SET ROLE`), with a warning in the
+    log. A login that fails falls back to `SET ROLE`, with a warning.
+  - Sign-in, sign-up, the admin routes, the worker and the CLI stay on the
+    owner's login: they act for every account.
+  - Tables added later get their rights at start and through
+    `ALTER DEFAULT PRIVILEGES`. Details:
+    [docs/hosting.md](docs/hosting.md#row-level-security).
+
 ## [0.5.0] - 2026-10-24
 
 The closed-beta round of the multi-user plan (P0 and P1, without billing):

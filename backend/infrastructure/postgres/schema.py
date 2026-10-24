@@ -9,6 +9,7 @@ drafts with their post-publish outcome (drafts), and worker-generated
 alerts (events) -- see docs/plan-iteration-8.md.
 """
 import logging
+import secrets
 from datetime import datetime, timezone
 
 from infrastructure.postgres.connection import get_conn  # noqa: F401  (re-export for callers)
@@ -997,16 +998,58 @@ def _owner_keys(conn):
         conn.execute(f"ALTER TABLE {table} ADD PRIMARY KEY ({', '.join(key)})")
 
 
-# multi-user plan P1-02: политика на каждую личную таблицу. app.user_id ставит
-# get_conn() в области пользователя; не задан -- NULL, и строк не видно вовсе.
+# multi-user plan P1-02: политика на каждую личную таблицу. Чей это запрос,
+# говорит nf_rls_uid(): app.user_id, который get_conn() ставит в области
+# пользователя, -- только если к нему верная подпись app.user_sig (connection.
+# rls_signature: SHA-256 от секрета, номера и pid соединения). Нет подписи или
+# она к другому номеру -- NULL, и строк не видно вовсе: сессия логина
+# приложения не назовётся чужим номером через set_config. Секрет лежит в
+# nf_rls_key, которую читает только владелец; функция -- SECURITY DEFINER.
+# В политике она в подзапросе: считается один раз на запрос, а не на строку.
 # events: NULL в user_id -- общий факт, его видят все (как и без RLS).
 RLS_POLICY = "nf_owner_rows"
-_RLS_UID = "NULLIF(current_setting('app.user_id', true), '')::bigint"
-_RLS_EXPR = {"events": f"(user_id IS NULL OR user_id = {_RLS_UID})"}
+RLS_KEY_TABLE = "nf_rls_key"
+_RLS_UID_BODY = """
+SELECT CASE WHEN c.u ~ '^[0-9]{{1,18}}$' AND c.s = encode(sha256(convert_to(
+         k.key || ':' || c.u || ':' || pg_backend_pid()::text || ':' || k.key, 'UTF8')), 'hex')
+       THEN c.u::bigint END
+FROM (SELECT current_setting('app.user_id', true) AS u,
+             current_setting('app.user_sig', true) AS s) c
+CROSS JOIN "{schema}".nf_rls_key k
+WHERE k.id = 1
+"""
 
 
-def _rls_expr(table):
-    return _RLS_EXPR.get(table, f"user_id = {_RLS_UID}")
+def _rls_uid(schema):
+    return f'(SELECT "{schema}".nf_rls_uid())'
+
+
+def _rls_expr(table, schema):
+    uid = _rls_uid(schema)
+    if table == "events":
+        return f"(user_id IS NULL OR user_id = {uid})"
+    return f"user_id = {uid}"
+
+
+def _ensure_rls_uid(conn, schema):
+    """Секрет (один раз, случайный) и функция, которая проверяет подпись.
+    Функцию переписываем, только если её текст другой: на каждом старте это
+    лишняя запись в каталог."""
+    conn.execute(f"CREATE TABLE IF NOT EXISTS {RLS_KEY_TABLE} ("
+                 "id INTEGER PRIMARY KEY CHECK (id = 1), key TEXT NOT NULL)")
+    conn.execute(f"INSERT INTO {RLS_KEY_TABLE} (id, key) VALUES (1, ?) ON CONFLICT (id) DO NOTHING",
+                 (secrets.token_hex(32),))
+    if conn.execute("SELECT has_table_privilege('public', ?, 'SELECT')",
+                    (f'"{schema}".{RLS_KEY_TABLE}',)).fetchone()[0]:
+        conn.execute(f"REVOKE ALL ON {RLS_KEY_TABLE} FROM PUBLIC")
+    body = _RLS_UID_BODY.format(schema=schema)
+    row = conn.execute("SELECT p.prosrc, p.prosecdef FROM pg_proc p "
+                       "WHERE p.oid = to_regprocedure(?)", (f'"{schema}".nf_rls_uid()',)).fetchone()
+    if row is None or row["prosrc"] != body or not row["prosecdef"]:
+        # psycopg2 не трогает %, когда параметров нет; '?' в теле нет
+        conn.execute(f'CREATE OR REPLACE FUNCTION "{schema}".nf_rls_uid() RETURNS bigint '
+                     "LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, pg_temp "
+                     f"AS $nf${body}$nf$")
 
 
 def _savepoint(conn, name, fn):
@@ -1024,33 +1067,65 @@ def _savepoint(conn, name, fn):
 
 
 def _ensure_app_role(conn, role):
-    """Роль для запросов пользователей: без входа, без BYPASSRLS, не владелец.
-    Логин владельца получает её членство, чтобы get_conn() делал SET ROLE."""
+    """Роль для запросов пользователей: без BYPASSRLS, не владелец (создаётся
+    без входа). Логин владельца получает её членство, чтобы get_conn() мог
+    сделать SET ROLE (режим "role"); логину приложения оно не нужно. True --
+    роль есть, ей можно раздавать права."""
     if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = ?", (role,)).fetchone():
         _savepoint(conn, "nf_rls_role", lambda: conn.execute(
             f'CREATE ROLE "{role}" NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT'))
     if not conn.execute("SELECT 1 FROM pg_roles WHERE rolname = ?", (role,)).fetchone():
         return False
-    member = conn.execute("SELECT pg_has_role(current_user, ?, 'MEMBER')", (role,)).fetchone()[0]
-    if not member:
-        member = _savepoint(conn, "nf_rls_member",
-                            lambda: conn.execute(f'GRANT "{role}" TO CURRENT_USER'))
-    return member
+    if not conn.execute("SELECT pg_has_role(current_user, ?, 'MEMBER')", (role,)).fetchone()[0]:
+        _savepoint(conn, "nf_rls_member", lambda: conn.execute(f'GRANT "{role}" TO CURRENT_USER'))
+    return True
+
+
+def _ensure_app_login(conn, role):
+    """POSTGRES_APP_PASSWORD задан: роль становится логином с этим паролем,
+    которым web и MCP входят для запросов пользователей. Пароль меняем, только
+    когда войти им не выходит (новая установка, новый пароль в .env): ALTER
+    ROLE на каждом старте зря писал бы пароль в каталог и журнал."""
+    import psycopg2
+
+    from infrastructure.postgres.connection import _app_dsn, app_password
+    password = app_password()
+    if not password:
+        return
+    if conn.execute("SELECT current_user = ?", (role,)).fetchone()[0]:
+        _log.warning("Row-Level Security: NF_DB_APP_ROLE %s is the owner's own login -- "
+                     "POSTGRES_APP_PASSWORD ignored", role)
+        return
+    try:
+        psycopg2.connect(_app_dsn(), connect_timeout=10).close()
+        return
+    except Exception:
+        pass
+    _savepoint(conn, "nf_rls_login", lambda: conn.execute(
+        f'ALTER ROLE "{role}" LOGIN PASSWORD ?', (password,)))
 
 
 def _grant_app_role(conn, role):
     """Права роли на таблицы и счётчики этой схемы -- только недостающие:
-    повторный GRANT на каждом старте зря трогал бы каталог."""
+    повторный GRANT на каждом старте зря трогал бы каталог. Таблицы, которые
+    появятся в SCHEMA или MIGRATIONS потом, получат права здесь же на первом
+    старте с ними; созданные позже вне init_db -- по ALTER DEFAULT PRIVILEGES.
+    Секрет подписи (nf_rls_key) -- никогда."""
     schema = conn.execute("SELECT current_schema()").fetchone()[0]
     if not conn.execute("SELECT has_schema_privilege(?, ?, 'USAGE')", (role, schema)).fetchone()[0]:
         conn.execute(f'GRANT USAGE ON SCHEMA "{schema}" TO "{role}"')
     for r in conn.execute(
             "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
-            "WHERE n.nspname = current_schema() AND c.relkind IN ('r', 'p') AND NOT ("
-            "has_table_privilege(?, c.oid, 'SELECT') AND has_table_privilege(?, c.oid, 'INSERT') "
+            "WHERE n.nspname = current_schema() AND c.relkind IN ('r', 'p') AND c.relname != ? "
+            "AND NOT (has_table_privilege(?, c.oid, 'SELECT') AND has_table_privilege(?, c.oid, 'INSERT') "
             "AND has_table_privilege(?, c.oid, 'UPDATE') "
-            "AND has_table_privilege(?, c.oid, 'DELETE'))", (role,) * 4).fetchall():
+            "AND has_table_privilege(?, c.oid, 'DELETE'))", (RLS_KEY_TABLE,) + (role,) * 4).fetchall():
         conn.execute(f'GRANT SELECT, INSERT, UPDATE, DELETE ON "{r["relname"]}" TO "{role}"')
+    if conn.execute("SELECT to_regclass(?) IS NOT NULL", (RLS_KEY_TABLE,)).fetchone()[0] and \
+            conn.execute("SELECT has_table_privilege(?, ?, 'SELECT, INSERT, UPDATE, DELETE, TRUNCATE, "
+                         "REFERENCES, TRIGGER')", (role, RLS_KEY_TABLE)).fetchone()[0]:
+        conn.execute(f'REVOKE ALL ON {RLS_KEY_TABLE} FROM "{role}"')
+    _default_privileges(conn, role, schema)
     for r in conn.execute(
             "SELECT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
             "WHERE n.nspname = current_schema() AND c.relkind = 'S' AND NOT ("
@@ -1060,9 +1135,30 @@ def _grant_app_role(conn, role):
         conn.execute(f'GRANT USAGE, SELECT, UPDATE ON SEQUENCE "{r["relname"]}" TO "{role}"')
 
 
+_DEFAULT_PRIVILEGES = {"r": ("SELECT, INSERT, UPDATE, DELETE", "TABLES", 4),
+                       "S": ("USAGE, SELECT, UPDATE", "SEQUENCES", 3)}
+
+
+def _default_privileges(conn, role, schema):
+    """ALTER DEFAULT PRIVILEGES -- только если их ещё нет (запись в каталог)."""
+    for kind, (privs, objects, count) in _DEFAULT_PRIVILEGES.items():
+        have = conn.execute(
+            "SELECT count(*) FROM pg_default_acl d, aclexplode(d.defaclacl) a "
+            "WHERE d.defaclrole = (SELECT oid FROM pg_roles WHERE rolname = current_user) "
+            "AND d.defaclnamespace = ?::regnamespace AND d.defaclobjtype = ? "
+            "AND a.grantee = (SELECT oid FROM pg_roles WHERE rolname = ?)",
+            (f'"{schema}"', kind, role)).fetchone()[0]
+        if have < count:
+            conn.execute(f'ALTER DEFAULT PRIVILEGES IN SCHEMA "{schema}" '
+                         f'GRANT {privs} ON {objects} TO "{role}"')
+
+
 def _ensure_policies(conn):
-    """ENABLE ROW LEVEL SECURITY и политика -- только там, где их ещё нет:
-    оба берут ACCESS EXCLUSIVE, и на каждом старте ждали бы worker."""
+    """ENABLE ROW LEVEL SECURITY и политика -- только там, где их ещё нет
+    (или политика старая, по app.user_id без подписи): оба берут ACCESS
+    EXCLUSIVE, и на каждом старте ждали бы worker."""
+    schema = conn.execute("SELECT current_schema()").fetchone()[0]
+    _ensure_rls_uid(conn, schema)
     for table in PERSONAL_TABLES:
         if "user_id" not in _existing_columns(conn, table):
             continue
@@ -1071,18 +1167,24 @@ def _ensure_policies(conn):
             "WHERE n.nspname = current_schema() AND c.relname = ?", (table,)).fetchone()
         if not row["relrowsecurity"]:
             conn.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
-        if not conn.execute("SELECT 1 FROM pg_policies WHERE schemaname = current_schema() "
-                            "AND tablename = ? AND policyname = ?", (table, RLS_POLICY)).fetchone():
-            expr = _rls_expr(table)
+        expr = _rls_expr(table, schema)
+        policy = conn.execute("SELECT qual, with_check FROM pg_policies WHERE schemaname = current_schema() "
+                              "AND tablename = ? AND policyname = ?", (table, RLS_POLICY)).fetchone()
+        if policy is None:
             conn.execute(f"CREATE POLICY {RLS_POLICY} ON {table} USING ({expr}) "
+                         f"WITH CHECK ({expr})")
+        elif not all("nf_rls_uid" in (policy[c] or "") for c in ("qual", "with_check")):
+            # политика P1-02 до подписи: верила app.user_id на слово
+            conn.execute(f"ALTER POLICY {RLS_POLICY} ON {table} USING ({expr}) "
                          f"WITH CHECK ({expr})")
 
 
 def _ensure_rls(conn):
-    """multi-user plan P1-02, на каждом init_db(): политики, роль, её права.
-    Не роняет старт: без прав на CREATE ROLE политики всё равно ставятся, а
-    запросы идут ролью владельца, как раньше (предупреждение в логе). Под
-    advisory-блокировкой схемы: web, worker и MCP стартуют одновременно."""
+    """multi-user plan P1-02, на каждом init_db(): секрет и функция подписи,
+    политики, роль (с POSTGRES_APP_PASSWORD -- логин), её права. Не роняет
+    старт: без прав на CREATE ROLE политики всё равно ставятся, а запросы идут
+    ролью владельца, как раньше (предупреждение в логе). Под advisory-
+    блокировкой схемы: web, worker и MCP стартуют одновременно."""
     from infrastructure.postgres.connection import app_role, lock_until_commit, rls_enabled
     try:
         lock_until_commit(conn, "rls_setup", 0)
@@ -1093,6 +1195,7 @@ def _ensure_rls(conn):
         if rls_enabled():
             role = app_role()
             if _ensure_app_role(conn, role):
+                _ensure_app_login(conn, role)
                 _grant_app_role(conn, role)
         conn.commit()
     except Exception as e:

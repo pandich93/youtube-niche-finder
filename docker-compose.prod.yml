@@ -22,7 +22,10 @@
 #     BACKUP_KEEP.
 #
 # Required in .env: NF_DOMAIN, POSTGRES_PASSWORD (compose refuses to start
-# without them), YOUTUBE_API_KEY, OWN_TOKENS_KEY. The checklist is in
+# without them), YOUTUBE_API_KEY, OWN_TOKENS_KEY. Recommended:
+# POSTGRES_APP_PASSWORD -- web and mcp-http then serve people's requests with a
+# database login that Row-Level Security holds (it reaches them via env_file;
+# the services set it up at start, docs/hosting.md). The checklist is in
 # SECURITY.md, "What you have to do before you give anyone an account".
 
 services:

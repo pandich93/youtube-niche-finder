@@ -64,6 +64,7 @@ In `.env`, set at least these values:
 | `NF_DOMAIN` | your domain, for example `niches.example.com` |
 | `POSTGRES_PASSWORD` | a long random password. Set it **before** the first start: the database keeps the password it was created with. |
 | `OWN_TOKENS_KEY` | an encryption key for the notification and channel secrets people save; how to generate it is just below |
+| `POSTGRES_APP_PASSWORD` | recommended: another long random password. The dashboard and MCP then serve people's requests through a database login of their own that cannot read other people's rows ([Row-Level Security](#row-level-security)) |
 | `NF_DEFAULT_LOCALE` | `en` for an English-speaking audience (`ru` by default) |
 | `NF_SERVICE_NAME`, `NF_OPERATOR_NAME`, `NF_CONTACT_EMAIL` | who runs the service; shown on `/privacy` and `/terms` |
 | `SMTP_HOST`, `SMTP_FROM` (and `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_PORT`, `SMTP_SECURITY` as your mail provider says) | optional: mail for sign-up, password reset and email change. Without it only you create accounts, and nobody can reset a forgotten password themselves. `NF_REGISTRATION=closed` keeps reset by mail but turns sign-up off. |
@@ -298,24 +299,56 @@ the services. Schema changes are applied automatically when the services start.
 ## Row-Level Security
 
 Postgres hides every user's personal rows from the other users' requests
-([SECURITY.md](../SECURITY.md)). Nothing to do on an update: at start, the
-services turn RLS on for the personal tables, create the role
-`<POSTGRES_USER>_app` (`niches_app` by default) and grant it the tables. The
-database login stays the same, and so do `.env` and the compose files.
+([SECURITY.md](../SECURITY.md)). At start, the services turn RLS on for the
+personal tables, create the role `<POSTGRES_USER>_app` (`niches_app` by
+default) and grant it the tables, including tables a later version adds.
+
+There are two ways the dashboard and MCP become that role for a person's
+request:
+
+- **Its own login (recommended).** Put `POSTGRES_APP_PASSWORD` in `.env` (a
+  long random password, for example `openssl rand -hex 24`) and restart:
+  `make prod-up`, or `docker compose up -d web worker` on your own machine.
+  The services turn the role into a login with that password themselves; no
+  SQL, no change to the compose files. People's requests then connect as
+  `niches_app`, which is not the owner and cannot switch to it, so no SQL in
+  such a request reaches another person's rows. To change the password,
+  change it in `.env` and restart: the services set the new one.
+- **`SET ROLE` from the owner's login.** Without `POSTGRES_APP_PASSWORD`,
+  everything works as before: requests switch to the role with `SET ROLE` on
+  the owner's connection. That catches a query that forgot its filter, but
+  not someone who can run arbitrary SQL (`RESET ROLE` undoes it). The
+  services log a warning about it at start.
+
+Sign-in, sign-up, password reset, the admin routes and the worker still use
+`POSTGRES_USER`: they work for every account at once.
 
 - **The first start after the update** waits for a moment when no other
   service writes to these tables (at most 10 seconds per start). If it does
   not get one, the next start finishes the job.
-- **Check it:** `docker compose logs web worker | grep -i "row-level"` prints
-  nothing when all is well. A line `Row-Level Security is not in effect` means
-  requests run as the table owner, as before the update. The usual reason is
-  that `POSTGRES_USER` may not create roles (a managed Postgres). Create the
-  role once as an administrator, then restart the services:
+- **Check it:** `docker compose logs web mcp-http | grep -i "row-level"`
+  prints nothing when the own login is in use. `runs with SET ROLE` means
+  there is no `POSTGRES_APP_PASSWORD`. `cannot use the database login` means
+  the login failed (the reason is in the line) and requests fell back to
+  `SET ROLE`. `Row-Level Security is not in effect` means requests run as the
+  table owner, as before RLS. The usual reason for the last two is that
+  `POSTGRES_USER` may not create or change roles (a managed Postgres). Create
+  the role once as an administrator, then restart the services:
 
   ```sql
-  CREATE ROLE niches_app NOLOGIN NOSUPERUSER NOBYPASSRLS;
+  CREATE ROLE niches_app LOGIN PASSWORD '...' NOSUPERUSER NOBYPASSRLS;  -- the POSTGRES_APP_PASSWORD
   GRANT niches_app TO niches;   -- the POSTGRES_USER the services log in as
   ```
+
+  The second line is only for the `SET ROLE` fallback. Never grant the owner
+  to `niches_app`: the services then refuse the login, since it could switch
+  to the owner.
+- **Turn the login off again:** remove `POSTGRES_APP_PASSWORD` from `.env`,
+  restart, and run `ALTER ROLE niches_app NOLOGIN;` as `POSTGRES_USER` (the
+  services do not take the login away by themselves).
+- **A connection pooler** (PgBouncer) in transaction mode between the
+  services and Postgres does not work with RLS: each request's identity is a
+  session setting bound to its server connection.
 
 - **Another name:** set `NF_DB_APP_ROLE` in `.env` (for two installs on one
   Postgres server with the same login, for example).

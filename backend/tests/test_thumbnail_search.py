@@ -110,7 +110,10 @@ def test_a_thumbnail_swap_after_embedding_re_embeds_it():
     TS.embed_thumbnails(limit=100, pause_seconds=0)
     conn = db.get_conn()
     conn.execute("INSERT INTO video_changes (video_id, changed_at, field, old_value, new_value) "
-                 "VALUES (?,?,?,?,?)", ("red3", (NOW + timedelta(minutes=5)).isoformat(),
+                 # от текущего времени, не от NOW: NOW взят при сборе тестов, а
+                 # полный прогон доходит до этого файла позже, чем через 5 минут
+                 "VALUES (?,?,?,?,?)", ("red3", (datetime.now(timezone.utc)
+                                                 + timedelta(minutes=5)).isoformat(),
                                         "thumbnail_image", "a", "b"))
     conn.commit()
     conn.close()
