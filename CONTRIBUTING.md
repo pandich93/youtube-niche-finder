@@ -134,7 +134,11 @@ behaviour, update the doc that describes it in the same PR:
 - a new setting → a commented line in `.env.example` and the configuration
   table in `backend/README.md`;
 - anything user-visible → an entry under `## [Unreleased]` in
-  [CHANGELOG.md](CHANGELOG.md).
+  [CHANGELOG.md](CHANGELOG.md);
+- a new page in `docs/` → a `!docs/<page>.md` line in `.gitignore` (it skips
+  the rest of `docs/`), or git never sees it. `make doc-links` (CI runs it)
+  fails when a relative link points at a file git does not track or at a
+  heading that is not there.
 
 ## Submitting a PR
 

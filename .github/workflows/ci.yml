@@ -39,6 +39,12 @@ jobs:
       - name: Check the HTTP API reference is current
         run: python3 scripts/gen_http_api_docs.py --check
 
+      # A relative link in any tracked .md must reach a tracked file (and a
+      # heading, for #anchors): .gitignore skips docs/* except listed pages,
+      # so a new page can stay local while four documents already link to it.
+      - name: Check the links between documents
+        run: python3 scripts/check_doc_links.py
+
   # Every dashboard screen in headless Chromium against a seeded backend
   # (frontend/tests/test_smoke.py). No button clicks: POSTs spend quota.
   frontend-smoke:
