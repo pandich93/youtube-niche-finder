@@ -100,9 +100,9 @@ loguru==0.7.3
     # via fastembed
 markdown-it-py==4.2.0
     # via rich
-mcp==2.2.0
+mcp==2.3.0
     # via -r requirements.in
-mcp-types==2.2.0
+mcp-types==2.3.0
     # via mcp
 mdurl==0.1.2
     # via markdown-it-py
@@ -137,7 +137,11 @@ packaging==26.3
     # via
     #   huggingface-hub
     #   onnxruntime
-pillow==12.3.0
+pillow==12.3.0 ; python_full_version < '3.11'
+    # via
+    #   -r requirements.in
+    #   fastembed
+pillow==13.0.0 ; python_full_version >= '3.11'
     # via
     #   -r requirements.in
     #   fastembed
