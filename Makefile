@@ -15,7 +15,7 @@ PYTHON  ?= $(shell command -v python3.13 || command -v python3.12 || \
 RUFF_VERSION ?= 0.16.9
 RUFF    ?= uvx ruff@$(RUFF_VERSION)
 
-.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli rotate-secrets api-docs extension-zip prod-up prod-down prod-logs prod-cli prod-backup
+.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli rotate-secrets api-docs doc-links extension-zip prod-up prod-down prod-logs prod-cli prod-backup
 
 doctor: ## проверить ключ, сеть и базу (начните отсюда)
 	$(COMPOSE) run --rm mcp python cli.py doctor
@@ -114,6 +114,9 @@ lint:           ## lint the backend with ruff (same pinned version as CI)
 
 api-docs:       ## regenerate docs/http-api.md from the HTTP routes (CI checks it is current)
 	python3 scripts/gen_http_api_docs.py
+
+doc-links:      ## check that relative links in the .md files reach tracked files and headings (CI runs it)
+	python3 scripts/check_doc_links.py
 
 extension-zip:  ## pack extension/ into dist/niche-finder-extension-v<version>.zip (committed files only)
 	sh scripts/package_extension.sh

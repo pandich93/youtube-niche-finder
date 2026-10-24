@@ -38,6 +38,10 @@ five-minute tour; everything below goes deeper into one part.
 - `docs/http-api.md` is generated from the code:
   `python3 scripts/gen_http_api_docs.py` rewrites it, `--check` fails when a
   route was added, removed or changed without regenerating it.
+- Links between documents are checked: `python3 scripts/check_doc_links.py`
+  (`make doc-links`, also in CI) fails on a relative link to a file git does
+  not track -- `.gitignore` skips `docs/*` except the pages it lists, so a new
+  page needs its own `!docs/<page>.md` line -- or to a missing `#heading`.
 - The tool count (100), the scenario count (7) and the screenshots in
   [`assets/`](../assets) are written by hand -- update them in the same pull
   request that changes the code.
