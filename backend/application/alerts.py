@@ -107,13 +107,17 @@ def _gone_rows(conn, channel_ids: list) -> list:
 
 def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
         acceleration_threshold: float = A.ACCELERATION_THRESHOLD_DEFAULT,
-        silence_days: float = DEFAULT_SILENCE_DAYS, period: str = DEFAULT_PERIOD) -> dict:
+        silence_days: float = DEFAULT_SILENCE_DAYS, period: str = DEFAULT_PERIOD,
+        channel_ids=None) -> dict:
     """Run every detector against TRACKED channels only -- alerts are about
     channels you asked to watch, not the whole database. Safe to call every
-    worker cycle: see _emit for why repeats never duplicate."""
+    worker cycle: see _emit for why repeats never duplicate.
+
+    channel_ids narrows the scan to those channels (multi-user plan P2-11: a
+    regular user's manual run covers their own watchlist only)."""
     # every user's tracked channels, each once: an event is a shared fact, who
     # sees it is decided when reading (list_events)
-    channel_ids = T.tracked_channel_ids()
+    channel_ids = T.tracked_channel_ids() if channel_ids is None else list(channel_ids)
     empty_counts = {"outlier": 0, "acceleration": 0, "title_change": 0, "silence_break": 0,
                     "channel_gone": 0, "video_gone": 0, "milestone": 0}
     if not channel_ids:

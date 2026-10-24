@@ -278,7 +278,13 @@ Known limits (by design, worth knowing before you invite anyone):
   `/api/events/scan`, `/api/thumbnails/embed`, `/api/niche-clusters/recompute`
   and the MCP tools `refresh_stats`, `enrich_channels`, `tag_new_videos`,
   `scan_for_alerts`, `embed_thumbnails`) needs an admin, by session or API
-  token. The first author of a transcript can still paste junk or a prompt
+  token. Multi-user plan P2-11 lets an admin open two of them to regular users
+  through the tariff limit `manual_runs` (off by default,
+  `NF_USER_MANUAL_RUNS_PER_HOUR=0`): `/api/refresh` and `/api/events/scan` then
+  run over that user's own watchlist only, on their own quota, at most that
+  many times an hour (`429` with `Retry-After` past it, counted in Postgres
+  under a lock); the rest, and the MCP tools, stay admin-only
+  ([docs/manual-runs.md](docs/manual-runs.md)). The first author of a transcript can still paste junk or a prompt
   injection into it, and the LLM hook review of that text is cached for
   everyone; an admin can replace it.
 - **Admins.** `users.is_admin` guards `/api/admin/*` (tariffs, users'

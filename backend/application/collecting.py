@@ -468,16 +468,22 @@ def discover_new_videos_via_rss(api_key: str, channel_ids=None, max_new_per_chan
 # ------------------------------------------------------------ refresh_stats
 
 def refresh_stats(api_key: str, scope: str = "recent", period: str = "30d",
-                  limit: int = 1000, niche: str = None) -> dict:
+                  limit: int = 1000, niche: str = None, channel_ids=None) -> dict:
     """Append a fresh stats snapshot for stored videos -- this is what makes
     vph24h, viewsGained24h, acceleration and title-change detection possible.
 
     scope: "recent" (published within `period`), "tracked" (uploads of tracked
-    channels), "niche", or "all".
+    channels), "niche", "channels" (uploads of `channel_ids`, multi-user plan
+    P2-11: one user's own watchlist), or "all".
     """
+    if scope == "channels" and not channel_ids:
+        return {"refreshed": 0, "scope": scope, "quota": {"units_from_shared_pool": 0}}
     conn = db.get_conn()
     params, sql = [], "SELECT v.video_id FROM videos v"
-    if scope == "tracked":
+    if scope == "channels":
+        sql += " WHERE v.channel_id = ANY(?)"
+        params.append(list(channel_ids))
+    elif scope == "tracked":
         # any user's tracked channel, each video once (plan 15: several users
         # may track the same channel)
         sql += (" WHERE EXISTS (SELECT 1 FROM tracked_channels t WHERE t.channel_id = v.channel_id "
@@ -485,7 +491,7 @@ def refresh_stats(api_key: str, scope: str = "recent", period: str = "30d",
     elif scope == "niche" and niche:
         sql += " JOIN video_niches vn ON vn.video_id = v.video_id AND vn.niche_slug = ?"
         params.append(niche)
-    if scope in ("recent", "tracked", "niche"):
+    if scope in ("recent", "tracked", "niche", "channels"):
         start, _ = P.window(period)
         if start:
             sql += " WHERE v.published_at >= ?" if "WHERE" not in sql else " AND v.published_at >= ?"
@@ -534,6 +540,22 @@ def refresh_stats(api_key: str, scope: str = "recent", period: str = "30d",
         "gone": gone,
         "quota": {"units_from_shared_pool": (len(ids) + 49) // 50, "search_calls": 0},
     }
+
+
+def refresh_watchlist(api_key: str, channel_ids, period: str = "30d",
+                      limit: int = 1000) -> dict:
+    """Multi-user plan P2-11: what a regular user may refresh by hand -- the
+    channels on THEIR watchlist (channel_tracking.user_channel_ids) and those
+    channels' videos from `period`, not the whole corpus. Quota goes to the
+    request's user (quota_owner), like any of their calls: ~1 unit per 50
+    videos and per 50 channels."""
+    ids = list(channel_ids or [])
+    if not ids:
+        empty = {"refreshed": 0, "quota": {"units_from_shared_pool": 0}}
+        return {"scope": "mine", "videos": dict(empty, scope="channels"), "channels": empty}
+    videos = refresh_stats(api_key, scope="channels", period=period, limit=limit, channel_ids=ids)
+    channels = refresh_channels(api_key, channel_ids=ids)
+    return {"scope": "mine", "videos": videos, "channels": channels}
 
 
 def _track_gone(conn, kind: str, requested, returned, now: str) -> dict:
