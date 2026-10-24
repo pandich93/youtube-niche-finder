@@ -71,9 +71,12 @@ def normalize(name):
 
 
 def to_local(moment: datetime, name) -> datetime:
-    """Момент во времени пояса name; None -- во времени сервера (как до P2-03).
-    Наивный момент считается временем сервера, как у datetime.astimezone()."""
-    return moment.astimezone(ZoneInfo(name)) if name else moment.astimezone()
+    """Момент во времени пояса name; None -- как до P2-03: момент со смещением
+    остаётся в своём (worker передаёт время сервера), наивный считается
+    временем сервера, как у datetime.astimezone()."""
+    if name:
+        return moment.astimezone(ZoneInfo(name))
+    return moment if moment.tzinfo else moment.astimezone()
 
 
 def local_day(moment: datetime, name) -> tuple:
@@ -93,11 +96,13 @@ def sent_today(mark, moment: datetime, name) -> bool:
     времени сервера: сравнивается как дата."""
     if not mark:
         return False
-    today = to_local(moment, name).date()
+    local = to_local(moment, name)
+    today = local.date()
     if len(mark) == 10:
         return mark >= today.isoformat()
     last = parse_utc(mark)
-    return last is not None and to_local(last, name).date() >= today
+    # без пояса метку (UTC) переводим в смещение самого moment, а не оставляем в UTC
+    return last is not None and last.astimezone(local.tzinfo).date() >= today
 
 
 @contextmanager
