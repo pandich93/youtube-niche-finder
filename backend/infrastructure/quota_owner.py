@@ -26,6 +26,25 @@ def current():
     return _owner.get()
 
 
+# multi-user plan P2-05: a support view (an admin looking at an account
+# read-only) spends nobody's budget and starts nothing: the YouTube client
+# refuses before reserving a unit, the LLM gateway answers from its cache only.
+_frozen = ContextVar("nf_quota_frozen", default=False)
+
+
+def freeze():
+    """No YouTube unit and no LLM call for the rest of this request."""
+    return _frozen.set(True)
+
+
+def unfreeze(token):
+    _frozen.reset(token)
+
+
+def frozen() -> bool:
+    return _frozen.get()
+
+
 # SaaS sub-project 1: the daily YouTube budget of a user comes from their
 # tariff. application/plans.py registers the lookup at import; until then (a
 # process that never imported it) the client keeps reading .env.

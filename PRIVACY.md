@@ -87,6 +87,17 @@ Everything lives in the Postgres database you point the app at (by default the
   signed in from where and who deleted what is exactly what a security log is
   for. Entries are removed by age instead: `NF_AUDIT_RETENTION_DAYS` (180 by
   default; 0 keeps them forever), checked by the worker once a day.
+- **Support may look at your account** (multi-user plan P2-05). To answer a
+  question, an admin of the server can open the dashboard as you see it --
+  your watchlist, saved items, drafts, alerts, own channels' numbers and
+  tariff -- read-only and for a limited time (`NF_IMPERSONATION_MINUTES`,
+  30 minutes by default). They cannot change, save, delete or start anything
+  on your behalf, do not spend your YouTube or LLM quota, and do not see your
+  sessions (addresses, browsers), API tokens or passwords. The action log
+  records who looked, when, for how long and the reason they gave
+  (`impersonation_start`, `impersonation_end`, `impersonation_expired`);
+  these entries follow the log's retention above. The view is not shown in
+  your profile yet: ask the server's operator for the log entries about you.
 - **Your own channels** (plan 14, only if you connect one) — the channel id and
   title, the granted scopes, the OAuth refresh token **encrypted** with
   `OWN_TOKENS_KEY` from your `.env` (Fernet; the key is never in the database),

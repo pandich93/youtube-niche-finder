@@ -48,6 +48,7 @@ from application import digest as DG
 from application import discovery as trends
 from application import enrichment as EN
 from application import hook_score as HK
+from application import impersonation as IMP
 from application import inspection as I
 from application import language_gaps as LG
 from application import library as L
@@ -262,6 +263,9 @@ _PUBLIC_API = frozenset({"/api/auth/login", "/api/auth/logout", "/api/auth/me", 
                          "/api/auth/register", "/api/auth/register/link",
                          "/api/auth/register/complete", "/api/auth/password/forgot",
                          "/api/auth/password/reset", "/api/auth/email/confirm"})
+# P2-05: что можно отправить не-GET из режима просмотра под пользователем --
+# выйти из режима и выйти из дашборда совсем (оба меняют только сессию админа)
+_VIEW_WRITES = frozenset({"/api/auth/impersonation/end", "/api/auth/logout"})
 
 
 # SaaS sub-project 1: route -> the tariff feature it needs. Methods None = any.
@@ -309,7 +313,7 @@ async def _rls_call(request, call_next, user_id):
 
 @app.middleware("http")
 async def session_guard(request, call_next):
-    request.state.user = request.state.session_id = None
+    request.state.user = request.state.session_id = request.state.impersonation = None
     if not multi_user_enabled():
         request.state.user_id = LOCAL_USER_ID
         return await _rls_call(request, call_next, LOCAL_USER_ID)
@@ -325,6 +329,14 @@ async def session_guard(request, call_next):
     user = session["user"] if session else None
     request.state.session_id = session["id"] if session else None
     request.state.via = "session" if user else None
+    # P2-05: сессия админа в режиме просмотра -- дальше запрос идёт глазами
+    # пользователя (_uid, RLS, тариф), а сам админ -- в state.impersonation
+    view = (await run_in_threadpool(IMP.resolve, session)
+            if session and session.get("impersonating") else None)
+    request.state.impersonation = view
+    if view:
+        user = view["user"]
+        request.state.via = "impersonation"
     if not user:
         # plan 15 (5.7): the extension (and scripts) send a personal API token
         # instead of the cookie; bearer auth is not sent by browsers on their
@@ -345,6 +357,13 @@ async def session_guard(request, call_next):
                             "на экране «MCP».", scope=need)
             return JSONResponse(status_code=403, content={
                 "error": "TokenScope", "scope": need, "detail": detail})
+    if (view and path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS")
+            and path not in _VIEW_WRITES):
+        # P2-05: поддержка смотрит, но ничего не меняет за пользователя
+        with i18n.use_locale(_header_locale(request)):
+            detail = tr("Режим просмотра под пользователем: только чтение. Чтобы что-то "
+                        "изменить, выйдите из режима.")
+        return JSONResponse(status_code=403, content={"error": "ReadOnlyView", "detail": detail})
     if (path.startswith("/api/") and path not in _PUBLIC_API and not user
             and request.method != "OPTIONS"):
         with i18n.use_locale(_header_locale(request)):
@@ -361,9 +380,14 @@ async def session_guard(request, call_next):
     # plan 15 (5.5): YouTube calls made for this request count against the
     # signed-in user's daily budget (infrastructure/quota_owner.py)
     owner = quota_owner.set_owner(user["id"]) if user else None
+    # P2-05: просмотр под пользователем не тратит ничью квоту и ничего не
+    # запускает -- только то, что уже есть в базе и кэше LLM
+    frozen = quota_owner.freeze() if view else None
     try:
         return await _rls_call(request, call_next, user["id"] if user else None)
     finally:
+        if frozen is not None:
+            quota_owner.unfreeze(frozen)
         if owner is not None:
             quota_owner.reset(owner)
 
@@ -519,6 +543,11 @@ def _need_key():
 
 @app.exception_handler(yt.QuotaExceeded)
 async def _quota_exceeded(request, exc):
+    if isinstance(exc, yt.SpendingFrozen):
+        # P2-05: просмотр под пользователем не ходит в YouTube -- это не «квота кончилась»
+        return JSONResponse(status_code=403, content={"error": "ReadOnlyView", "detail": tr(
+            "Режим просмотра под пользователем: новые данные из YouTube не запрашиваются, "
+            "показано только уже собранное.")})
     return JSONResponse(status_code=429, content={"error": "QuotaExceeded",
                                                   "detail": str(exc)[:800]})
 
@@ -1312,7 +1341,18 @@ def auth_me(request: Request):
             "plan": PL.summary(user["id"]) if user else None,
             "locale": _saved_locale(user["id"]) if user else None,
             # P1-06: what the sign-in screen offers (both need SMTP)
-            "signup": SU.options()}
+            "signup": SU.options(),
+            # P2-05: an admin's read-only support view -- user above is the account
+            "impersonation": _view_info(request)}
+
+
+def _view_info(request):
+    view = getattr(request.state, "impersonation", None)
+    if not view:
+        return None
+    return {"userId": view["user"]["id"], "email": view["user"]["email"],
+            "admin": view["admin"], "startedAt": view["startedAt"],
+            "expiresAt": view["expiresAt"], "reason": view["reason"], "readOnly": True}
 
 
 @app.put("/api/me/locale")
@@ -1354,6 +1394,9 @@ def _signed_in(request, response, s) -> dict:
 
 @app.post("/api/auth/logout")
 def auth_logout(request: Request, response: Response):
+    if getattr(request.state, "impersonation", None):
+        # P2-05: the support view ends with the session, and the log says so
+        IMP.end(request.state.session_id, why="logout")
     AUTH.logout(request.cookies.get(AUTH_COOKIE, ""))
     response.delete_cookie(AUTH_COOKIE, path="/")
     return {"signedOut": True}
@@ -1708,6 +1751,38 @@ def admin_user_enable(request: Request, user_id: int):
 @app.delete("/api/admin/users/{user_id}")
 def admin_user_delete(request: Request, user_id: int, payload: dict = Body(default={})):
     return _users_call(UA.delete, _admin(request), user_id, str(payload.get("confirmEmail") or ""))
+
+
+# ------------------------------------------- support view (P2-05)
+# An admin looks at an account read-only, from the dashboard only: the session
+# is marked (application/impersonation.py), session_guard does the rest.
+
+@app.post("/api/admin/users/{user_id}/impersonate")
+def admin_user_impersonate(request: Request, user_id: int, payload: dict = Body(default={})):
+    """Admin, signed in to the dashboard: look at this account through its
+    owner's eyes, read-only, for NF_IMPERSONATION_MINUTES (30 by default).
+    reason is required and goes into the action log. Not an admin, not a
+    blocked account, not from inside another view; never by API token."""
+    if not multi_user_enabled():
+        raise HTTPException(status_code=409, detail="accounts exist only with NF_MULTI_USER=1")
+    admin = _admin(request)
+    try:
+        return IMP.start(admin, request.state.session_id, user_id, payload.get("reason"))
+    except IMP.NotFound:
+        raise HTTPException(status_code=404, detail="user not found")
+    except IMP.ImpersonationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/auth/impersonation/end")
+def auth_impersonation_end(request: Request):
+    """Leave the support view: the session is the admin's again. The one
+    change a support view may send; ended: false when there was no view."""
+    view = getattr(request.state, "impersonation", None)
+    if not view:
+        return {"ended": False}
+    IMP.end(request.state.session_id, why="exit")
+    return {"ended": True, "user": {**view["admin"], "isAdmin": True}}
 
 
 @app.delete("/api/auth/me")

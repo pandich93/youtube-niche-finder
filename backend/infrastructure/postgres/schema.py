@@ -700,6 +700,16 @@ MIGRATIONS = {
     },
 }
 
+# multi-user plan P2-05: просмотр под пользователем для поддержки
+# (application/impersonation.py). Сессия админа на время смотрит «глазами»
+# impersonating_user_id -- только чтение и не дольше impersonation_expires_at;
+# NULL -- обычная сессия. Строка сессии по-прежнему принадлежит админу (user_id).
+MIGRATIONS["sessions"] = {**MIGRATIONS["sessions"],
+                          "impersonating_user_id": "BIGINT",
+                          "impersonation_started_at": "TEXT",
+                          "impersonation_expires_at": "TEXT",
+                          "impersonation_reason": "TEXT"}
+
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()

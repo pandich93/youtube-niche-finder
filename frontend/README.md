@@ -404,6 +404,15 @@ lists sign-ins and failed sign-ins, password and email changes, API tokens,
 tariff changes and admin actions, filtered by event, user and period and paged
 (`GET /api/admin/audit`, only from a dashboard session, never with an API
 token). A notice counts stored secrets the current encryption keys cannot read.
+"Посмотреть как" next to an ordinary active user asks for a reason and opens
+the dashboard through that user's eyes, read-only, for
+`NF_IMPERSONATION_MINUTES` (`POST /api/admin/users/{id}/impersonate`, P2-05).
+While it lasts a yellow bar on every screen (`impersonation.js`, the
+`#impersonationBanner` in `index.html`) says "Вы смотрите как <email> —
+только чтение" with the end time and "Выйти" (`POST /api/auth/impersonation/end`);
+the page reloads as the admin when the time is up. Changes are refused by the
+server; `/api/auth/me` returns `impersonation` with the account, the admin and
+the expiry.
 
 ### Profile (`#/profile`)
 

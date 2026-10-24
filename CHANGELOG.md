@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Support view: an admin looks at an account read-only** (multi-user plan
+  P2-05). "Посмотреть как" on the "Admin" page (`POST
+  /api/admin/users/{id}/impersonate`, a reason required) marks the admin's
+  dashboard session with the account for `NF_IMPERSONATION_MINUTES` (30 by
+  default); never an API token or MCP, never on an admin or a blocked
+  account, never nested. Requests then see the account's rows (`_uid` and
+  Row-Level Security), every non-GET request to `/api` but leaving
+  (`POST /api/auth/impersonation/end`) and signing out is refused with 403
+  `ReadOnlyView`, and spending is frozen: no YouTube unit (403 instead of a
+  fetch), no new LLM call, cached answers only. A banner on every screen
+  says whose eyes you are using; `/api/auth/me` returns `impersonation`.
+  The start (with the reason), the end and the expiry go into the action log
+  (group `support`).
+
 ## [0.5.0] - 2026-10-24
 
 The closed-beta round of the multi-user plan (P0 and P1, without billing):

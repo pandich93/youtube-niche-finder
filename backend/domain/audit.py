@@ -37,6 +37,10 @@ EVENTS = {
     "plan_update": "admin",
     "plan_archive": "admin",
     "plan_restore": "admin",
+    # multi-user plan P2-05: an admin looking at an account read-only
+    "impersonation_start": "support",
+    "impersonation_end": "support",
+    "impersonation_expired": "support",
 }
 
 # admin_actions (P0-04) -> the event it becomes in audit_log

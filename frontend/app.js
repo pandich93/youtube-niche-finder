@@ -5,6 +5,7 @@ import { loadFootStat } from './shared.js';
 import { render, routeTitle } from './router.js';
 import { setMe, applyNav, renderPlanLine } from './plan-state.js';
 import { setOffers, showSignIn, openAccountLink } from './account.js';
+import { setView, renderBanner } from './impersonation.js';
 import { dict, getLocale, hasStoredLocale, setLocale, onLocaleChange, translateStatic } from './i18n.js';
 import ru from './i18n/ru/app.js';
 import en from './i18n/en/app.js';
@@ -45,6 +46,7 @@ function translateChrome() {
   applyTheme(document.documentElement.dataset.theme || 'dark');
   $('#langToggle').textContent = LANG_NAMES[getLocale() === 'ru' ? 'en' : 'ru'];
   if (me.multiUser && me.user) $('#signOut').textContent = t('signOutAs', { email: me.user.email });
+  renderBanner();
 }
 
 function initChrome() {
@@ -96,9 +98,12 @@ async function start() {
   setOffers(me.signup);
   if (me.multiUser && !me.user) { if (!openAccountLink(false)) showSignIn(); return; }
   setMe(me);
+  // P2-05: админ смотрит глазами пользователя -- баннер «только чтение · Выйти»;
+  // «Выйти (email)» внизу назвало бы чужой адрес, поэтому его прячем
+  setView(me);
   if (me.multiUser) {
     const out = $('#signOut');
-    out.hidden = false;
+    out.hidden = !!me.impersonation;
     out.textContent = t('signOutAs', { email: me.user.email });
     out.addEventListener('click', async () => {
       await api('/api/auth/logout', { method: 'POST' }).catch(() => {});

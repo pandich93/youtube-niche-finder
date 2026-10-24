@@ -152,6 +152,10 @@ def _reserve(path: str) -> list:
     # for a double in sys.modules are honoured
     import infrastructure.postgres as db
     from infrastructure import quota_owner
+    if quota_owner.frozen():
+        # P2-05: a support view reads what is cached and spends nobody's units
+        raise SpendingFrozen("a read-only support view does not call YouTube; "
+                             "only data already collected is shown")
     uid = quota_owner.current()
     charges = _charges(path, uid)
     conn = db.get_conn()
@@ -208,6 +212,12 @@ class UserQuotaExceeded(QuotaExceeded):
 class SharedPoolExhausted(QuotaExceeded):
     """The server's shared daily budget is spent -- for signed-in users the
     pool minus the worker's reserve, or the 100 searches a day (P0-05)."""
+
+
+class SpendingFrozen(UserQuotaExceeded):
+    """Multi-user plan P2-05: a read-only support view never spends quota. A
+    UserQuotaExceeded, so callers that fall back to cached data on a spent
+    budget do the same here."""
 
 
 class YouTubeUnreachable(RuntimeError):
