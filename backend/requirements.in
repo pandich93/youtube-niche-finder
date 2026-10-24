@@ -1,5 +1,5 @@
 # MCP SDK v2 -- server.py uses mcp.server.mcpserver.MCPServer
-mcp[cli]>=2.0,<3
+mcp[cli]>=2.3.0,<3
 requests>=2.31
 python-dotenv>=1.0
 numpy>=1.26
