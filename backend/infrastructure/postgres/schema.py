@@ -713,6 +713,46 @@ MIGRATIONS = {
 }
 
 
+# ---------- multi-user plan P2-04: двухфакторный вход (application/two_factor.py) ----------
+# Отдельным блоком: свои таблицы дописываются к SCHEMA, своя колонка -- к MIGRATIONS.
+# user_totp: секрет TOTP, зашифрованный OWN_TOKENS_KEY (Fernet, как токены
+# каналов и секреты уведомлений); enabled_at NULL -- задан, но ещё не
+# подтверждён кодом. last_step -- 30-секундный шаг последнего принятого кода:
+# тот же код второй раз не сработает.
+# user_backup_codes: одноразовые резервные коды, только scrypt-хэш.
+# mfa_challenges: «пароль верный, ждём код» -- промежуточный токен входа
+# (только SHA-256), живёт минуты и гаснет после успеха или MFA_MAX_TRIES ошибок.
+SCHEMA += """
+CREATE TABLE IF NOT EXISTS user_totp (
+    user_id BIGINT PRIMARY KEY,
+    secret_enc BYTEA NOT NULL,
+    created_at TEXT NOT NULL,
+    enabled_at TEXT,
+    last_step BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS user_backup_codes (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    code_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    used_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS mfa_challenges (
+    token_hash TEXT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0
+);
+"""
+# sessions.mfa_at: когда этот вход прошёл второй фактор (NULL -- не проходил:
+# у аккаунта нет 2FA или сессия старше её включения). Создать API-токен может
+# только такая сессия, если у аккаунта 2FA включена.
+MIGRATIONS["sessions"] = {**MIGRATIONS["sessions"], "mfa_at": "TEXT"}
+
+
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
 
@@ -910,6 +950,8 @@ PERSONAL_TABLES = (
     "own_channels", "own_channel_daily", "own_video_metrics", "own_oauth_pending",
     "manual_runs",                                  # P2-11
 )
+# multi-user plan P2-04: второй фактор -- тоже личное (удаляется с аккаунтом, под RLS)
+PERSONAL_TABLES += ("user_totp", "user_backup_codes", "mfa_challenges")
 
 
 # plan 15 (5.4): a row is unique per owner, so two users can track the same

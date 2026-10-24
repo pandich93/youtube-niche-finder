@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Two-factor sign-in** (multi-user plan P2-04). In the profile, an account
+  turns on TOTP (RFC 6238, 6 digits, 30 s, one step of drift, a code never
+  works twice) with any authenticator app -- the secret as text and an
+  `otpauth://` link, no QR service -- and gets 10 one-time backup codes,
+  shown once and stored as scrypt hashes. The secret is encrypted with
+  `OWN_TOKENS_KEY` and covered by `cli.py rotate-secrets`. Sign-in then takes
+  two steps: the password gives a one-time challenge (5 min) and the session
+  comes only with a code (`POST /api/auth/login/2fa`); wrong codes count with
+  wrong passwords in `login_attempts`. A reset by emailed link keeps 2FA;
+  turning it off needs the password and a code; the operator has
+  `cli.py disable-2fa EMAIL`. `NF_ADMIN_2FA=required` limits an admin without
+  2FA to its setup. API tokens need no code, but with 2FA on only a session
+  that passed it can create one. The action log gets `2fa_enable`,
+  `2fa_disable`, `2fa_failed`, `2fa_backup_used`, `2fa_backup_regenerate`.
 - **Manual runs for regular users, with a limit** (multi-user plan P2-11). A
   new tariff limit `manual_runs` ("Ручные запуски в час", default
   `NF_USER_MANUAL_RUNS_PER_HOUR=0` = admins only, as before) lets a regular
