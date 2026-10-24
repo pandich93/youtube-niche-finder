@@ -178,6 +178,7 @@ SUMMARY = {
     "DELETE /api/auth/sessions/{session_id}": ("auth", "Sign out one of your sessions (only your own; the current one signs this browser out)."),
     "POST /api/auth/sessions/end-others": ("auth", "Sign out on every other device; this browser stays signed in."),
     "PUT /api/me/locale": ("auth", "Save the interface language (`ru` or `en`): the dashboard on other devices and your alerts and digest use it."),
+    "PUT /api/me/timezone": ("auth", "Save your IANA time zone (`Europe/Moscow`; empty = the server default): the digest goes out at `DIGEST_HOUR` in it and calendar reminders show times in it. `onlyIfEmpty` never overwrites a saved one."),
     "GET /api/auth/tokens": ("auth", "Your personal API tokens (names and dates, never the secret)."),
     "POST /api/auth/tokens": ("auth", "Create a personal token for the extension or MCP over HTTP; shown once."),
     "DELETE /api/auth/tokens/{token_id}": ("auth", "Revoke a personal token."),

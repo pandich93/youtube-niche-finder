@@ -628,7 +628,9 @@ _USER_ID = "BIGINT NOT NULL DEFAULT 1"
 
 MIGRATIONS = {
     # multi-user plan P0-04: NULL = active; set = blocked (no sign-in, no sessions, no tokens)
-    "users": {"disabled_at": "TEXT"},
+    "users": {"disabled_at": "TEXT",
+              # P2-03: часовой пояс IANA (Europe/Moscow); NULL -- NF_DEFAULT_TIMEZONE / время сервера
+              "timezone": "TEXT"},
     # multi-user plan P1-03: older tokens keep working as before -- no expiry,
     # every scope -- until revoked
     "api_tokens": {"expires_at": "TEXT", "scopes": "TEXT NOT NULL DEFAULT 'read,write,mcp'"},

@@ -73,6 +73,7 @@ from application import sponsors as SP
 from application import tags as TG
 from application import template_risk as TRK
 from application import thumbnail_search as TS
+from application import timezone_prefs as TZP
 from application import topic_watch as TW
 from application import trajectory as TJ
 from application import transcripts as TR
@@ -1305,12 +1306,13 @@ def _cookie_secure(request) -> bool:
 def auth_me(request: Request):
     if not multi_user_enabled():
         return {"multiUser": False, "user": {"id": LOCAL_USER_ID, "email": "local", "isAdmin": True},
-                "locale": _saved_locale(LOCAL_USER_ID)}
+                "locale": _saved_locale(LOCAL_USER_ID), **_timezone_info(LOCAL_USER_ID)}
     user = request.state.user
     return {"multiUser": True, "user": user,
             "quota": yt.user_usage(user["id"]) if user else None,
             "plan": PL.summary(user["id"]) if user else None,
             "locale": _saved_locale(user["id"]) if user else None,
+            **_timezone_info(user["id"] if user else None),
             # P1-06: what the sign-in screen offers (both need SMTP)
             "signup": SU.options()}
 
@@ -1323,6 +1325,26 @@ def me_locale(request: Request, payload: dict = Body(...)):
         return {"locale": LP.save(payload.get("locale"), user_id=_uid(request))}
     except LP.LocaleError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+def _timezone_info(user_id) -> dict:
+    """P2-03: сохранённый пояс (None -- не выбран) и что действует без него."""
+    return {"timezone": TZP.get(user_id=user_id) if user_id is not None else None,
+            "defaultTimezone": TZP.server_name()}
+
+
+@app.put("/api/me/timezone")
+def me_timezone(request: Request, payload: dict = Body(...)):
+    """P2-03: часовой пояс IANA (Europe/Moscow) -- дайджест уходит в DIGEST_HOUR
+    по нему, напоминания календаря пишут время в нём. Пусто -- сбросить на
+    NF_DEFAULT_TIMEZONE / время сервера. onlyIfEmpty: дашборд молча предлагает
+    пояс браузера при первом входе и не перебивает уже выбранный."""
+    try:
+        saved = TZP.save(payload.get("timezone"), user_id=_uid(request),
+                         only_if_empty=bool(payload.get("onlyIfEmpty")))
+    except TZP.TimezoneError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"timezone": saved, "defaultTimezone": TZP.server_name()}
 
 
 @app.post("/api/auth/login")

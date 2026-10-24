@@ -1,11 +1,12 @@
 /* Экран «Профиль» (многопользовательский план P1-06): свой email, смена пароля
    (нужен текущий; остальные входы и API-токены завершаются) и смена email
    (ссылка подтверждения уходит на новый адрес, без почты на сервере -- нельзя),
-   список своих входов с выходом на других устройствах (P1-04). */
+   список своих входов с выходом на других устройствах (P1-04), часовой пояс
+   дайджеста и напоминаний (P2-03; он есть и без NF_MULTI_USER). */
 import { api, esc, toast, sectionHead, notice, ago } from '../ui.js';
 import { view } from '../shared.js';
 import { getMe } from '../plan-state.js';
-import { dict, fmtDate } from '../i18n.js';
+import { dict, fmtDate, browserTimeZone } from '../i18n.js';
 import ru from '../i18n/ru/profile.js';
 import en from '../i18n/en/profile.js';
 
@@ -14,7 +15,8 @@ const t = dict({ ru, en });
 async function viewProfile() {
   const me = getMe();
   if (!me.multiUser) {
-    view.innerHTML = notice(t('singleUserOnly'));
+    view.innerHTML = `${notice(t('singleUserOnly'))}${timezoneCard(me)}`;
+    bindTimezone(me);
     return;
   }
   const mail = !!me.signup?.passwordReset;      // сервер умеет слать письма
@@ -41,7 +43,9 @@ async function viewProfile() {
         <button class="btn btn-sm" type="submit" ${mail ? '' : 'disabled'}>${esc(t('sendConfirm'))}</button>
       </form>
     </div>
+    ${timezoneCard(me)}
     <div class="card" id="sessionsCard" style="max-width:720px;margin-top:12px"></div>`;
+  bindTimezone(me);
   loadSessions();
   view.querySelector('#passwordForm').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -64,6 +68,65 @@ async function viewProfile() {
       view.querySelector('#emailSent').innerHTML = notice(esc(t('confirmSent', { email: r.sentTo })));
     } catch (err) { toast(err.message, 'err'); }
   });
+}
+
+/* P2-03: часовой пояс -- список IANA из браузера (старые браузеры без
+   Intl.supportedValuesOf: свой, браузерный и UTC), «как в браузере» одной
+   кнопкой, пустое значение -- пояс по умолчанию сервера. */
+function zoneList(me) {
+  let zones = [];
+  try { zones = Intl.supportedValuesOf('timeZone'); } catch { /* старый браузер */ }
+  return [...new Set([...zones, me.timezone, browserTimeZone(), 'UTC'].filter(Boolean))].sort();
+}
+
+function timezoneCard(me) {
+  const current = me.timezone || '';
+  const browser = browserTimeZone();
+  const fallback = me.defaultTimezone || t('tzServerTime');
+  return `<div class="card" id="timezoneCard" style="max-width:520px;margin-top:12px">
+      ${sectionHead(t('tzTitle'), t('tzSub'))}
+      <form id="timezoneForm" style="display:grid;gap:10px">
+        <select name="timezone" aria-label="${esc(t('tzTitle'))}">
+          <option value="">${esc(t('tzDefault', { zone: fallback }))}</option>
+          ${zoneList(me).map((z) => `<option value="${esc(z)}" ${z === current ? 'selected' : ''}>${esc(z)}</option>`).join('')}
+        </select>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-sm" type="submit">${esc(t('tzSave'))}</button>
+          ${browser && browser !== current ? `<button class="btn btn-ghost btn-sm" id="tzBrowser" type="button">${esc(t('tzUseBrowser', { zone: browser }))}</button>` : ''}
+        </div>
+      </form>
+    </div>`;
+}
+
+function bindTimezone(me) {
+  const form = view.querySelector('#timezoneForm');
+  if (!form) return;
+  const save = async (zone) => {
+    try {
+      const r = await api('/api/me/timezone', { method: 'PUT', body: { timezone: zone } });
+      me.timezone = r.timezone;
+      me.defaultTimezone = r.defaultTimezone;
+      view.querySelector('#timezoneCard').outerHTML = timezoneCard(me);
+      bindTimezone(me);
+      toast(r.timezone ? t('tzSaved', { zone: r.timezone }) : t('tzReset'), 'ok');
+    } catch (err) { toast(err.message, 'err'); }
+  };
+  form.addEventListener('submit', (e) => { e.preventDefault(); save(new FormData(form).get('timezone')); });
+  view.querySelector('#tzBrowser')?.addEventListener('click', () => save(browserTimeZone()));
+}
+
+/* Первый вход (NF_MULTI_USER=1): пояс не выбран -- молча берём браузерный.
+   Иначе дайджест придёт по времени сервера, которое у большинства не своё;
+   onlyIfEmpty не перебьёт пояс, выбранный на другом устройстве, а сменить его
+   можно здесь же, в профиле. Без входа -- не трогаем: там пояс задаёт сам
+   оператор (TZ / NF_DEFAULT_TIMEZONE в .env). */
+async function adoptBrowserTimezone(me) {
+  const zone = browserTimeZone();
+  if (!me.multiUser || !me.user || me.timezone || !zone) return;
+  try {
+    const r = await api('/api/me/timezone', { method: 'PUT', body: { timezone: zone, onlyIfEmpty: true } });
+    me.timezone = r.timezone;
+  } catch { /* неизвестный серверу пояс -- останется время по умолчанию */ }
 }
 
 /* P1-04: где выполнен вход -- текущая сессия помечена, остальные можно
@@ -111,4 +174,4 @@ function deviceLabel(ua) {
   return [browser, os].filter(Boolean).join(' · ') || ua.slice(0, 60);
 }
 
-export { viewProfile };
+export { viewProfile, adoptBrowserTimezone };

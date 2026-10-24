@@ -1,7 +1,7 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, q, esc, toast, sectionHead, empty, notice } from '../ui.js';
 import { view } from '../shared.js';
-import { dict, fmtDate, fmtTime } from '../i18n.js';
+import { dict, fmtDate, fmtTime, fmtUtcSlot } from '../i18n.js';
 import ru from '../i18n/ru/calendar.js';
 import en from '../i18n/en/calendar.js';
 
@@ -13,12 +13,6 @@ const t = dict({ ru, en });
 // Второй элемент -- ключ словаря: подпись переводится при рендере.
 const STATE = { planned: ['', 'stPlanned'], overdue: ['chip-bad', 'stOverdue'],
   published: ['chip-good', 'stPublished'], unplanned: ['', 'stUnplanned'] };
-// Сервер отдаёт день недели слота как 'Mon'..'Sun'; название -- через Intl текущей локали.
-const WEEKDAY_IDX = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 };
-const weekdayName = (w) => (w in WEEKDAY_IDX
-  // 2024-01-01 -- понедельник
-  ? fmtDate(new Date(Date.UTC(2024, 0, 1 + WEEKDAY_IDX[w])), { weekday: 'short', timeZone: 'UTC' })
-  : w);
 // Заголовок ячейки: короткое название дня с заглавной буквы («Пн», «Mon»).
 const dayName = (d) => {
   const s = fmtDate(d, { weekday: 'short' });
@@ -90,7 +84,7 @@ function editor(d) {
   const label = labelKey ? t(labelKey) : x.state;
   const plan = lastPlan && lastPlan.id === x.id ? lastPlan : null;
   const slotList = plan?.bestSlots?.length
-    ? plan.bestSlots.map((s) => `${weekdayName(s.weekday)} ${String(s.hour).padStart(2, '0')}:00`).join(', ')
+    ? plan.bestSlots.map((s) => fmtUtcSlot(s.weekday, s.hour)).join(', ')
     : '';
   const slots = slotList
     ? t(plan.fitsBestSlot === true ? 'bestSlotsFit' : plan.fitsBestSlot === false ? 'bestSlotsMiss' : 'bestSlots',

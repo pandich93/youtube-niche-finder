@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Each user's time zone** (P2-03). `users.timezone` holds an IANA name
+  (`Europe/Moscow`), checked with `zoneinfo` (old browser names such as
+  `Asia/Calcutta` are stored as the current ones); `PUT /api/me/timezone`
+  saves or clears it and `/api/auth/me` returns it with `defaultTimezone`.
+  The "Profile" screen has a "Часовой пояс" card with "Как в браузере",
+  also without `NF_MULTI_USER`; signed-in users who have none get the
+  browser's zone saved silently. `NF_DEFAULT_TIMEZONE` is the zone of those
+  who chose none.
+
+### Changed
+
+- **The digest goes out at `DIGEST_HOUR` of each recipient's own time**
+  (P2-03), once per local day: the mark in `meta` is now the UTC moment of
+  the last send, counted for its local date in the zone in force, so
+  daylight saving time and a change of zone neither repeat nor skip a day.
+  With no zone saved and no `NF_DEFAULT_TIMEZONE`, it is the container's
+  time as before; marks written before the upgrade still count. Calendar
+  reminders write the planned time in the recipient's zone (UTC as before
+  when there is none), and the best publishing hours on the brief and
+  calendar screens are shown in the browser's time instead of UTC. Daily
+  quotas stay on Pacific Time (YouTube units and searches) and UTC (LLM spend), now said so
+  in `backend/README.md`.
+
 ## [0.5.0] - 2026-10-24
 
 The closed-beta round of the multi-user plan (P0 and P1, without billing):

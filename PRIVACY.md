@@ -51,6 +51,11 @@ Everything lives in the Postgres database you point the app at (by default the
   only to the backend address you set. Each user's notification settings
   (`user_settings`): the Telegram chat id in clear, the bot token and webhook
   address encrypted with `OWN_TOKENS_KEY`.
+- **Time zone** (P2-03) -- the IANA name a person picked or the dashboard
+  took from their browser on first sign-in (`users.timezone`, e.g.
+  `Europe/Moscow`), used to send their digest in their morning and to write
+  times in their reminders. Nothing finer than the zone; it goes with the
+  account and can be cleared on the "Profile" page.
 - **Tariffs** (only with `NF_MULTI_USER=1`) -- the tariffs themselves (`plans`:
   name, price, limits and features) are shared settings, not data about
   anyone. Per user, `user_plans` keeps the user's tariff, its start and end

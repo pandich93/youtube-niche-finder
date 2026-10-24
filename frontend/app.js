@@ -5,6 +5,7 @@ import { loadFootStat } from './shared.js';
 import { render, routeTitle } from './router.js';
 import { setMe, applyNav, renderPlanLine } from './plan-state.js';
 import { setOffers, showSignIn, openAccountLink } from './account.js';
+import { adoptBrowserTimezone } from './screens/profile.js';
 import { dict, getLocale, hasStoredLocale, setLocale, onLocaleChange, translateStatic } from './i18n.js';
 import ru from './i18n/ru/app.js';
 import en from './i18n/en/app.js';
@@ -96,6 +97,7 @@ async function start() {
   setOffers(me.signup);
   if (me.multiUser && !me.user) { if (!openAccountLink(false)) showSignIn(); return; }
   setMe(me);
+  adoptBrowserTimezone(me);   // P2-03: только если пояс ещё не выбран
   if (me.multiUser) {
     const out = $('#signOut');
     out.hidden = false;
