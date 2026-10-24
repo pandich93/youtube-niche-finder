@@ -75,6 +75,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Dashboard: links from emails and signed-out navigation in an open tab**
+  (found in a live run of the multi-user beta). A sign-up, reset or
+  email-change link pasted into a tab where the dashboard was already open
+  only changed the address and drew "Overview" with "Sign in first"; it now
+  opens its own screen, as a freshly loaded page did. Signed out, a click on a
+  menu section drew that section with 401 errors; it now stays on sign-in.
+  Confirming a new email while signed in no longer says "Sign in" in the
+  header, and on a narrow screen the niche, period and refresh controls wrap
+  instead of scrolling the page sideways.
 - **The backend lockfile serves Python 3.10, 3.11 and Windows again.** A
   Dependabot update rewrote `backend/requirements.txt` with its pip updater,
   which dropped the per-version and per-OS lines of the `uv pip compile

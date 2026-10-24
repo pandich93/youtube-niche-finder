@@ -68,7 +68,16 @@ function initChrome() {
   $('#langToggle').addEventListener('click', () => setLocale(getLocale() === 'ru' ? 'en' : 'ru'));
 
   translateChrome();
-  addEventListener('hashchange', render);
+  addEventListener('hashchange', onHash);
+}
+
+/* Смена адреса в уже открытой вкладке: ссылка из письма, вставленная сюда,
+   открывает свой экран, а без входа любой раздел -- это экран входа (иначе
+   рисовался бы раздел с ошибкой 401). */
+function onHash() {
+  if (me.multiUser && openAccountLink(!!me.user)) return;
+  if (me.multiUser && !me.user) { showSignIn(); return; }
+  render();
 }
 
 /* Смена языка кнопкой: каркас, подвал и экран перерисовываются без перезагрузки;
