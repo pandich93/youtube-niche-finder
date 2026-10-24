@@ -12,6 +12,7 @@ export default {
   tileInWindow: 'Videos in window',
   refreshTitle: 'Refresh stats',
   refreshSub: 're-reads counters and appends a snapshot — speeds are computed from these',
+  refreshSubMine: 're-reads the counters of the channels on your watchlist and their videos from the last 30 days — spends your YouTube quota',
   refreshNow: 'Refresh now',
   refreshed: 'Refreshed {videos} videos and {channels} channels',
 

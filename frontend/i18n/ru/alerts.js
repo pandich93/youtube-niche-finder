@@ -39,6 +39,8 @@ export default {
   title: 'Алерты',
   sub: 'события по каналам из трекера и по вашим темам — то же, что уходит в Telegram или webhook',
   markAllSeen: 'Отметить всё прочитанным',
+  scanNow: 'Проверить сейчас',
+  scanned: 'Проверено каналов: {channels} · новых событий: {found}',
   type: 'Тип',
   all: 'все',
   unseenOnly: 'Только новые',

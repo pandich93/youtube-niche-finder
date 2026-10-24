@@ -41,6 +41,7 @@ container read-only, no image rebuild needed.
 | `router.js` | hash routing: route table, active menu item, loading/error state |
 | `shared.js` | shared by screens: `#view`, period labels, the collect form, the quota footer, the niche overview block |
 | `plan-state.js` | the signed-in user's tariff (multi-user mode only): hides menu sections the tariff switches off and fills the footer line "Тариф <name> · квота used/limit" |
+| `manual-runs.js` | buttons that start the server's work by hand (refresh, alert scan): shown to an admin, or to a user whose tariff has `manual_runs`; past the hourly limit they read "Снова можно в HH:MM" (multi-user plan P2-11) |
 | `hook_view.js` | the hook-score result card shared by the Transcripts and Title check screens |
 | `screens/*.js` | one file per screen (`overview.js`, `find.js`, …, `channel.js`, `niche.js`) |
 | `tests/test_smoke.py` | opens every screen in headless Chromium against a seeded backend (`make frontend-test`) |
@@ -133,7 +134,10 @@ The alert events of your watchlist (`/api/events`) — the same ones Telegram
 or a webhook gets: outliers, acceleration, title changes, a channel breaking
 its silence, a channel or video that disappeared, a subscriber milestone, and
 a match on one of your topics. Filter by type or "only new", and mark
-everything read. Below, "Мои темы" (`/api/topics`): name a topic in plain
+everything read. "Проверить сейчас" runs the alert scan without waiting for
+the worker (`POST /api/events/scan`): always for an admin, for a regular user
+only over their watchlist and within the tariff's `manual_runs` per hour
+(multi-user plan P2-11; hidden when it is 0). Below, "Мои темы" (`/api/topics`): name a topic in plain
 words with a similarity threshold, pause or remove it; a new video close to it
 raises a "Тема" alert that only you see. Zero quota; ticking "На YouTube"
 (or "Искать на YouTube" on a topic) also searches all of YouTube for it once
@@ -424,6 +428,10 @@ those emails open `#/signup/<token>`, `#/reset/<token>` and `#/email/<token>`
 
 Key, database, and history state (how many channels/videos/snapshots have
 been collected), plus the same collection forms and a manual stats refresh.
+The refresh card is there for an admin (the whole corpus) and, when the
+tariff limit `manual_runs` allows it (multi-user plan P2-11), for a regular
+user too -- then it refreshes only their watchlist, and past the hourly limit
+the button reads "Снова можно в HH:MM" (`/api/manual-runs`, `manual-runs.js`).
 A "Хранение данных" card (`/api/freshness`) shows how many videos and channels were not
 refreshed for 25 days, since when the history goes back, and that the worker
 re-reads the oldest rows daily and never deletes anything.

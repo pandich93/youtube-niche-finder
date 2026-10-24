@@ -1,6 +1,7 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, q, num, compact, ago, esc, toast, sectionHead, empty } from '../ui.js';
 import { view, render } from '../shared.js';
+import { manualRunStatus, manualRunAvailable, wireManualRun } from '../manual-runs.js';
 import { dict, fmtDate, fmtDateTime } from '../i18n.js';
 import ru from '../i18n/ru/alerts.js';
 import en from '../i18n/en/alerts.js';
@@ -97,15 +98,18 @@ function wireTopics() {
 async function viewAlerts() {
   const p = { kind: '', unseen_only: false };
   try { Object.assign(p, JSON.parse(localStorage.getItem('nf.alerts') || '{}')); } catch (e) { /* пусто */ }
-  const [d, topics] = await Promise.all([
+  const [d, topics, runs] = await Promise.all([
     api(`/api/events${q({ kind: p.kind, unseen_only: p.unseen_only || '', limit: 200 })}`),
-    api('/api/topics')]);
+    api('/api/topics'), manualRunStatus()]);
   const opt = (v, l) => `<option value="${esc(v)}"${p.kind === v ? ' selected' : ''}>${esc(l)}</option>`;
+  // P2-11: «проверить сейчас», не дожидаясь воркера -- админу всегда, остальным по тарифу
+  const scanBtn = manualRunAvailable(runs, 'scan')
+    ? `<button class="btn btn-ghost btn-sm" id="alScan" type="button">${t('scanNow')}</button> ` : '';
 
   view.innerHTML = `
     <div class="card">
       ${sectionHead(t('title'), t('sub'),
-        `<button class="btn btn-ghost btn-sm" id="alSeen" type="button">${t('markAllSeen')}</button>`)}
+        `${scanBtn}<button class="btn btn-ghost btn-sm" id="alSeen" type="button">${t('markAllSeen')}</button>`)}
       <div class="form-row">
         <label class="field"><span class="field-label">${t('type')}</span>
           <select id="alKind">${opt('', t('all'))}${Object.entries(kinds()).map(([k, [l]]) => opt(k, l)).join('')}</select></label>
@@ -128,6 +132,14 @@ async function viewAlerts() {
     }));
     render();
   });
+  if ($('#alScan')) {
+    wireManualRun($('#alScan'), runs, 'scan', t('scanNow'), async () => {
+      const r = await api('/api/events/scan', { method: 'POST' });
+      const found = Object.values(r.emitted || {}).reduce((a, b) => a + b, 0);
+      toast(t('scanned', { channels: num(r.channelsScanned || 0), found: num(found) }), 'ok');
+      render();
+    });
+  }
   $('#alSeen').addEventListener('click', async () => {
     await api('/api/events/seen', { method: 'POST', body: { all: true } });
     toast(t('allSeen'));
