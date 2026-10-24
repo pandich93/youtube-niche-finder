@@ -16,8 +16,8 @@ let offers = { signup: false, passwordReset: false };
 
 function setOffers(next) { if (next) offers = next; }
 
-function screen(title, sub, body, message = '', kind = 'error') {
-  $('#crumbSection').textContent = t('crumb');
+function screen(title, sub, body, message = '', kind = 'error', crumb = t('crumb')) {
+  $('#crumbSection').textContent = crumb;
   $('#view').innerHTML = `${message ? notice(esc(message), kind) : ''}
     <div class="card" style="max-width:420px">
       <div class="section-head"><div><div class="section-title">${esc(title)}</div>
@@ -178,14 +178,16 @@ function resetPassword(token) {
 async function confirmEmail(token, signedInNow) {
   try {
     const r = await api('/api/auth/email/confirm', { method: 'POST', body: { token } });
+    // со входом это не экран входа -- и в заголовке не «Вход»
     screen(t('emailChangedTitle'), '', `<p>${esc(t('emailChanged', { email: r.email }))}</p>
-      <button class="btn" type="button" id="afterEmail">${esc(t('continue'))}</button>`);
+      <button class="btn" type="button" id="afterEmail">${esc(t('continue'))}</button>`,
+    '', 'error', signedInNow ? t('emailChangedTitle') : t('crumb'));
     $('#afterEmail').addEventListener('click', () => {
       location.hash = signedInNow ? '#/profile' : '#/overview';
       location.reload();
     });
   } catch (err) {
-    if (signedInNow) screen(t('emailChangedTitle'), '', '', err.message);
+    if (signedInNow) screen(t('emailChangedTitle'), '', '', err.message, 'error', t('emailChangedTitle'));
     else showSignIn(err.message);
   }
 }

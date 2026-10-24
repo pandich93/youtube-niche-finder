@@ -437,4 +437,6 @@ td.wrap { white-space: normal; max-width: 380px; }
   .nav { flex-direction: row; flex-wrap: wrap; flex: 0 1 auto; overflow: visible; }
   .sidebar-foot { margin: 0; }
   .topbar { flex-wrap: wrap; }
+  /* фильтры и «Обновить» переносятся, а не растягивают страницу вбок */
+  .topbar-right { flex-wrap: wrap; margin-left: 0; }
 }
