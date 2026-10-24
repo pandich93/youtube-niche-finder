@@ -26,7 +26,8 @@ async function api(path, opts = {}) {
   });
   let data = null;
   try { data = await res.json(); } catch { /* пустой ответ */ }
-  if (res.status === 401 && path !== '/api/auth/login') {
+  // вход и его второй шаг (P2-04) отвечают 401 на неверный ввод -- это не конец сессии
+  if (res.status === 401 && path !== '/api/auth/login' && path !== '/api/auth/login/2fa') {
     // План 15: сессия кончилась или её нет -- app.js покажет экран входа.
     dispatchEvent(new CustomEvent('nf:signin-required'));
   }

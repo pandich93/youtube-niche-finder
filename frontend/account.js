@@ -1,7 +1,9 @@
 /* Вход и всё, что можно сделать без входа (план 15, многопользовательский
    P1-06): вход, регистрация по ссылке из письма, «Забыли пароль?» и ссылки из
    писем #/signup/<токен>, #/reset/<токен>, #/email/<токен>. Только при
-   NF_MULTI_USER=1. Сессия -- HttpOnly cookie, скрипт её не видит и не хранит. */
+   NF_MULTI_USER=1. Сессия -- HttpOnly cookie, скрипт её не видит и не хранит.
+   P2-04: у аккаунта с двухфакторной защитой после пароля (и после сброса по
+   ссылке) -- второй шаг, код из приложения или резервный код. */
 import { $, api, esc, notice } from './ui.js';
 import { dict } from './i18n.js';
 import ru from './i18n/ru/account.js';
@@ -66,10 +68,30 @@ function showSignIn(message = '', kind = 'error') {
   $('#signInForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     try {
-      await api('/api/auth/login', { method: 'POST',
+      const r = await api('/api/auth/login', { method: 'POST',
         body: { email: $('#signInEmail').value, password: $('#signInPassword').value } });
+      if (r?.mfaRequired) { showSecondStep(r.challenge); return; }
       location.reload();
     } catch (err) { showSignIn(err.message); }
+  });
+}
+
+/* P2-04: второй шаг. Промежуточный токен живёт только в памяти этой страницы,
+   несколько минут и до нескольких ошибок -- потом вход начинается с пароля. */
+function showSecondStep(challenge, message = '', kind = 'error', done = () => location.reload()) {
+  screen(t('codeTitle'), t('codeSub'), `
+    <form id="codeForm" style="display:grid;gap:10px">
+      <input type="text" id="signInCode" inputmode="numeric" autocomplete="one-time-code" placeholder="${esc(t('codePlaceholder'))}" required>
+      <button class="btn" type="submit">${esc(t('confirmCode'))}</button>
+    </form>${linkRow([{ on: true, go: 'signin', label: t('backToSignIn') }])}`, message, kind);
+  wireLinks();
+  $('#signInCode').focus();
+  $('#codeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/api/auth/login/2fa', { method: 'POST', body: { challenge, code: $('#signInCode').value } });
+      done();
+    } catch (err) { showSecondStep(challenge, err.message, 'error', done); }
   });
 }
 
@@ -143,7 +165,9 @@ function resetPassword(token) {
     $('#resetForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        await api('/api/auth/password/reset', { method: 'POST', body: { token, password: chosenPassword() } });
+        const r = await api('/api/auth/password/reset', { method: 'POST', body: { token, password: chosenPassword() } });
+        // пароль сменён, но двухфакторная защита осталась -- нужен код
+        if (r?.mfaRequired) { showSecondStep(r.challenge, t('resetNeedsCode'), '', signedIn); return; }
         signedIn();
       } catch (err) { draw(err.message); }
     });

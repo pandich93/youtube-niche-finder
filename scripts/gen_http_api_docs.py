@@ -179,6 +179,13 @@ SUMMARY = {
     "DELETE /api/auth/sessions/{session_id}": ("auth", "Sign out one of your sessions (only your own; the current one signs this browser out)."),
     "POST /api/auth/sessions/end-others": ("auth", "Sign out on every other device; this browser stays signed in."),
     "POST /api/auth/impersonation/end": ("auth", "Leave an admin's read-only support view; the session is the admin's again."),
+    # multi-user plan P2-04: two-factor sign-in
+    "POST /api/auth/login/2fa": ("auth", "The second sign-in step: the `challenge` from the login (or a password reset) and an app or backup `code`; sets the session cookie. Throttled like passwords."),
+    "GET /api/auth/2fa": ("auth", "Your two-factor sign-in: on or off, backup codes left, whether the server can turn it on and whether it is required for you."),
+    "POST /api/auth/2fa/setup": ("auth", "Start turning two-factor sign-in on: a new secret and its `otpauth://` link, shown once; needs `OWN_TOKENS_KEY`."),
+    "POST /api/auth/2fa/enable": ("auth", "Confirm the setup with an app `code`: turns it on, returns 10 backup codes once, ends your other sessions."),
+    "POST /api/auth/2fa/disable": ("auth", "Turn two-factor sign-in off with your `password` and a `code` (app or backup)."),
+    "POST /api/auth/2fa/backup-codes": ("auth", "New backup codes for a current `code`; the old ones stop working. Shown once."),
     "PUT /api/me/locale": ("auth", "Save the interface language (`ru` or `en`): the dashboard on other devices and your alerts and digest use it."),
     "GET /api/auth/tokens": ("auth", "Your personal API tokens (names and dates, never the secret)."),
     "POST /api/auth/tokens": ("auth", "Create a personal token for the extension or MCP over HTTP; shown once."),
@@ -314,7 +321,7 @@ def render():
         " `X-NF-Client: <anything>`, otherwise it gets `403` -- this stops other websites open in your"
         " browser from spending your quota. See [SECURITY.md](../SECURITY.md).",
         "- **Multi-user mode** (`NF_MULTI_USER=1`): every route except `/api/health`, `/api/auth/login`,"
-        " `/api/auth/logout`, `/api/auth/me` and the OAuth callback needs a session cookie or"
+        " `/api/auth/login/2fa`, `/api/auth/logout`, `/api/auth/me` and the OAuth callback needs a session cookie or"
         " `Authorization: Bearer <personal token>`; without one it answers `401`.",
         "- **Cost:** a route not marked otherwise only reads your local Postgres -- zero YouTube quota,"
         " no LLM call. LLM costs apply only when `LLM_PROVIDER` is set.",

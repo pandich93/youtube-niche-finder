@@ -6,6 +6,7 @@ import { render, routeTitle } from './router.js';
 import { setMe, applyNav, renderPlanLine } from './plan-state.js';
 import { setOffers, showSignIn, openAccountLink } from './account.js';
 import { setView, renderBanner, inView } from './impersonation.js';
+import { viewTwoFactorSetup } from './screens/profile.js';
 import { dict, getLocale, hasStoredLocale, setLocale, onLocaleChange, translateStatic } from './i18n.js';
 import ru from './i18n/ru/app.js';
 import en from './i18n/en/app.js';
@@ -111,6 +112,12 @@ async function start() {
       location.reload();
     });
     renderPlanLine();
+  }
+  if (me.twoFactor?.setupRequired) {
+    // P2-04: администратор без 2FA при NF_ADMIN_2FA=required -- пока не включит, только её настройка
+    document.querySelectorAll('#nav .nav-item').forEach((a) => { a.hidden = true; });
+    viewTwoFactorSetup();
+    return;
   }
   applyNav();
   addEventListener('nf:signin-required', () => showSignIn(t('sessionExpired')));

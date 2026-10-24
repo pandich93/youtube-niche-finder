@@ -25,6 +25,12 @@ EVENTS = {
     "password_reset": "auth",
     "email_change_requested": "auth",
     "email_change": "auth",
+    # multi-user plan P2-04: второй фактор
+    "2fa_enable": "auth",
+    "2fa_disable": "auth",
+    "2fa_failed": "auth",
+    "2fa_backup_used": "auth",
+    "2fa_backup_regenerate": "auth",
     "token_create": "tokens",
     "token_revoke": "tokens",
     "plan_change": "plans",

@@ -240,7 +240,20 @@ reset; see `.env.example`). Accounts from the command line:
 make cli ARGS="create-user ann@example.com --admin"   # asks for the password twice
 make cli ARGS="set-password local"                    # your existing data belongs to "local"
 make cli ARGS="users"
+make cli ARGS="disable-2fa ann@example.com"           # lost phone and backup codes (logged)
 ```
+
+Two-factor sign-in (multi-user plan P2-04, `application/two_factor.py`,
+`domain/totp.py`): an account turns it on in the profile with an authenticator
+app (TOTP, RFC 6238, standard library only). The secret is encrypted with
+`OWN_TOKENS_KEY` (no key -- no 2FA); 10 one-time backup codes are kept as
+scrypt hashes. With it on, `POST /api/auth/login` answers `{mfaRequired,
+challenge}` instead of setting the cookie, and `POST /api/auth/login/2fa`
+with the challenge and a code signs in; a reset by emailed link does the
+same. Wrong codes count in `login_attempts` like wrong passwords.
+`NF_ADMIN_2FA=required` keeps an admin without 2FA on its setup (403
+`TwoFactorRequired` elsewhere); `cli.py set-password` leaves 2FA on and says
+so. API tokens need no code, but only a session that passed 2FA creates one.
 
 Passwords are scrypt hashes (standard library), at least 10 characters. A
 session is a random token in the `nf_session` cookie (HttpOnly,

@@ -86,6 +86,8 @@ function auditLabels() {
     plan_archive: t('evPlanArchive'), plan_restore: t('evPlanRestore'),
     impersonation_start: t('evImpersonationStart'), impersonation_end: t('evImpersonationEnd'),
     impersonation_expired: t('evImpersonationExpired'),
+    '2fa_enable': t('ev2faEnable'), '2fa_disable': t('ev2faDisable'), '2fa_failed': t('ev2faFailed'),
+    '2fa_backup_used': t('ev2faBackupUsed'), '2fa_backup_regenerate': t('ev2faBackupRegenerate'),
   };
 }
 

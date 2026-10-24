@@ -51,6 +51,14 @@ Everything lives in the Postgres database you point the app at (by default the
   only to the backend address you set. Each user's notification settings
   (`user_settings`): the Telegram chat id in clear, the bot token and webhook
   address encrypted with `OWN_TOKENS_KEY`.
+- **Two-factor sign-in** (only if you turn it on, multi-user plan P2-04) --
+  the authenticator secret encrypted with `OWN_TOKENS_KEY` and the 30-second
+  step of the last accepted code (`user_totp`), scrypt hashes of the backup
+  codes with when each was used (`user_backup_codes`), and for a sign-in
+  waiting for its code the SHA-256 of a one-time challenge for 5 minutes
+  (`mfa_challenges`). A session row also notes when it passed the second
+  factor (`sessions.mfa_at`). All of it goes when 2FA is turned off and with
+  the account.
 - **Tariffs** (only with `NF_MULTI_USER=1`) -- the tariffs themselves (`plans`:
   name, price, limits and features) are shared settings, not data about
   anyone. Per user, `user_plans` keeps the user's tariff, its start and end

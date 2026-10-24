@@ -195,7 +195,9 @@ def _failed(conn, keys, now: datetime):
 
 
 def login(email: str, password: str, client_ip: str = None) -> dict:
-    """A session for the right password. Failed attempts are counted per
+    """A session for the right password -- or, with two-factor sign-in on
+    (P2-04), {mfaRequired, challenge, expiresAt} for the second step
+    (application/two_factor.complete_login). Failed attempts are counted per
     email and per client address (multi-user plan P0-03): past the limits
     LoginThrottled says how long to wait -- before the password is even
     checked, so guessing cannot go on, and alike for a known and an unknown
@@ -229,6 +231,14 @@ def login(email: str, password: str, client_ip: str = None) -> dict:
                        details={"reason": "wrong password"})
             _failed(conn, keys, now)
             raise AuthError(_FAIL)
+        # P2-04: с двухфакторной защитой сессии ещё нет -- промежуточный токен
+        # второго шага; счётчик ошибок не обнуляется до верного кода, иначе
+        # каждый верный пароль давал бы новые попытки угадать код
+        from application import two_factor as TF  # он импортирует этот модуль
+        if TF.enabled(row["id"], conn=conn):
+            challenge = TF.start_challenge(conn, row["id"])
+            conn.commit()
+            return challenge
         db.clear_login_failures(conn, "email", _norm(email))
         s = start_session(conn, row["id"])
         AUD.record(conn, "login", actor_id=row["id"], target_id=row["id"], ip=client_ip)
