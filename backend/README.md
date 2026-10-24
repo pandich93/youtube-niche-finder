@@ -447,7 +447,11 @@ python3 tests/test_smoke.py   # should be 17/17 passed -- needs a reachable
 `requirements.in` (edit them there). Re-pin to the newest allowed versions with
 `uv pip compile requirements.in --python-version 3.10 --universal -o requirements.txt --upgrade`
 (3.10 is the oldest Python `make local-install` accepts; per-version markers let the same file serve
-3.10, 3.11 and the 3.12 used by Docker and CI). Local installs need Linux or an Apple Silicon Mac: the pinned
+3.10, 3.11 and the 3.12 used by Docker and CI). To move one package, add
+`--upgrade-package NAME` instead of `--upgrade`; uv keeps every other pin and picks a version per
+Python where the newest no longer supports 3.10. `make lock-check` (also in CI) fails when the
+file is not exactly what uv compiles -- Dependabot's pip updater rewrites it without the
+per-version and per-OS lines, so its PRs for `backend/` fail there and are redone with uv. Local installs need Linux or an Apple Silicon Mac: the pinned
 `onnxruntime` ships no Intel-Mac wheels for Python 3.11+, so use Docker there.
 
 Each test process works in its own `nichetest_<random>` schema and drops it on

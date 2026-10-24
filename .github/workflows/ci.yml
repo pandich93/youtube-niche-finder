@@ -45,6 +45,16 @@ jobs:
       - name: Check the links between documents
         run: python3 scripts/check_doc_links.py
 
+      # backend/requirements.txt is `uv pip compile --universal` output for
+      # Python 3.10+ on every OS. Recompiling it (uv keeps the pins already
+      # there) must change nothing but comments: a lockfile rewritten by hand
+      # or by Dependabot's pip updater drops the per-version and per-OS lines,
+      # which only Docker's Python 3.12 on Linux would survive.
+      - name: Check the backend lockfile is uv-compiled
+        run: |
+          pip install uv==0.13.5
+          make lock-check UV=uv
+
   # Every dashboard screen in headless Chromium against a seeded backend
   # (frontend/tests/test_smoke.py). No button clicks: POSTs spend quota.
   frontend-smoke:

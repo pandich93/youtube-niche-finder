@@ -1,7 +1,10 @@
 # Weekly pull requests for outdated dependencies; security fixes come as soon
 # as an advisory is out (Dependabot security updates, repository settings).
-# backend/requirements.txt is compiled from requirements.in by uv: Dependabot
-# updates the pinned line, and CI runs the full test suite on it.
+# backend/requirements.txt is `uv pip compile --universal` output (Python
+# 3.10+, every OS). Dependabot's pip updater rewrites it without those markers,
+# so its backend PRs fail CI's lockfile check; they still say what is out of
+# date, and the bump is redone with uv (backend/README.md, "Running without
+# Docker").
 version: 2
 updates:
   - package-ecosystem: pip
