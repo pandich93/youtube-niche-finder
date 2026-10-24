@@ -143,7 +143,7 @@ SUMMARY = {
     "POST /api/topics/{topic_id}/pause": ("alerts", "Pause or resume a topic: `paused`."),
     "POST /api/topics/{topic_id}/search": ("alerts", "Turn a topic's daily YouTube search on or off: `on` (one search.list call a day)."),
     "DELETE /api/topics/{topic_id}": ("alerts", "Stop watching a topic; its past alerts stay."),
-    "POST /api/events/scan": ("alerts", "Run the alert scan now instead of waiting for the worker."),
+    "POST /api/events/scan": ("alerts", "Run the alert scan now instead of waiting for the worker. An admin scans every watchlist; with `manual_runs` on their plan a regular user scans their own, a few times an hour (429 + Retry-After past it)."),
     "GET /api/digest": ("alerts", "What the daily digest would contain right now (read-only)."),
     "POST /api/digest/send": ("alerts", "Send the digest now, to check the Telegram/webhook setup."),
     "GET /api/settings/notifications": ("alerts", "Whether Telegram/webhook delivery is set and in which mode -- never the secrets."),
@@ -151,7 +151,8 @@ SUMMARY = {
     "POST /api/settings/notifications/test": ("alerts", "Send a test message to the configured Telegram chat or webhook."),
     "POST /api/collect/channel": ("collect", "Collect a channel through its uploads playlist; `track=true` also adds it to the watchlist."),
     "POST /api/collect/niche": ("collect", "Collect a niche by search query (the only route that uses `search.list`)."),
-    "POST /api/refresh": ("collect", "Refresh view counts of recent videos and tracked channels now."),
+    "POST /api/refresh": ("collect", "Refresh view counts of recent videos and tracked channels now. An admin refreshes the corpus; with `manual_runs` on their plan a regular user refreshes their own watchlist, a few times an hour (429 + Retry-After past it)."),
+    "GET /api/manual-runs": ("collect", "Which manual runs (refresh, alert scan) you may start now and when the next one is allowed (multi-user plan P2-11)."),
     "GET /api/inspect/video": ("inspect", "Everything the watch-page panel shows for one video."),
     "GET /api/inspect/channel": ("inspect", "Everything the channel-page panel shows (`ref` = UC id, @handle or URL)."),
     "POST /api/inspect/videos": ("inspect", "Badge data (multiplier, views per hour) for up to a page of thumbnails at once."),
@@ -177,7 +178,16 @@ SUMMARY = {
     "GET /api/auth/sessions": ("auth", "Where you are signed in: times, address and browser, the current session marked; never a token. Dashboard sign-in only."),
     "DELETE /api/auth/sessions/{session_id}": ("auth", "Sign out one of your sessions (only your own; the current one signs this browser out)."),
     "POST /api/auth/sessions/end-others": ("auth", "Sign out on every other device; this browser stays signed in."),
+    "POST /api/auth/impersonation/end": ("auth", "Leave an admin's read-only support view; the session is the admin's again."),
+    # multi-user plan P2-04: two-factor sign-in
+    "POST /api/auth/login/2fa": ("auth", "The second sign-in step: the `challenge` from the login (or a password reset) and an app or backup `code`; sets the session cookie. Throttled like passwords."),
+    "GET /api/auth/2fa": ("auth", "Your two-factor sign-in: on or off, backup codes left, whether the server can turn it on and whether it is required for you."),
+    "POST /api/auth/2fa/setup": ("auth", "Start turning two-factor sign-in on: a new secret and its `otpauth://` link, shown once; needs `OWN_TOKENS_KEY`."),
+    "POST /api/auth/2fa/enable": ("auth", "Confirm the setup with an app `code`: turns it on, returns 10 backup codes once, ends your other sessions."),
+    "POST /api/auth/2fa/disable": ("auth", "Turn two-factor sign-in off with your `password` and a `code` (app or backup)."),
+    "POST /api/auth/2fa/backup-codes": ("auth", "New backup codes for a current `code`; the old ones stop working. Shown once."),
     "PUT /api/me/locale": ("auth", "Save the interface language (`ru` or `en`): the dashboard on other devices and your alerts and digest use it."),
+    "PUT /api/me/timezone": ("auth", "Save your IANA time zone (`Europe/Moscow`; empty = the server default): the digest goes out at `DIGEST_HOUR` in it and calendar reminders show times in it. `onlyIfEmpty` never overwrites a saved one."),
     "GET /api/auth/tokens": ("auth", "Your personal API tokens (names and dates, never the secret)."),
     "POST /api/auth/tokens": ("auth", "Create a personal token for the extension or MCP over HTTP; shown once."),
     "DELETE /api/auth/tokens/{token_id}": ("auth", "Revoke a personal token."),
@@ -194,6 +204,7 @@ SUMMARY = {
     "POST /api/admin/users/{user_id}/disable": ("plan", "Admin: block an account; its sessions and API tokens end at once."),
     "POST /api/admin/users/{user_id}/enable": ("plan", "Admin: unblock an account; the person signs in again."),
     "DELETE /api/admin/users/{user_id}": ("plan", "Admin: delete an account and all of its data (`confirmEmail` must match)."),
+    "POST /api/admin/users/{user_id}/impersonate": ("plan", "Admin, dashboard only: look at an account read-only for a while (`reason` required, logged); not an admin or a blocked account."),
     "GET /api/admin/audit": ("plan", "Admin (dashboard sign-in): the action log -- sign-ins, failed sign-ins, password/email changes, API tokens, plans, account actions; filters `event`, `user`, `since`, `until`, pages."),
     "DELETE /api/auth/me": ("auth", "Delete your own account and all of your data; needs your `password` and a dashboard sign-in."),
 }
@@ -311,7 +322,7 @@ def render():
         " `X-NF-Client: <anything>`, otherwise it gets `403` -- this stops other websites open in your"
         " browser from spending your quota. See [SECURITY.md](../SECURITY.md).",
         "- **Multi-user mode** (`NF_MULTI_USER=1`): every route except `/api/health`, `/api/auth/login`,"
-        " `/api/auth/logout`, `/api/auth/me` and the OAuth callback needs a session cookie or"
+        " `/api/auth/login/2fa`, `/api/auth/logout`, `/api/auth/me` and the OAuth callback needs a session cookie or"
         " `Authorization: Bearer <personal token>`; without one it answers `401`.",
         "- **Cost:** a route not marked otherwise only reads your local Postgres -- zero YouTube quota,"
         " no LLM call. LLM costs apply only when `LLM_PROVIDER` is set.",

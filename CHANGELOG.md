@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Support view: an admin looks at an account read-only** (multi-user plan
+  P2-05). "Посмотреть как" on the "Admin" page (`POST
+  /api/admin/users/{id}/impersonate`, a reason required) marks the admin's
+  dashboard session with the account for `NF_IMPERSONATION_MINUTES` (30 by
+  default); never an API token or MCP, never on an admin or a blocked
+  account, never nested. Requests then see the account's rows (`_uid` and
+  Row-Level Security), every non-GET request to `/api` but leaving
+  (`POST /api/auth/impersonation/end`) and signing out is refused with 403
+  `ReadOnlyView`, and spending is frozen: no YouTube unit (403 instead of a
+  fetch), no new LLM call, cached answers only. A banner on every screen
+  says whose eyes you are using; `/api/auth/me` returns `impersonation`.
+  The start (with the reason), the end and the expiry go into the action log
+  (group `support`).
+- **Two-factor sign-in** (multi-user plan P2-04). In the profile, an account
+  turns on TOTP (RFC 6238, 6 digits, 30 s, one step of drift, a code never
+  works twice) with any authenticator app -- the secret as text and an
+  `otpauth://` link, no QR service -- and gets 10 one-time backup codes,
+  shown once and stored as scrypt hashes. The secret is encrypted with
+  `OWN_TOKENS_KEY` and covered by `cli.py rotate-secrets`. Sign-in then takes
+  two steps: the password gives a one-time challenge (5 min) and the session
+  comes only with a code (`POST /api/auth/login/2fa`); wrong codes count with
+  wrong passwords in `login_attempts`. A reset by emailed link keeps 2FA;
+  turning it off needs the password and a code; the operator has
+  `cli.py disable-2fa EMAIL`. `NF_ADMIN_2FA=required` limits an admin without
+  2FA to its setup. API tokens need no code, but with 2FA on only a session
+  that passed it can create one. The action log gets `2fa_enable`,
+  `2fa_disable`, `2fa_failed`, `2fa_backup_used`, `2fa_backup_regenerate`.
+- **Manual runs for regular users, with a limit** (multi-user plan P2-11). A
+  new tariff limit `manual_runs` ("Ручные запуски в час", default
+  `NF_USER_MANUAL_RUNS_PER_HOUR=0` = admins only, as before) lets a regular
+  user refresh stats (`POST /api/refresh`) and run the alert scan
+  (`POST /api/events/scan`) by hand -- over their own watchlist only, on their
+  own YouTube quota, that many times an hour per operation. Past the limit the
+  answer is `429` with `Retry-After`; the counter (`manual_runs`, personal,
+  under RLS) is in Postgres under an advisory lock, so it holds across
+  restarts, replicas and parallel requests, and a failed run does not count.
+  `GET /api/manual-runs` tells the dashboard when the next run is allowed: the
+  "Обновить сейчас" button on "Данные" and the new "Проверить сейчас" on
+  "Алерты" show "Снова можно в HH:MM". Admins are never limited. AI
+  labelling, thumbnail vectors and the niche map stay admin-only; the decision
+  table is in [docs/manual-runs.md](docs/manual-runs.md).
+- **Each user's time zone** (P2-03). `users.timezone` holds an IANA name
+  (`Europe/Moscow`), checked with `zoneinfo` (old browser names such as
+  `Asia/Calcutta` are stored as the current ones); `PUT /api/me/timezone`
+  saves or clears it and `/api/auth/me` returns it with `defaultTimezone`.
+  The "Profile" screen has a "Часовой пояс" card with "Как в браузере",
+  also without `NF_MULTI_USER`; signed-in users who have none get the
+  browser's zone saved silently. `NF_DEFAULT_TIMEZONE` is the zone of those
+  who chose none.
+
+### Changed
+
+- **The digest goes out at `DIGEST_HOUR` of each recipient's own time**
+  (P2-03), once per local day: the mark in `meta` is now the UTC moment of
+  the last send, counted for its local date in the zone in force, so
+  daylight saving time and a change of zone neither repeat nor skip a day.
+  With no zone saved and no `NF_DEFAULT_TIMEZONE`, it is the container's
+  time as before; marks written before the upgrade still count. Calendar
+  reminders write the planned time in the recipient's zone (UTC as before
+  when there is none), and the best publishing hours on the brief and
+  calendar screens are shown in the browser's time instead of UTC. Daily
+  quotas stay on Pacific Time (YouTube units and searches) and UTC (LLM spend), now said so
+  in `backend/README.md`.
+
 ### Security
 
 - **Row-Level Security holds against arbitrary SQL** (multi-user plan P1-02,

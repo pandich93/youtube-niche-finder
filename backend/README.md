@@ -240,7 +240,20 @@ reset; see `.env.example`). Accounts from the command line:
 make cli ARGS="create-user ann@example.com --admin"   # asks for the password twice
 make cli ARGS="set-password local"                    # your existing data belongs to "local"
 make cli ARGS="users"
+make cli ARGS="disable-2fa ann@example.com"           # lost phone and backup codes (logged)
 ```
+
+Two-factor sign-in (multi-user plan P2-04, `application/two_factor.py`,
+`domain/totp.py`): an account turns it on in the profile with an authenticator
+app (TOTP, RFC 6238, standard library only). The secret is encrypted with
+`OWN_TOKENS_KEY` (no key -- no 2FA); 10 one-time backup codes are kept as
+scrypt hashes. With it on, `POST /api/auth/login` answers `{mfaRequired,
+challenge}` instead of setting the cookie, and `POST /api/auth/login/2fa`
+with the challenge and a code signs in; a reset by emailed link does the
+same. Wrong codes count in `login_attempts` like wrong passwords.
+`NF_ADMIN_2FA=required` keeps an admin without 2FA on its setup (403
+`TwoFactorRequired` elsewhere); `cli.py set-password` leaves 2FA on and says
+so. API tokens need no code, but only a session that passed 2FA creates one.
 
 Passwords are scrypt hashes (standard library), at least 10 characters. A
 session is a random token in the `nf_session` cookie (HttpOnly,
@@ -291,6 +304,21 @@ With `NF_MULTI_USER=1`, the HTTP MCP services (`mcp-http`/`mcp-https`) require
 such a token (401 without one; set `MCP_PUBLIC_URL` to the address clients use);
 MCP over stdio stays local and acts as user 1.
 
+Time zone (P2-03): each user keeps an IANA zone (`users.timezone`,
+`PUT /api/me/timezone`, shown in `/api/auth/me`; the local user has one too,
+so it works without `NF_MULTI_USER`). The digest goes out at `DIGEST_HOUR` of
+that zone, else of `NF_DEFAULT_TIMEZONE`, else of the container (`TZ`), as
+before. It goes once per local day: `meta` keeps the UTC moment of the last
+send (`digest_last_sent_date[_u<id>]`), and a send counts for the local date
+it falls on in the zone in force now, so a clock turned back repeats an hour
+but never a day, a skipped hour does not skip the digest (it is "not before
+the hour"), a restart reads the same mark, and changing the zone neither
+repeats nor skips a day. Calendar reminders (`draft_due`) write the planned
+time in the recipient's zone (UTC when there is none); they fire 24 hours
+before, whatever the zone. Daily quotas do not move with it: YouTube units
+and searches, the tariff's daily limits on them included, reset at midnight
+Pacific Time (YouTube's day), LLM spend at midnight UTC, for everyone alike.
+
 Notifications (sub-stage 5.9): each user sets their own Telegram bot and chat
 or webhook and the mode — instant, digest, both or off — on the dashboard's
 "Данные" screen (`/api/settings/notifications`). Alerts and the digest cover
@@ -337,6 +365,15 @@ number or empty (no limit); 0 means "not at all".
 - A count limit is checked in the same transaction as the insert, under a lock
   per user and limit, so two requests at once cannot both take the last free
   row.
+- **Manual runs** (multi-user plan P2-11): the limit `manual_runs` lets a
+  regular user start "refresh stats" (`POST /api/refresh`) and the alert scan
+  (`POST /api/events/scan`) by hand, over their own watchlist only, that many
+  times an hour per operation, on their own quota. Past it: `429` with
+  `Retry-After`; `GET /api/manual-runs` tells the dashboard when the next run
+  is allowed. Unlike the other limits, 0 (the default, from
+  `NF_USER_MANUAL_RUNS_PER_HOUR`) means admins only, as before. AI labelling,
+  thumbnail vectors and the niche map stay admin-only; the decision per
+  operation is in [docs/manual-runs.md](../docs/manual-runs.md).
 - Admins edit tariffs on the dashboard's **Админка** screen and change a
   user's tariff there; admins themselves are not limited.
 - Users pick a free tariff on the **Тариф** screen. A tariff with a price is
@@ -731,7 +768,7 @@ required. The optional groups:
 | Worker schedule | `WORKER_RSS_INTERVAL_MIN`, `WORKER_ALERTS_INTERVAL_MIN`, `WORKER_HOT_*`, `WORKER_EMBED*`, `WORKER_DAILY_INTERVAL_MIN`, `WORKER_FULL_*`, `WORKER_REGIONS`, `WORKER_TRENDING`, `WORKER_QUERIES`, `WORKER_QUERY_*`, `WORKER_ENRICH_*`, `WORKER_CLUSTER_INTERVAL_MIN`, `WORKER_THUMBS` (1), `WORKER_THUMBS_INTERVAL_MIN` (360), `WORKER_THUMBS_LIMIT` (500), `WORKER_SPONSORS` (1), `WORKER_SPONSORS_INTERVAL_MIN` (60), `WORKER_SPONSORS_LIMIT` (5000) |
 | LLM (off by default) | `LLM_PROVIDER` (`none` / `openrouter` / `ollama`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_MODEL_LONG` (long-context model for comment insights), `OPENROUTER_REFERER`, `OPENROUTER_TITLE`, `OLLAMA_URL`, `OLLAMA_MODEL`, `LLM_DAILY_BUDGET_USD`, `LLM_WORKER_RESERVE_USD` (0.25), `LLM_FALLBACK_USD_PER_MTOK` (15), `LLM_RELABEL_DAYS`, `LLM_MIN_MANUAL_TAGS`, `LLM_INSIGHTS_TTL_DAYS` (7), `LLM_WHY_VIRAL_TTL_DAYS` (14), `LLM_HOOK_TTL_DAYS` (30) |
 | Niche clusters | `NICHE_CLUSTERS_MIN_CHANNELS` (10), `NICHE_CLUSTERS_COMPETITION_SUBS` (100000) |
-| Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_WINDOW_DAYS` (7: only events this recent are sent), `NOTIFY_DASHBOARD_URL`, `NOTIFY_MODE` (`instant` / `digest` / `both`), `DIGEST_HOUR` (8, container time zone), `DIGEST_SKIP_EMPTY` (1), `WORKER_DIGEST_CHECK_INTERVAL_MIN` (10) |
+| Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_WINDOW_DAYS` (7: only events this recent are sent), `NOTIFY_DASHBOARD_URL`, `NOTIFY_MODE` (`instant` / `digest` / `both`), `DIGEST_HOUR` (8, the recipient's local hour), `NF_DEFAULT_TIMEZONE` (time zone of users who chose none; empty = the container's), `DIGEST_SKIP_EMPTY` (1), `WORKER_DIGEST_CHECK_INTERVAL_MIN` (10) |
 | Servers | `WEB_PORT`, `RATE_LIMIT_PER_MINUTE`, `NF_ALLOWED_HOSTS` (extra `Host` names for the HTTP API), `MCP_TRANSPORT` (`stdio`), `MCP_HOST` (`127.0.0.1`), `MCP_PORT`, `MCP_ALLOW_UNAUTHENTICATED` (`0`; HTTP without `NF_MULTI_USER=1` only on loopback otherwise) |
 | Observability | `NF_LOG_FORMAT` (`text`; `json` = one JSON object per line), `NF_METRICS_TOKEN` (opens `/metrics`), `NF_OPERATOR_ALERTS` (`1`), `NF_OPERATOR_ALERT_HOURS` (`6`), `SENTRY_DSN`, `SENTRY_ENVIRONMENT` -- see [docs/hosting.md](../docs/hosting.md#monitoring) |
 

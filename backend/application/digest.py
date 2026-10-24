@@ -6,18 +6,21 @@ NOTIFY_MODE picks the delivery style: `instant` (default, per-event
 messages as before), `digest` (only this summary; per-event delivery in
 application/alerts.py stays silent) or `both`. The worker calls
 send_digest() every cycle; it sends once per local day, not before
-DIGEST_HOUR (container time zone, TZ in docker-compose.yml), and remembers
-the day in `meta` so a restart never sends twice.
+DIGEST_HOUR, and remembers the day in `meta` so a restart never sends twice.
+"Local" is the recipient's own time zone (P2-03, users.timezone), else
+NF_DEFAULT_TIMEZONE, else the container's (TZ in docker-compose.yml).
 """
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import infrastructure.postgres as db
 from application import channel_tracking as T
 from application import packaging as PKG
+from application import timezone_prefs as TZP
 from domain import i18n
 from domain import periods as P
+from domain import timezones as TZ
 from domain.i18n import tr
 from domain.users import LOCAL_USER_ID, multi_user_enabled
 from infrastructure.notify.null import NullNotifier
@@ -248,40 +251,50 @@ def send_digest(now: datetime = None, force: bool = False, period: str = "24h",
     both time checks). An empty day counts as done when DIGEST_SKIP_EMPTY is
     on; a failed send does not, so the next worker cycle retries. Every
     event the digest covered is marked delivered, so switching NOTIFY_MODE
-    back to instant does not replay them one by one."""
+    back to instant does not replay them one by one.
+
+    P2-03: "local" and "today" are the recipient's time zone. The mark is
+    the UTC moment of the last send; it counts for the local DATE it falls
+    on in the zone in force now: a clock turned back (DST) repeats an hour
+    but never a date, a skipped hour cannot skip the send ("not before", not
+    "exactly at"), and a new zone neither repeats nor skips a day. A mark
+    from before P2-03 (a plain server-local date) still counts as that date."""
     from application import notify_settings as NS
     notifier = NS.notifier_for(user_id=user_id)
     if isinstance(notifier, NullNotifier):
         return {"sent": False, "reason": "no notifier",
                 "hint": "set NOTIFY_TELEGRAM_BOT_TOKEN + NOTIFY_TELEGRAM_CHAT_ID "
                         "or NOTIFY_WEBHOOK_URL in .env"}
+    zone = TZP.effective(user_id=user_id)
     now = now or datetime.now().astimezone()
-    today = now.date().isoformat()
+    today, hour = TZ.local_day(now, zone)
+    mark = now.astimezone(timezone.utc).isoformat()
 
     conn = db.get_conn()
     try:
         if not force:
-            if now.hour < DIGEST_HOUR:
-                return {"sent": False, "reason": "too early", "digestHour": DIGEST_HOUR}
-            if db.get_meta(conn, _last_sent_key(user_id)) == today:
+            if hour < DIGEST_HOUR:
+                return {"sent": False, "reason": "too early", "digestHour": DIGEST_HOUR,
+                        "timezone": zone}
+            if TZ.sent_today(db.get_meta(conn, _last_sent_key(user_id)), now, zone):
                 return {"sent": False, "reason": "already sent today"}
 
         d = build_digest(period=period, user_id=user_id)
         if d["empty"] and DIGEST_SKIP_EMPTY and not force:
-            db.set_meta(conn, _last_sent_key(user_id), today)
+            db.set_meta(conn, _last_sent_key(user_id), mark)
             conn.commit()
             return {"sent": False, "reason": "empty"}
 
         # the recipient's language (worker, CLI and POST /api/digest/send alike):
         # the text goes to their Telegram/webhook
         from application.alerts import recipient_locale
-        with i18n.use_locale(recipient_locale(user_id)):
+        with i18n.use_locale(recipient_locale(user_id)), TZ.use_timezone(zone):
             text = format_digest(d)
         if not notifier.send(text):
             return {"sent": False, "reason": "send failed"}
         for event_id in d["eventIds"]:
             db.mark_alert_delivered(conn, str(event_id), "digest", user_id=user_id)
-        db.set_meta(conn, _last_sent_key(user_id), today)
+        db.set_meta(conn, _last_sent_key(user_id), mark)
         conn.commit()
         return {"sent": True, "events": len(d["eventIds"]), "date": today}
     finally:

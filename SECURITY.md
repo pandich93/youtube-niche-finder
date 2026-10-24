@@ -80,6 +80,39 @@ What the server does for you:
     anyone lock out someone else's account. The counters live in Postgres
     (`login_attempts`), so restarts do not reset them. The limits can be tuned
     with `NF_LOGIN_MAX_FAILS`, `NF_LOGIN_MAX_IP_FAILS` and `NF_LOGIN_WINDOW_MIN`.
+- **Two-factor sign-in** (multi-user plan P2-04, optional per account).
+  - Turned on in the profile with an authenticator app: TOTP (RFC 6238),
+    30-second steps, 6 digits, one step of clock drift either way. The same
+    code never works twice: the step of the last accepted code is kept.
+  - The secret is encrypted with `OWN_TOKENS_KEY`, like channel tokens and
+    notification secrets, and `cli.py rotate-secrets` re-encrypts it too.
+    Without the key it cannot be turned on; if the key is lost, the app codes
+    stop working and only backup codes or `cli.py disable-2fa` get the person
+    back in.
+  - The dashboard shows the secret as text and as an `otpauth://` link, not as
+    a QR code: drawing one would need an external service or a QR encoder in
+    the bundle, and neither is worth it for one screen.
+  - Ten backup codes (about 49 bits each) are shown once and kept only as
+    scrypt hashes; each works once. New ones need a current code and replace
+    the old set.
+  - With 2FA on, a right password gives no session, only a one-time
+    challenge (SHA-256 in `mfa_challenges`, 5 minutes, dies after 5 wrong
+    codes). Wrong codes count in the same `login_attempts` counters as wrong
+    passwords, and a right password does not reset the email's counter, so a
+    known password does not buy free guesses.
+  - Turning it on ends your other sessions; turning it off needs the password
+    and a code. A reset by emailed link keeps 2FA: after it comes the code
+    step too. `cli.py set-password` creates no session and says that 2FA is
+    still on; the operator removes it with `cli.py disable-2fa EMAIL`
+    (written to the action log).
+  - API tokens do not ask for a code (they are a factor of their own), but
+    with 2FA on a token can be created only from a session that passed it.
+  - `NF_ADMIN_2FA=required`: an admin without 2FA can sign in but sees only
+    the 2FA setup until they turn it on (the API answers 403
+    `TwoFactorRequired`); they cannot turn it off. Off by default, so an
+    upgrade never locks admins out; it needs `OWN_TOKENS_KEY`.
+  - The action log records turning it on and off, failed codes and every
+    used backup code.
 - **Sessions.**
   - A session is a random token in an `HttpOnly`, `SameSite=Strict` cookie, and
     the database keeps only its SHA-256.
@@ -275,7 +308,13 @@ Known limits (by design, worth knowing before you invite anyone):
   `/api/events/scan`, `/api/thumbnails/embed`, `/api/niche-clusters/recompute`
   and the MCP tools `refresh_stats`, `enrich_channels`, `tag_new_videos`,
   `scan_for_alerts`, `embed_thumbnails`) needs an admin, by session or API
-  token. The first author of a transcript can still paste junk or a prompt
+  token. Multi-user plan P2-11 lets an admin open two of them to regular users
+  through the tariff limit `manual_runs` (off by default,
+  `NF_USER_MANUAL_RUNS_PER_HOUR=0`): `/api/refresh` and `/api/events/scan` then
+  run over that user's own watchlist only, on their own quota, at most that
+  many times an hour (`429` with `Retry-After` past it, counted in Postgres
+  under a lock); the rest, and the MCP tools, stay admin-only
+  ([docs/manual-runs.md](docs/manual-runs.md)). The first author of a transcript can still paste junk or a prompt
   injection into it, and the LLM hook review of that text is cached for
   everyone; an admin can replace it.
 - **Admins.** `users.is_admin` guards `/api/admin/*` (tariffs, users'
@@ -300,6 +339,25 @@ Known limits (by design, worth knowing before you invite anyone):
   survive a deleted account and leave after `NF_AUDIT_RETENTION_DAYS`
   (default 180). The rows of P0-04's `admin_actions` were moved into it on
   the first start, and that table is gone.
+- **Support view** (multi-user plan P2-05). An admin signed in to the
+  dashboard can look at an account through its owner's eyes ("Посмотреть
+  как" on the "Admin" page, `POST /api/admin/users/{id}/impersonate`) to
+  answer a support question. It is a mark on the admin's own session
+  (`sessions.impersonating_user_id`), never on an API token or MCP, and:
+  a reason is required; not on another admin, a blocked account or oneself;
+  not nested; it lasts `NF_IMPERSONATION_MINUTES` (30 by default) and then
+  the next request clears it. While it lasts, `_uid` and Row-Level Security
+  (`app.user_id`) are the account's, not the admin's, admin routes are closed
+  (the account is no admin), and so are the account's session list, API
+  tokens and every profile change. **Every request but GET/HEAD/OPTIONS is
+  refused with 403** (`ReadOnlyView`) except leaving the view
+  (`POST /api/auth/impersonation/end`) and signing out. Spending is frozen:
+  the YouTube client refuses before reserving a unit and the LLM gateway
+  answers from its cache only, so a view uses nobody's quota and starts
+  nothing. The start (who, whom, why, until when), the end and the expiry
+  are in the action log; blocking the account, deleting it, making it an
+  admin or removing the admin's role ends the view too. The dashboard shows
+  a banner "Вы смотрите как ... — только чтение" on every screen.
 - **Tokens made before expiry existed do not expire.** New tokens live 90 days
   by default (1 to 365 days, or no expiry if you choose it). Older tokens keep
   every scope and no expiry until revoked; the MCP screen marks them

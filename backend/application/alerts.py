@@ -14,8 +14,10 @@ from application import channel_tracking as T
 from application import discovery as trends
 from application import locale_prefs as LP
 from application import milestones as MSA
+from application import timezone_prefs as TZP
 from domain import alerts as A
 from domain import i18n
+from domain import timezones as TZ
 from domain.i18n import tr
 from infrastructure.notify.null import NullNotifier
 
@@ -107,13 +109,17 @@ def _gone_rows(conn, channel_ids: list) -> list:
 
 def scan(outlier_threshold: float = A.OUTLIER_THRESHOLD_DEFAULT,
         acceleration_threshold: float = A.ACCELERATION_THRESHOLD_DEFAULT,
-        silence_days: float = DEFAULT_SILENCE_DAYS, period: str = DEFAULT_PERIOD) -> dict:
+        silence_days: float = DEFAULT_SILENCE_DAYS, period: str = DEFAULT_PERIOD,
+        channel_ids=None) -> dict:
     """Run every detector against TRACKED channels only -- alerts are about
     channels you asked to watch, not the whole database. Safe to call every
-    worker cycle: see _emit for why repeats never duplicate."""
+    worker cycle: see _emit for why repeats never duplicate.
+
+    channel_ids narrows the scan to those channels (multi-user plan P2-11: a
+    regular user's manual run covers their own watchlist only)."""
     # every user's tracked channels, each once: an event is a shared fact, who
     # sees it is decided when reading (list_events)
-    channel_ids = T.tracked_channel_ids()
+    channel_ids = T.tracked_channel_ids() if channel_ids is None else list(channel_ids)
     empty_counts = {"outlier": 0, "acceleration": 0, "title_change": 0, "silence_break": 0,
                     "channel_gone": 0, "video_gone": 0, "milestone": 0}
     if not channel_ids:
@@ -362,12 +368,14 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, *, user_id: int) -> dict:
 
         channel = NS.target_name(user_id=user_id)
         to_send, rest = pending[:max_per_cycle], pending[max_per_cycle:]
-        # written in THIS user's language, whoever else the worker sends to
+        # written in THIS user's language, whoever else the worker sends to,
+        # and with times in THIS user's time zone (P2-03: calendar reminders)
         locale = recipient_locale(user_id)
+        zone = TZP.effective(user_id=user_id)
 
         sent = failed = 0
         for ev in to_send:
-            with i18n.use_locale(locale):
+            with i18n.use_locale(locale), TZ.use_timezone(zone):
                 text = _format_message(ev)
             if notifier.send(text):
                 db.mark_alert_delivered(conn, str(ev["id"]), channel, user_id=user_id)

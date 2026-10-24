@@ -41,6 +41,7 @@ container read-only, no image rebuild needed.
 | `router.js` | hash routing: route table, active menu item, loading/error state |
 | `shared.js` | shared by screens: `#view`, period labels, the collect form, the quota footer, the niche overview block |
 | `plan-state.js` | the signed-in user's tariff (multi-user mode only): hides menu sections the tariff switches off and fills the footer line "Тариф <name> · квота used/limit" |
+| `manual-runs.js` | buttons that start the server's work by hand (refresh, alert scan): shown to an admin, or to a user whose tariff has `manual_runs`; past the hourly limit they read "Снова можно в HH:MM" (multi-user plan P2-11) |
 | `hook_view.js` | the hook-score result card shared by the Transcripts and Title check screens |
 | `screens/*.js` | one file per screen (`overview.js`, `find.js`, …, `channel.js`, `niche.js`) |
 | `tests/test_smoke.py` | opens every screen in headless Chromium against a seeded backend (`make frontend-test`) |
@@ -133,7 +134,10 @@ The alert events of your watchlist (`/api/events`) — the same ones Telegram
 or a webhook gets: outliers, acceleration, title changes, a channel breaking
 its silence, a channel or video that disappeared, a subscriber milestone, and
 a match on one of your topics. Filter by type or "only new", and mark
-everything read. Below, "Мои темы" (`/api/topics`): name a topic in plain
+everything read. "Проверить сейчас" runs the alert scan without waiting for
+the worker (`POST /api/events/scan`): always for an admin, for a regular user
+only over their watchlist and within the tariff's `manual_runs` per hour
+(multi-user plan P2-11; hidden when it is 0). Below, "Мои темы" (`/api/topics`): name a topic in plain
 words with a similarity threshold, pause or remove it; a new video close to it
 raises a "Тема" alert that only you see. Zero quota; ticking "На YouTube"
 (or "Искать на YouTube" on a topic) also searches all of YouTube for it once
@@ -404,16 +408,49 @@ lists sign-ins and failed sign-ins, password and email changes, API tokens,
 tariff changes and admin actions, filtered by event, user and period and paged
 (`GET /api/admin/audit`, only from a dashboard session, never with an API
 token). A notice counts stored secrets the current encryption keys cannot read.
+"Посмотреть как" next to an ordinary active user asks for a reason and opens
+the dashboard through that user's eyes, read-only, for
+`NF_IMPERSONATION_MINUTES` (`POST /api/admin/users/{id}/impersonate`, P2-05).
+While it lasts a yellow bar on every screen (`impersonation.js`, the
+`#impersonationBanner` in `index.html`) says "Вы смотрите как <email> —
+только чтение" with the end time and "Выйти" (`POST /api/auth/impersonation/end`);
+the page reloads as the admin when the time is up. Changes are refused by the
+server; `/api/auth/me` returns `impersonation` with the account, the admin and
+the expiry.
 
 ### Profile (`#/profile`)
 
-Only in multi-user mode, for whoever is signed in. "Пароль" changes the
+"Часовой пояс" (P2-03) is there in both modes: a list of IANA zones from the
+browser, "Как в браузере" (`Intl.DateTimeFormat().resolvedOptions().timeZone`)
+and an empty choice for the server default (`PUT /api/me/timezone`). The
+digest arrives at `DIGEST_HOUR` of that zone and calendar reminders show times
+in it. With `NF_MULTI_USER=1`, a user who has none gets the browser's zone
+saved silently on sign-in (`onlyIfEmpty`, never over a chosen one): otherwise
+their digest would follow the server's clock, which for most people is not
+theirs. Without accounts nothing is saved by itself: the operator's `TZ` /
+`NF_DEFAULT_TIMEZONE` keep working as before. The best publishing hours (the
+brief and the calendar) come from the server in UTC and are shown in the
+browser's zone, like every other time on the dashboard.
+
+The rest only in multi-user mode, for whoever is signed in. "Пароль" changes the
 password with the current one (`POST /api/auth/password`): other sessions and
 API tokens end, this browser stays signed in. "Email" sends a confirmation
 link to the new address (`POST /api/auth/email`) and is disabled when the
 server has no mail set up. "Где выполнен вход" lists the account's sessions
 with browser, address and last activity, the current one marked, and ends one
-or all others (`/api/auth/sessions`).
+or all others (`/api/auth/sessions`). "Двухфакторная защита" is its own card
+(`/api/auth/2fa*`): "Включить" shows the secret in groups of four and an
+`otpauth://` link (opens the authenticator on the same device) -- no QR code,
+which would need an external service or a QR encoder in the bundle -- then a
+code from the app turns it on and the 10 backup codes are shown once. With it
+on, the card makes new backup codes (with a code) and turns it off (with the
+password and a code). An admin without 2FA under `NF_ADMIN_2FA=required` gets
+only this card, with the menu hidden, until it is on (`app.js`,
+`viewTwoFactorSetup`).
+
+With 2FA on, the sign-in screen asks for the code after the password (and
+after a reset by link): an app code or a backup code
+(`POST /api/auth/login/2fa`); the one-time challenge lives only in the page.
 
 Signed out, the sign-in screen also offers "Создать аккаунт" and "Забыли
 пароль?" when the server has mail (`signup` in `/api/auth/me`); the links in
@@ -424,6 +461,10 @@ those emails open `#/signup/<token>`, `#/reset/<token>` and `#/email/<token>`
 
 Key, database, and history state (how many channels/videos/snapshots have
 been collected), plus the same collection forms and a manual stats refresh.
+The refresh card is there for an admin (the whole corpus) and, when the
+tariff limit `manual_runs` allows it (multi-user plan P2-11), for a regular
+user too -- then it refreshes only their watchlist, and past the hourly limit
+the button reads "Снова можно в HH:MM" (`/api/manual-runs`, `manual-runs.js`).
 A "Хранение данных" card (`/api/freshness`) shows how many videos and channels were not
 refreshed for 25 days, since when the history goes back, and that the worker
 re-reads the oldest rows daily and never deletes anything.

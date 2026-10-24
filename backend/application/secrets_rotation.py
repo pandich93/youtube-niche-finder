@@ -18,6 +18,7 @@ FIELDS = (
     ("own_channels", "token_enc", ("user_id", "channel_id")),
     ("user_settings", "telegram_token_enc", ("user_id",)),
     ("user_settings", "webhook_url_enc", ("user_id",)),
+    ("user_totp", "secret_enc", ("user_id",)),        # P2-04: секрет второго фактора
 )
 
 

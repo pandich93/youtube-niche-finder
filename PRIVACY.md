@@ -51,6 +51,19 @@ Everything lives in the Postgres database you point the app at (by default the
   only to the backend address you set. Each user's notification settings
   (`user_settings`): the Telegram chat id in clear, the bot token and webhook
   address encrypted with `OWN_TOKENS_KEY`.
+- **Two-factor sign-in** (only if you turn it on, multi-user plan P2-04) --
+  the authenticator secret encrypted with `OWN_TOKENS_KEY` and the 30-second
+  step of the last accepted code (`user_totp`), scrypt hashes of the backup
+  codes with when each was used (`user_backup_codes`), and for a sign-in
+  waiting for its code the SHA-256 of a one-time challenge for 5 minutes
+  (`mfa_challenges`). A session row also notes when it passed the second
+  factor (`sessions.mfa_at`). All of it goes when 2FA is turned off and with
+  the account.
+- **Time zone** (P2-03) -- the IANA name a person picked or the dashboard
+  took from their browser on first sign-in (`users.timezone`, e.g.
+  `Europe/Moscow`), used to send their digest in their morning and to write
+  times in their reminders. Nothing finer than the zone; it goes with the
+  account and can be cleared on the "Profile" page.
 - **Tariffs** (only with `NF_MULTI_USER=1`) -- the tariffs themselves (`plans`:
   name, price, limits and features) are shared settings, not data about
   anyone. Per user, `user_plans` keeps the user's tariff, its start and end
@@ -87,6 +100,17 @@ Everything lives in the Postgres database you point the app at (by default the
   signed in from where and who deleted what is exactly what a security log is
   for. Entries are removed by age instead: `NF_AUDIT_RETENTION_DAYS` (180 by
   default; 0 keeps them forever), checked by the worker once a day.
+- **Support may look at your account** (multi-user plan P2-05). To answer a
+  question, an admin of the server can open the dashboard as you see it --
+  your watchlist, saved items, drafts, alerts, own channels' numbers and
+  tariff -- read-only and for a limited time (`NF_IMPERSONATION_MINUTES`,
+  30 minutes by default). They cannot change, save, delete or start anything
+  on your behalf, do not spend your YouTube or LLM quota, and do not see your
+  sessions (addresses, browsers), API tokens or passwords. The action log
+  records who looked, when, for how long and the reason they gave
+  (`impersonation_start`, `impersonation_end`, `impersonation_expired`);
+  these entries follow the log's retention above. The view is not shown in
+  your profile yet: ask the server's operator for the log entries about you.
 - **Your own channels** (plan 14, only if you connect one) — the channel id and
   title, the granted scopes, the OAuth refresh token **encrypted** with
   `OWN_TOKENS_KEY` from your `.env` (Fernet; the key is never in the database),

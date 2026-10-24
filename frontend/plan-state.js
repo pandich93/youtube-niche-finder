@@ -28,7 +28,9 @@ function isAdmin() {
 }
 
 function routeAllowed(name) {
-  if (name === 'plan' || name === 'profile') return me.multiUser;
+  if (name === 'plan') return me.multiUser;
+  // P2-03: в однопользовательском режиме профиль -- только карточка часового пояса
+  if (name === 'profile') return true;
   if (name === 'admin') return me.multiUser && !!me.user?.isAdmin;
   const f = ROUTE_FEATURE[name];
   return !f || featureOn(f);

@@ -195,7 +195,9 @@ def _failed(conn, keys, now: datetime):
 
 
 def login(email: str, password: str, client_ip: str = None) -> dict:
-    """A session for the right password. Failed attempts are counted per
+    """A session for the right password -- or, with two-factor sign-in on
+    (P2-04), {mfaRequired, challenge, expiresAt} for the second step
+    (application/two_factor.complete_login). Failed attempts are counted per
     email and per client address (multi-user plan P0-03): past the limits
     LoginThrottled says how long to wait -- before the password is even
     checked, so guessing cannot go on, and alike for a known and an unknown
@@ -229,6 +231,14 @@ def login(email: str, password: str, client_ip: str = None) -> dict:
                        details={"reason": "wrong password"})
             _failed(conn, keys, now)
             raise AuthError(_FAIL)
+        # P2-04: с двухфакторной защитой сессии ещё нет -- промежуточный токен
+        # второго шага; счётчик ошибок не обнуляется до верного кода, иначе
+        # каждый верный пароль давал бы новые попытки угадать код
+        from application import two_factor as TF  # он импортирует этот модуль
+        if TF.enabled(row["id"], conn=conn):
+            challenge = TF.start_challenge(conn, row["id"])
+            conn.commit()
+            return challenge
         db.clear_login_failures(conn, "email", _norm(email))
         s = start_session(conn, row["id"])
         AUD.record(conn, "login", actor_id=row["id"], target_id=row["id"], ip=client_ip)
@@ -283,7 +293,9 @@ def start_session(conn, user_id: int) -> dict:
 
 
 def session_for_token(token: str, client_ip: str = None, user_agent: str = None):
-    """{id, user: {id, email, isAdmin}} for a live session, else None. At most
+    """{id, user: {id, email, isAdmin}, impersonating} for a live session,
+    else None; impersonating: the account a support view looks at (P2-05,
+    application/impersonation.py checks it), else None. At most
     once per SESSION_TOUCH_MINUTES the idle expiry moves forward and the last
     activity, address and browser are written (multi-user plan P1-04); the
     other requests only read."""
@@ -294,7 +306,7 @@ def session_for_token(token: str, client_ip: str = None, user_agent: str = None)
     try:
         row = conn.execute(
             "SELECT s.id AS sid, s.created_at, s.expires_at, s.last_seen_at, s.ip, s.user_agent, "
-            "u.id, u.email, u.is_admin FROM sessions s "
+            "s.impersonating_user_id, u.id, u.email, u.is_admin FROM sessions s "
             "JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND u.disabled_at IS NULL",
             (th,)).fetchone()
         created = _ts(row["created_at"]) if row else None
@@ -313,7 +325,9 @@ def session_for_token(token: str, client_ip: str = None, user_agent: str = None)
     finally:
         conn.close()
     return {"id": row["sid"],
-            "user": {"id": row["id"], "email": row["email"], "isAdmin": bool(row["is_admin"])}}
+            "user": {"id": row["id"], "email": row["email"], "isAdmin": bool(row["is_admin"])},
+            # P2-05: чьими глазами смотрит эта сессия (application/impersonation.py)
+            "impersonating": row["impersonating_user_id"]}
 
 
 def user_for_token(token: str, client_ip: str = None, user_agent: str = None):

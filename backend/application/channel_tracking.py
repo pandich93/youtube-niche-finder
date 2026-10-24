@@ -150,6 +150,18 @@ def tracked_channel_ids() -> list:
         conn.close()
 
 
+def user_channel_ids(*, user_id: int) -> list:
+    """One user's active watchlist -- what their manual refresh and alert
+    scan cover (multi-user plan P2-11)."""
+    conn = db.get_conn()
+    try:
+        return [r["channel_id"] for r in conn.execute(
+            "SELECT channel_id FROM tracked_channels WHERE user_id = ? AND active = 1 "
+            "ORDER BY channel_id", (user_id,)).fetchall()]
+    finally:
+        conn.close()
+
+
 def fix_tracked(api_key: str = None, apply: bool = False) -> dict:
     """Watchlist rows whose channel_id isn't a real UC id -- written before
     resolve_channel_id existed, when track_channel(collect=False) stored the

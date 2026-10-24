@@ -43,7 +43,7 @@ export default {
   titlesNoLlm: 'новые заголовки без LLM не генерируются',
   patternSkeletons: 'Фразы, которые у outlier\'ов ниши встречаются чаще: {chips}',
   matchedInTitle: 'В этом заголовке уже есть: {chips}',
-  bestTime: 'Лучшее время публикации в нише: {times} (UTC)',
+  bestTime: 'Лучшее время публикации в нише (по времени браузера): {times}',
 
   overlapGapTitle: 'Уже снято по этому вопросу',
   overlapTopicTitle: 'Уже снято по этой теме',

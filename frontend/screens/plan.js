@@ -48,6 +48,8 @@ async function viewPlan() {
         <li>${t('llm', { used: used.llm_usd, limit: esc(fmt(d.limits.llm_usd, '$')) })}</li>
         ${d.catalog.limits.filter((l) => l.kind === 'count').map((l) =>
           `<li>${esc(l.label)}: ${fmtNum(d.usage.counts[l.key])} / ${esc(fmt(d.limits[l.key], l.unit))}</li>`).join('')}
+        ${d.catalog.limits.filter((l) => l.kind === 'hourly').map((l) =>
+          `<li>${esc(l.label)}: ${esc(fmt(d.limits[l.key], l.unit))}</li>`).join('')}
       </ul>
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px">

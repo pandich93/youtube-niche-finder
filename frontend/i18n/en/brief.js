@@ -43,7 +43,7 @@ export default {
   titlesNoLlm: 'new titles are not generated without the LLM',
   patternSkeletons: 'Phrases that show up more often in niche outliers: {chips}',
   matchedInTitle: 'Already in this title: {chips}',
-  bestTime: 'Best time to publish in the niche: {times} (UTC)',
+  bestTime: 'Best time to publish in the niche (your browser’s time): {times}',
 
   overlapGapTitle: 'Already made on this question',
   overlapTopicTitle: 'Already made on this topic',

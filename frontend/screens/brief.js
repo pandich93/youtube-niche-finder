@@ -1,7 +1,7 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, num, compact, mult, ago, esc, toast, tile, sectionHead, notice, empty, trajectoryChart, compareHref, qmark, outlierTraitsBlock } from '../ui.js';
 import { view } from '../shared.js';
-import { dict } from '../i18n.js';
+import { dict, fmtUtcSlot } from '../i18n.js';
 import ru from '../i18n/ru/brief.js';
 import en from '../i18n/en/brief.js';
 
@@ -71,7 +71,7 @@ function briefHtml(b, llm) {
         chips: b.angle.matchedInTitle.map((k) => `<span class="chip chip-good">${esc(k)}</span>`).join(' '),
       })}</div>` : ''}
       ${b.angle.bestTime.length ? `<div class="section-sub">${t('bestTime', {
-        times: b.angle.bestTime.map((bt) => `${esc(bt.weekday)} ${String(bt.hour).padStart(2, '0')}:00`).join(', '),
+        times: b.angle.bestTime.map((bt) => esc(fmtUtcSlot(bt.weekday, bt.hour))).join(', '),
       })}</div>` : ''}
     </div>
 

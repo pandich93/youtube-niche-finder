@@ -48,10 +48,12 @@ from application import digest as DG
 from application import discovery as trends
 from application import enrichment as EN
 from application import hook_score as HK
+from application import impersonation as IMP
 from application import inspection as I
 from application import language_gaps as LG
 from application import library as L
 from application import locale_prefs as LP
+from application import manual_runs as MRUN
 from application import maturity_curve
 from application import metadata_review as MR
 from application import niche_clusters as NCL
@@ -73,11 +75,14 @@ from application import sponsors as SP
 from application import tags as TG
 from application import template_risk as TRK
 from application import thumbnail_search as TS
+from application import timezone_prefs as TZP
 from application import topic_watch as TW
 from application import trajectory as TJ
 from application import transcripts as TR
+from application import two_factor as TF
 from application import users_admin as UA
 from domain import i18n
+from domain import manual_runs as DMR
 from domain import plans as PD
 from domain.i18n import tr
 from domain.users import LOCAL_USER_ID, multi_user_enabled
@@ -261,7 +266,16 @@ _PUBLIC_API = frozenset({"/api/auth/login", "/api/auth/logout", "/api/auth/me", 
                          # multi-user plan P1-06: sign-up and reset by emailed link
                          "/api/auth/register", "/api/auth/register/link",
                          "/api/auth/register/complete", "/api/auth/password/forgot",
-                         "/api/auth/password/reset", "/api/auth/email/confirm"})
+                         "/api/auth/password/reset", "/api/auth/email/confirm",
+                         # multi-user plan P2-04: второй шаг входа (по промежуточному токену)
+                         "/api/auth/login/2fa"})
+# P2-05: что можно отправить не-GET из режима просмотра под пользователем --
+# выйти из режима и выйти из дашборда совсем (оба меняют только сессию админа)
+_VIEW_WRITES = frozenset({"/api/auth/impersonation/end", "/api/auth/logout"})
+# P2-04, NF_ADMIN_2FA=required: администратору без 2FA открыта только её
+# настройка (и язык); остальное -- 403 TwoFactorRequired, пока не включит
+_MFA_SETUP_API = frozenset({"/api/auth/2fa", "/api/auth/2fa/setup", "/api/auth/2fa/enable",
+                            "/api/me/locale"})
 
 
 # SaaS sub-project 1: route -> the tariff feature it needs. Methods None = any.
@@ -309,7 +323,7 @@ async def _rls_call(request, call_next, user_id):
 
 @app.middleware("http")
 async def session_guard(request, call_next):
-    request.state.user = request.state.session_id = None
+    request.state.user = request.state.session_id = request.state.impersonation = None
     if not multi_user_enabled():
         request.state.user_id = LOCAL_USER_ID
         return await _rls_call(request, call_next, LOCAL_USER_ID)
@@ -325,6 +339,14 @@ async def session_guard(request, call_next):
     user = session["user"] if session else None
     request.state.session_id = session["id"] if session else None
     request.state.via = "session" if user else None
+    # P2-05: сессия админа в режиме просмотра -- дальше запрос идёт глазами
+    # пользователя (_uid, RLS, тариф), а сам админ -- в state.impersonation
+    view = (await run_in_threadpool(IMP.resolve, session)
+            if session and session.get("impersonating") else None)
+    request.state.impersonation = view
+    if view:
+        user = view["user"]
+        request.state.via = "impersonation"
     if not user:
         # plan 15 (5.7): the extension (and scripts) send a personal API token
         # instead of the cookie; bearer auth is not sent by browsers on their
@@ -345,12 +367,28 @@ async def session_guard(request, call_next):
                             "на экране «MCP».", scope=need)
             return JSONResponse(status_code=403, content={
                 "error": "TokenScope", "scope": need, "detail": detail})
+    if (view and path.startswith("/api/") and request.method not in ("GET", "HEAD", "OPTIONS")
+            and path not in _VIEW_WRITES):
+        # P2-05: поддержка смотрит, но ничего не меняет за пользователя
+        with i18n.use_locale(_header_locale(request)):
+            detail = tr("Режим просмотра под пользователем: только чтение. Чтобы что-то "
+                        "изменить, выйдите из режима.")
+        return JSONResponse(status_code=403, content={"error": "ReadOnlyView", "detail": detail})
     if (path.startswith("/api/") and path not in _PUBLIC_API and not user
             and request.method != "OPTIONS"):
         with i18n.use_locale(_header_locale(request)):
             # без заголовка языка -- прежний двуязычный текст: на него смотрят скрипты
             detail = tr("Sign in first: NF_MULTI_USER is on -- войдите в дашборде.")
         return JSONResponse(status_code=401, content={"detail": detail})
+    if (user and request.state.via == "session" and user.get("isAdmin") and TF.admin_required()
+            and path.startswith("/api/") and path not in _PUBLIC_API
+            and path not in _MFA_SETUP_API
+            and await run_in_threadpool(TF.setup_required, user)):
+        with i18n.use_locale(_header_locale(request)):
+            detail = tr("Администраторам этого сервера нужна двухфакторная защита: включите "
+                        "её на экране «Профиль».")
+        return JSONResponse(status_code=403, content={"error": "TwoFactorRequired",
+                                                      "detail": detail})
     if user and path.startswith("/api/") and path not in _PUBLIC_API:
         blocked = await run_in_threadpool(_feature_block, request, user["id"])
         if blocked:
@@ -361,9 +399,14 @@ async def session_guard(request, call_next):
     # plan 15 (5.5): YouTube calls made for this request count against the
     # signed-in user's daily budget (infrastructure/quota_owner.py)
     owner = quota_owner.set_owner(user["id"]) if user else None
+    # P2-05: просмотр под пользователем не тратит ничью квоту и ничего не
+    # запускает -- только то, что уже есть в базе и кэше LLM
+    frozen = quota_owner.freeze() if view else None
     try:
         return await _rls_call(request, call_next, user["id"] if user else None)
     finally:
+        if frozen is not None:
+            quota_owner.unfreeze(frozen)
         if owner is not None:
             quota_owner.reset(owner)
 
@@ -519,6 +562,11 @@ def _need_key():
 
 @app.exception_handler(yt.QuotaExceeded)
 async def _quota_exceeded(request, exc):
+    if isinstance(exc, yt.SpendingFrozen):
+        # P2-05: просмотр под пользователем не ходит в YouTube -- это не «квота кончилась»
+        return JSONResponse(status_code=403, content={"error": "ReadOnlyView", "detail": tr(
+            "Режим просмотра под пользователем: новые данные из YouTube не запрашиваются, "
+            "показано только уже собранное.")})
     return JSONResponse(status_code=429, content={"error": "QuotaExceeded",
                                                   "detail": str(exc)[:800]})
 
@@ -527,6 +575,16 @@ async def _quota_exceeded(request, exc):
 async def _plan_limit(request, exc):
     return JSONResponse(status_code=403, content={"error": "PlanLimit", "limit": exc.key,
                                                   "max": exc.max, "detail": str(exc)})
+
+
+@app.exception_handler(DMR.ManualRunLimited)
+async def _manual_run_limited(request, exc):
+    """P2-11: ручной запуск чаще лимита тарифа -- 429 с Retry-After и временем,
+    когда можно снова (nextAt, UTC), для кнопки дашборда."""
+    return JSONResponse(status_code=429, headers={"Retry-After": str(exc.retry_after)},
+                        content={"error": "ManualRunLimit", "operation": exc.operation,
+                                 "limit": exc.limit, "retryAfter": exc.retry_after,
+                                 "nextAt": exc.at.isoformat(), "detail": str(exc)})
 
 
 @app.exception_handler(PD.FeatureOff)
@@ -1019,9 +1077,14 @@ def mark_events_seen(request: Request, payload: dict = Body(default={})):
 @app.post("/api/events/scan")
 def scan_events(request: Request):
     """Manual trigger -- the worker already runs this on WORKER_ALERTS_INTERVAL_MIN,
-    this is for "check right now" from the dashboard/popup without waiting."""
-    require_admin(request)
-    return AL.scan()
+    this is for "check right now" from the dashboard/popup without waiting.
+    An admin scans every watchlist; a regular user (P2-11, plan limit
+    `manual_runs`) only their own channels, a few times an hour."""
+    if _is_admin(request):
+        require_admin(request)
+        return AL.scan()
+    return _user_run(request, "scan",
+                     lambda uid: AL.scan(channel_ids=T.user_channel_ids(user_id=uid)))
 
 
 # ------------------------------------------------------ topic alerts (plan 19)
@@ -1305,14 +1368,28 @@ def _cookie_secure(request) -> bool:
 def auth_me(request: Request):
     if not multi_user_enabled():
         return {"multiUser": False, "user": {"id": LOCAL_USER_ID, "email": "local", "isAdmin": True},
-                "locale": _saved_locale(LOCAL_USER_ID)}
+                "locale": _saved_locale(LOCAL_USER_ID), **_timezone_info(LOCAL_USER_ID)}
     user = request.state.user
     return {"multiUser": True, "user": user,
             "quota": yt.user_usage(user["id"]) if user else None,
             "plan": PL.summary(user["id"]) if user else None,
             "locale": _saved_locale(user["id"]) if user else None,
+            **_timezone_info(user["id"] if user else None),
             # P1-06: what the sign-in screen offers (both need SMTP)
-            "signup": SU.options()}
+            "signup": SU.options(),
+            # P2-05: an admin's read-only support view -- user above is the account
+            "impersonation": _view_info(request),
+            # P2-04: setupRequired -- администратор без 2FA при NF_ADMIN_2FA=required
+            **({"twoFactor": {"setupRequired": TF.setup_required(user)}} if user else {})}
+
+
+def _view_info(request):
+    view = getattr(request.state, "impersonation", None)
+    if not view:
+        return None
+    return {"userId": view["user"]["id"], "email": view["user"]["email"],
+            "admin": view["admin"], "startedAt": view["startedAt"],
+            "expiresAt": view["expiresAt"], "reason": view["reason"], "readOnly": True}
 
 
 @app.put("/api/me/locale")
@@ -1323,6 +1400,26 @@ def me_locale(request: Request, payload: dict = Body(...)):
         return {"locale": LP.save(payload.get("locale"), user_id=_uid(request))}
     except LP.LocaleError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+def _timezone_info(user_id) -> dict:
+    """P2-03: сохранённый пояс (None -- не выбран) и что действует без него."""
+    return {"timezone": TZP.get(user_id=user_id) if user_id is not None else None,
+            "defaultTimezone": TZP.server_name()}
+
+
+@app.put("/api/me/timezone")
+def me_timezone(request: Request, payload: dict = Body(...)):
+    """P2-03: часовой пояс IANA (Europe/Moscow) -- дайджест уходит в DIGEST_HOUR
+    по нему, напоминания календаря пишут время в нём. Пусто -- сбросить на
+    NF_DEFAULT_TIMEZONE / время сервера. onlyIfEmpty: дашборд молча предлагает
+    пояс браузера при первом входе и не перебивает уже выбранный."""
+    try:
+        saved = TZP.save(payload.get("timezone"), user_id=_uid(request),
+                         only_if_empty=bool(payload.get("onlyIfEmpty")))
+    except TZP.TimezoneError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"timezone": saved, "defaultTimezone": TZP.server_name()}
 
 
 @app.post("/api/auth/login")
@@ -1344,7 +1441,11 @@ def auth_login(request: Request, response: Response, payload: dict = Body(...)):
 def _signed_in(request, response, s) -> dict:
     """Put a new session into the HttpOnly cookie (never into the body). The
     cookie may outlive the idle expiry: the server decides (P1-04), so it is
-    kept up to the absolute limit and never has to be set again."""
+    kept up to the absolute limit and never has to be set again. With
+    two-factor sign-in (P2-04) there is no session yet: the answer carries the
+    one-time challenge for POST /api/auth/login/2fa, and no cookie is set."""
+    if s.get("mfaRequired"):
+        return {"mfaRequired": True, "challenge": s["challenge"], "expiresAt": s["expiresAt"]}
     response.set_cookie(AUTH_COOKIE, s["token"], max_age=AUTH.SESSION_MAX_DAYS * 86400, path="/",
                         httponly=True, samesite="strict", secure=_cookie_secure(request))
     user = AUTH.user_for_token(s["token"], client_ip=_client_ip(request),
@@ -1354,6 +1455,9 @@ def _signed_in(request, response, s) -> dict:
 
 @app.post("/api/auth/logout")
 def auth_logout(request: Request, response: Response):
+    if getattr(request.state, "impersonation", None):
+        # P2-05: the support view ends with the session, and the log says so
+        IMP.end(request.state.session_id, why="logout")
     AUTH.logout(request.cookies.get(AUTH_COOKIE, ""))
     response.delete_cookie(AUTH_COOKIE, path="/")
     return {"signedOut": True}
@@ -1457,8 +1561,13 @@ def _own_session(request) -> int:
 def auth_password_change(request: Request, response: Response, payload: dict = Body(...)):
     """Change your password with the current one: other sign-ins and API
     tokens end, this browser stays signed in."""
-    s = _signup_call(SU.change_password, _own_session(request),
+    uid = _own_session(request)
+    # P2-04: новая сессия наследует пройденный второй фактор (старую смена пароля завершит)
+    verified = TF.session_verified(request.state.session_id)
+    s = _signup_call(SU.change_password, uid,
                      str(payload.get("currentPassword") or ""), str(payload.get("password") or ""))
+    if verified:
+        TF.mark_session(s["token"])
     return _signed_in(request, response, s)
 
 
@@ -1470,6 +1579,81 @@ def auth_email_change(request: Request, payload: dict = Body(...)):
                            str(payload.get("password") or ""), str(payload.get("email") or ""),
                            client_ip=_client_ip(request), link=_mail_link(request))
     return {"sentTo": sent_to}
+
+
+# ------------------------------------------- two-factor sign-in (P2-04)
+
+def _tf_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except AUTH.LoginThrottled as e:
+        raise HTTPException(status_code=429, headers={"Retry-After": str(e.retry_after)},
+                            detail=tr("Слишком много неудачных попыток входа. Повторите через "
+                                      "{retry_after} с.", retry_after=e.retry_after))
+    except TF.TwoFactorUnavailable as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except AUTH.AuthError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except TF.TwoFactorError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/auth/login/2fa")
+def auth_login_second_step(request: Request, response: Response, payload: dict = Body(...)):
+    """The second sign-in step: the `challenge` from POST /api/auth/login (or a
+    password reset) and a `code` from the authenticator app or a backup code.
+    The session cookie is set only now; wrong codes slow down like wrong
+    passwords, and the challenge dies after a few of them or a few minutes."""
+    if not multi_user_enabled():
+        raise HTTPException(status_code=409, detail="accounts exist only with NF_MULTI_USER=1")
+    s = _tf_call(TF.complete_login, str(payload.get("challenge") or ""),
+                 str(payload.get("code") or ""), client_ip=_client_ip(request))
+    return _signed_in(request, response, s)
+
+
+@app.get("/api/auth/2fa")
+def auth_2fa_status(request: Request):
+    """Your two-factor sign-in: on or off, setup started, backup codes left,
+    whether this server can turn it on (OWN_TOKENS_KEY) and whether it is
+    required for you (NF_ADMIN_2FA=required, admins). Dashboard sign-in only."""
+    uid = _own_session(request)
+    return TF.status(uid, bool(request.state.user.get("isAdmin")))
+
+
+@app.post("/api/auth/2fa/setup")
+def auth_2fa_setup(request: Request):
+    """Start turning two-factor sign-in on: a new secret and its otpauth://
+    link for the authenticator app, shown only now. Nothing changes until
+    POST /api/auth/2fa/enable confirms a code."""
+    uid = _own_session(request)
+    return _tf_call(TF.setup, uid, request.state.user["email"])
+
+
+@app.post("/api/auth/2fa/enable")
+def auth_2fa_enable(request: Request, payload: dict = Body(...)):
+    """Confirm the setup with a `code` from the app: two-factor sign-in is on,
+    10 backup codes come back ONCE, your other sessions end."""
+    uid = _own_session(request)
+    return _tf_call(TF.enable, uid, str(payload.get("code") or ""), request.state.session_id)
+
+
+@app.post("/api/auth/2fa/disable")
+def auth_2fa_disable(request: Request, payload: dict = Body(...)):
+    """Turn two-factor sign-in off with your `password` and a `code` (app or
+    backup). Not for admins when NF_ADMIN_2FA=required."""
+    uid = _own_session(request)
+    return _tf_call(TF.disable, uid, str(payload.get("password") or ""),
+                    str(payload.get("code") or ""), bool(request.state.user.get("isAdmin")),
+                    client_ip=_client_ip(request))
+
+
+@app.post("/api/auth/2fa/backup-codes")
+def auth_2fa_backup_codes(request: Request, payload: dict = Body(...)):
+    """New backup codes for a current `code`; the old ones stop working. The
+    new ones come back ONCE."""
+    uid = _own_session(request)
+    return _tf_call(TF.regenerate_backup_codes, uid, str(payload.get("code") or ""),
+                    client_ip=_client_ip(request))
 
 
 # ------------------------------------------- your sessions (P1-04)
@@ -1535,6 +1719,32 @@ def require_admin(request):
     _as_system()
 
 
+def _user_run(request, operation, run):
+    """P2-11: ручной запуск обычного пользователя -- по его каналам и в лимит
+    тарифа `manual_runs`. Лимит 0 -- 403, как до P2-11 (только администратор);
+    исчерпан -- 429 с Retry-After (_manual_run_limited). Запуск, который упал
+    (нет ключа, кончилась квота), не в счёт. Работает в области пользователя
+    (RLS), квоту и LLM платит он сам (quota_owner)."""
+    uid = _uid(request)
+    try:
+        run_id = MRUN.start(operation, user_id=uid)
+    except PD.AdminOnly as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    try:
+        return run(uid)
+    except BaseException:
+        MRUN.release(run_id, user_id=uid)
+        raise
+
+
+@app.get("/api/manual-runs")
+def manual_runs_status(request: Request):
+    """P2-11: which manual runs (refresh, scan) this user may start now and,
+    past the plan's hourly limit, when the next one is allowed (nextAt, UTC).
+    An admin is never limited; perHour 0 means admins only."""
+    return MRUN.status(user_id=_uid(request), is_admin=_is_admin(request))
+
+
 def _as_system():
     """P1-02: дальше этот маршрут работает за всех, как worker, -- ролью
     владельца, без политик RLS. Без reset: синхронный маршрут идёт в потоке
@@ -1561,9 +1771,15 @@ def api_tokens_list(request: Request):
 def api_tokens_create(request: Request, payload: dict = Body(default={})):
     """A personal token for the extension or MCP over HTTP, shown ONCE.
     expiresInDays: 1..365 (default 90), 0 = no expiry; scopes: any of read,
-    write, mcp (default all)."""
+    write, mcp (default all). With two-factor sign-in on, only from a session
+    that passed the second factor (P2-04)."""
+    uid = _session_user(request)
+    if TF.enabled(uid) and not TF.session_verified(request.state.session_id):
+        raise HTTPException(status_code=403, detail=tr(
+            "Создать API-токен можно только из входа, прошедшего двухфакторную проверку: "
+            "выйдите и войдите снова."))
     try:
-        return AUTH.create_api_token(_session_user(request), payload.get("name"),
+        return AUTH.create_api_token(uid, payload.get("name"),
                                      expires_in_days=payload.get("expiresInDays"),
                                      scopes=payload.get("scopes"))
     except AUTH.AuthError as e:
@@ -1708,6 +1924,38 @@ def admin_user_enable(request: Request, user_id: int):
 @app.delete("/api/admin/users/{user_id}")
 def admin_user_delete(request: Request, user_id: int, payload: dict = Body(default={})):
     return _users_call(UA.delete, _admin(request), user_id, str(payload.get("confirmEmail") or ""))
+
+
+# ------------------------------------------- support view (P2-05)
+# An admin looks at an account read-only, from the dashboard only: the session
+# is marked (application/impersonation.py), session_guard does the rest.
+
+@app.post("/api/admin/users/{user_id}/impersonate")
+def admin_user_impersonate(request: Request, user_id: int, payload: dict = Body(default={})):
+    """Admin, signed in to the dashboard: look at this account through its
+    owner's eyes, read-only, for NF_IMPERSONATION_MINUTES (30 by default).
+    reason is required and goes into the action log. Not an admin, not a
+    blocked account, not from inside another view; never by API token."""
+    if not multi_user_enabled():
+        raise HTTPException(status_code=409, detail="accounts exist only with NF_MULTI_USER=1")
+    admin = _admin(request)
+    try:
+        return IMP.start(admin, request.state.session_id, user_id, payload.get("reason"))
+    except IMP.NotFound:
+        raise HTTPException(status_code=404, detail="user not found")
+    except IMP.ImpersonationError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/auth/impersonation/end")
+def auth_impersonation_end(request: Request):
+    """Leave the support view: the session is the admin's again. The one
+    change a support view may send; ended: false when there was no view."""
+    view = getattr(request.state, "impersonation", None)
+    if not view:
+        return {"ended": False}
+    IMP.end(request.state.session_id, why="exit")
+    return {"ended": True, "user": {**view["admin"], "isAdmin": True}}
 
 
 @app.delete("/api/auth/me")
@@ -1958,13 +2206,24 @@ def collect_niche(payload: dict = Body(...)):
 
 @app.post("/api/refresh")
 def refresh(request: Request, payload: dict = Body(default={})):
-    require_admin(request)
-    _need_key()
-    stats_res = collector.refresh_stats(API_KEY, scope=payload.get("scope", "recent"),
-                                        period=payload.get("period", "30d"),
-                                        limit=int(payload.get("limit", 1000)))
-    chan_res = collector.refresh_channels(API_KEY, only_tracked=True)
-    return {"videos": stats_res, "channels": chan_res}
+    """Fresh counters now instead of waiting for the worker. An admin
+    refreshes the corpus (scope/period/limit, every tracked channel); a
+    regular user (P2-11, plan limit `manual_runs`) refreshes only their own
+    watchlist and its videos from `period`, on their own YouTube quota."""
+    if _is_admin(request):
+        require_admin(request)
+        _need_key()
+        stats_res = collector.refresh_stats(API_KEY, scope=payload.get("scope", "recent"),
+                                            period=payload.get("period", "30d"),
+                                            limit=int(payload.get("limit", 1000)))
+        chan_res = collector.refresh_channels(API_KEY, only_tracked=True)
+        return {"videos": stats_res, "channels": chan_res}
+
+    def mine(uid):
+        _need_key()
+        return collector.refresh_watchlist(API_KEY, T.user_channel_ids(user_id=uid),
+                                           period=payload.get("period") or "30d")
+    return _user_run(request, "refresh", mine)
 
 
 @app.post("/api/videos/{video_id}/comments")

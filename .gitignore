@@ -10,6 +10,7 @@ docs/*
 !docs/self-hosting.md
 !docs/hosting.md
 !docs/chrome-web-store.md
+!docs/manual-runs.md
 .idea/
 .gitnexus/
 __pycache__/
