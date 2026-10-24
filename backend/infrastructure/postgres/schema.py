@@ -619,6 +619,18 @@ CREATE TABLE IF NOT EXISTS plan_changes (
     changed_by TEXT NOT NULL,
     changed_at TEXT NOT NULL
 );
+
+-- ---------- multi-user plan P2-11: manual runs by regular users ----------
+-- personal: one row per run a user started by hand (refresh, scan), kept for
+-- the hour the limit counts (application/manual_runs.py removes older rows)
+CREATE TABLE IF NOT EXISTS manual_runs (
+    id BIGSERIAL PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    operation TEXT NOT NULL,
+    started_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_manual_runs_user_op ON manual_runs(user_id, operation, started_at);
 """
 
 # columns added to pre-existing tables (name -> DDL type)
@@ -896,6 +908,7 @@ PERSONAL_TABLES = (
     "tracked_channels", "saved_items", "drafts", "alert_deliveries", "event_reads", "events",
     "transcript_requests", "llm_usage", "llm_reservations", "user_topics", "cost_profiles",
     "own_channels", "own_channel_daily", "own_video_metrics", "own_oauth_pending",
+    "manual_runs",                                  # P2-11
 )
 
 

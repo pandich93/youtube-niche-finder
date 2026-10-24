@@ -1,7 +1,7 @@
 /* Экран дашборда. Роутинг -- router.js, общее -- shared.js, компоненты -- ui.js. */
 import { $, api, q, num, esc, toast, tile, sectionHead, notice, state } from '../ui.js';
 import { view, plabel, collectForm, wireCollect, render } from '../shared.js';
-import { isAdmin } from '../plan-state.js';
+import { manualRunStatus, manualRunAvailable, wireManualRun } from '../manual-runs.js';
 import { dict, fmtDate } from '../i18n.js';
 import ru from '../i18n/ru/data.js';
 import en from '../i18n/en/data.js';
@@ -11,9 +11,9 @@ const t = dict({ ru, en });
 /* ----------------------------------------------------------------- Данные */
 
 async function viewData() {
-  const [h, cov, fresh] = await Promise.all([
+  const [h, cov, fresh, runs] = await Promise.all([
     api('/api/health'), api(`/api/coverage${q({ period: state.period })}`),
-    api('/api/freshness').catch(() => null)]);
+    api('/api/freshness').catch(() => null), manualRunStatus()]);
   view.innerHTML = `
     ${h.hasApiKey ? notice(t('apiKeyOk'), 'ok')
                   : notice(t('apiKeyMissing'), 'error')}
@@ -33,21 +33,22 @@ async function viewData() {
     ${freshnessCard(fresh)}
     <div id="costProfiles"></div>
     ${collectForm()}
-    ${isAdmin() ? `<div class="card">
-      ${sectionHead(t('refreshTitle'), t('refreshSub'))}
+    ${manualRunAvailable(runs, 'refresh') ? `<div class="card">
+      ${sectionHead(t('refreshTitle'), runs.admin ? t('refreshSub') : t('refreshSubMine'))}
       <button class="btn btn-ghost" id="refreshBtn" type="button">${t('refreshNow')}</button>
     </div>` : ''}`;
   wireCollect(render);
   loadNotifySettings();
   loadCostProfiles();
-  $('#refreshBtn')?.addEventListener('click', async (e) => {
-    e.target.disabled = true;
-    try {
+  // P2-11: админ обновляет корпус, пользователь с лимитом -- свои каналы
+  const btn = $('#refreshBtn');
+  if (btn) {
+    wireManualRun(btn, runs, 'refresh', t('refreshNow'), async () => {
       const r = await api('/api/refresh', { method: 'POST', body: { period: '30d' } });
       toast(t('refreshed', { videos: r.videos.refreshed, channels: r.channels.refreshed }), 'ok');
       render();
-    } catch (err) { toast(err.message, 'err'); } finally { e.target.disabled = false; }
-  });
+    });
+  }
 }
 
 /* План 30: профили расходов -- сколько стоит сделать одно видео (озвучка, монтаж,

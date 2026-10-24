@@ -39,6 +39,8 @@ export default {
   title: 'Alerts',
   sub: 'events for tracked channels and your topics — the same as what goes to Telegram or a webhook',
   markAllSeen: 'Mark all as read',
+  scanNow: 'Check now',
+  scanned: 'Channels checked: {channels} · new events: {found}',
   type: 'Type',
   all: 'all',
   unseenOnly: 'New only',

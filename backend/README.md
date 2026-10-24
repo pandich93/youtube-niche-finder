@@ -337,6 +337,15 @@ number or empty (no limit); 0 means "not at all".
 - A count limit is checked in the same transaction as the insert, under a lock
   per user and limit, so two requests at once cannot both take the last free
   row.
+- **Manual runs** (multi-user plan P2-11): the limit `manual_runs` lets a
+  regular user start "refresh stats" (`POST /api/refresh`) and the alert scan
+  (`POST /api/events/scan`) by hand, over their own watchlist only, that many
+  times an hour per operation, on their own quota. Past it: `429` with
+  `Retry-After`; `GET /api/manual-runs` tells the dashboard when the next run
+  is allowed. Unlike the other limits, 0 (the default, from
+  `NF_USER_MANUAL_RUNS_PER_HOUR`) means admins only, as before. AI labelling,
+  thumbnail vectors and the niche map stay admin-only; the decision per
+  operation is in [docs/manual-runs.md](../docs/manual-runs.md).
 - Admins edit tariffs on the dashboard's **Админка** screen and change a
   user's tariff there; admins themselves are not limited.
 - Users pick a free tariff on the **Тариф** screen. A tariff with a price is
