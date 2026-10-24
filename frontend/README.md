@@ -408,10 +408,31 @@ lists sign-ins and failed sign-ins, password and email changes, API tokens,
 tariff changes and admin actions, filtered by event, user and period and paged
 (`GET /api/admin/audit`, only from a dashboard session, never with an API
 token). A notice counts stored secrets the current encryption keys cannot read.
+"Посмотреть как" next to an ordinary active user asks for a reason and opens
+the dashboard through that user's eyes, read-only, for
+`NF_IMPERSONATION_MINUTES` (`POST /api/admin/users/{id}/impersonate`, P2-05).
+While it lasts a yellow bar on every screen (`impersonation.js`, the
+`#impersonationBanner` in `index.html`) says "Вы смотрите как <email> —
+только чтение" with the end time and "Выйти" (`POST /api/auth/impersonation/end`);
+the page reloads as the admin when the time is up. Changes are refused by the
+server; `/api/auth/me` returns `impersonation` with the account, the admin and
+the expiry.
 
 ### Profile (`#/profile`)
 
-Only in multi-user mode, for whoever is signed in. "Пароль" changes the
+"Часовой пояс" (P2-03) is there in both modes: a list of IANA zones from the
+browser, "Как в браузере" (`Intl.DateTimeFormat().resolvedOptions().timeZone`)
+and an empty choice for the server default (`PUT /api/me/timezone`). The
+digest arrives at `DIGEST_HOUR` of that zone and calendar reminders show times
+in it. With `NF_MULTI_USER=1`, a user who has none gets the browser's zone
+saved silently on sign-in (`onlyIfEmpty`, never over a chosen one): otherwise
+their digest would follow the server's clock, which for most people is not
+theirs. Without accounts nothing is saved by itself: the operator's `TZ` /
+`NF_DEFAULT_TIMEZONE` keep working as before. The best publishing hours (the
+brief and the calendar) come from the server in UTC and are shown in the
+browser's zone, like every other time on the dashboard.
+
+The rest only in multi-user mode, for whoever is signed in. "Пароль" changes the
 password with the current one (`POST /api/auth/password`): other sessions and
 API tokens end, this browser stays signed in. "Email" sends a confirmation
 link to the new address (`POST /api/auth/email`) and is disabled when the

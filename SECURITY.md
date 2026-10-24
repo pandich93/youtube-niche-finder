@@ -309,6 +309,25 @@ Known limits (by design, worth knowing before you invite anyone):
   survive a deleted account and leave after `NF_AUDIT_RETENTION_DAYS`
   (default 180). The rows of P0-04's `admin_actions` were moved into it on
   the first start, and that table is gone.
+- **Support view** (multi-user plan P2-05). An admin signed in to the
+  dashboard can look at an account through its owner's eyes ("Посмотреть
+  как" on the "Admin" page, `POST /api/admin/users/{id}/impersonate`) to
+  answer a support question. It is a mark on the admin's own session
+  (`sessions.impersonating_user_id`), never on an API token or MCP, and:
+  a reason is required; not on another admin, a blocked account or oneself;
+  not nested; it lasts `NF_IMPERSONATION_MINUTES` (30 by default) and then
+  the next request clears it. While it lasts, `_uid` and Row-Level Security
+  (`app.user_id`) are the account's, not the admin's, admin routes are closed
+  (the account is no admin), and so are the account's session list, API
+  tokens and every profile change. **Every request but GET/HEAD/OPTIONS is
+  refused with 403** (`ReadOnlyView`) except leaving the view
+  (`POST /api/auth/impersonation/end`) and signing out. Spending is frozen:
+  the YouTube client refuses before reserving a unit and the LLM gateway
+  answers from its cache only, so a view uses nobody's quota and starts
+  nothing. The start (who, whom, why, until when), the end and the expiry
+  are in the action log; blocking the account, deleting it, making it an
+  admin or removing the admin's role ends the view too. The dashboard shows
+  a banner "Вы смотрите как ... — только чтение" on every screen.
 - **Tokens made before expiry existed do not expire.** New tokens live 90 days
   by default (1 to 365 days, or no expiry if you choose it). Older tokens keep
   every scope and no expiry until revoked; the MCP screen marks them

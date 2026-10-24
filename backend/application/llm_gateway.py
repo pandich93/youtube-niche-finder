@@ -175,7 +175,8 @@ def run(task: str, system: str, user: str, schema: dict, model: str = None,
             "SELECT result FROM llm_cache WHERE key=?", (key,)).fetchone()
         if row:
             return json.loads(row["result"])
-        if budget_blocked_today(conn):
+        # P2-05: a read-only support view gets cached answers only, no new call
+        if quota_owner.frozen() or budget_blocked_today(conn):
             return None
     finally:
         conn.close()

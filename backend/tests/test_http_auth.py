@@ -53,6 +53,9 @@ def test_single_user_mode_needs_no_login(monkeypatch):
     c = client()
     assert c.get("/api/stats").status_code == 200
     me = c.get("/api/auth/me").json()
+    # P2-03: часовой пояс локального пользователя (не выбран -- None) и пояс по умолчанию
+    assert me.pop("timezone") is None and "defaultTimezone" in me
+    me.pop("defaultTimezone")
     # locale (план i18n): язык, сохранённый пользователем; ещё не выбирал -- None
     assert me == {"multiUser": False, "user": {"id": 1, "email": "local", "isAdmin": True},
                   "locale": None}
@@ -64,9 +67,13 @@ def test_multi_user_mode_answers_401_without_a_session(multi):
     c = client()
     resp = c.get("/api/stats")
     assert resp.status_code == 401 and "sign in" in resp.json()["detail"].lower()
-    assert c.get("/api/auth/me").json() == {"multiUser": True, "user": None, "quota": None, "plan": None,
-                                            "locale": None,
-                                            "signup": {"signup": False, "passwordReset": False}}
+    me = c.get("/api/auth/me").json()
+    assert me.pop("timezone") is None and "defaultTimezone" in me      # P2-03
+    me.pop("defaultTimezone")
+    assert me == {"multiUser": True, "user": None, "quota": None, "plan": None,
+                  "locale": None,
+                  "signup": {"signup": False, "passwordReset": False},
+                  "impersonation": None}
 
 
 def test_public_routes_stay_open(multi):

@@ -178,6 +178,7 @@ SUMMARY = {
     "GET /api/auth/sessions": ("auth", "Where you are signed in: times, address and browser, the current session marked; never a token. Dashboard sign-in only."),
     "DELETE /api/auth/sessions/{session_id}": ("auth", "Sign out one of your sessions (only your own; the current one signs this browser out)."),
     "POST /api/auth/sessions/end-others": ("auth", "Sign out on every other device; this browser stays signed in."),
+    "POST /api/auth/impersonation/end": ("auth", "Leave an admin's read-only support view; the session is the admin's again."),
     # multi-user plan P2-04: two-factor sign-in
     "POST /api/auth/login/2fa": ("auth", "The second sign-in step: the `challenge` from the login (or a password reset) and an app or backup `code`; sets the session cookie. Throttled like passwords."),
     "GET /api/auth/2fa": ("auth", "Your two-factor sign-in: on or off, backup codes left, whether the server can turn it on and whether it is required for you."),
@@ -186,6 +187,7 @@ SUMMARY = {
     "POST /api/auth/2fa/disable": ("auth", "Turn two-factor sign-in off with your `password` and a `code` (app or backup)."),
     "POST /api/auth/2fa/backup-codes": ("auth", "New backup codes for a current `code`; the old ones stop working. Shown once."),
     "PUT /api/me/locale": ("auth", "Save the interface language (`ru` or `en`): the dashboard on other devices and your alerts and digest use it."),
+    "PUT /api/me/timezone": ("auth", "Save your IANA time zone (`Europe/Moscow`; empty = the server default): the digest goes out at `DIGEST_HOUR` in it and calendar reminders show times in it. `onlyIfEmpty` never overwrites a saved one."),
     "GET /api/auth/tokens": ("auth", "Your personal API tokens (names and dates, never the secret)."),
     "POST /api/auth/tokens": ("auth", "Create a personal token for the extension or MCP over HTTP; shown once."),
     "DELETE /api/auth/tokens/{token_id}": ("auth", "Revoke a personal token."),
@@ -202,6 +204,7 @@ SUMMARY = {
     "POST /api/admin/users/{user_id}/disable": ("plan", "Admin: block an account; its sessions and API tokens end at once."),
     "POST /api/admin/users/{user_id}/enable": ("plan", "Admin: unblock an account; the person signs in again."),
     "DELETE /api/admin/users/{user_id}": ("plan", "Admin: delete an account and all of its data (`confirmEmail` must match)."),
+    "POST /api/admin/users/{user_id}/impersonate": ("plan", "Admin, dashboard only: look at an account read-only for a while (`reason` required, logged); not an admin or a blocked account."),
     "GET /api/admin/audit": ("plan", "Admin (dashboard sign-in): the action log -- sign-ins, failed sign-ins, password/email changes, API tokens, plans, account actions; filters `event`, `user`, `since`, `until`, pages."),
     "DELETE /api/auth/me": ("auth", "Delete your own account and all of your data; needs your `password` and a dashboard sign-in."),
 }

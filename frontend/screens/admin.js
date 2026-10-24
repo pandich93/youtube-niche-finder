@@ -4,6 +4,7 @@
 import { api, q, esc, toast, sectionHead, notice, table } from '../ui.js';
 import { view, render } from '../shared.js';
 import { getMe } from '../plan-state.js';
+import { startView } from '../impersonation.js';
 import { dict, fmtNum, fmtDateTime } from '../i18n.js';
 import ru from '../i18n/ru/admin.js';
 import en from '../i18n/en/admin.js';
@@ -73,7 +74,7 @@ const AUDIT_PER_PAGE = 50;
 function auditLabels() {
   return {
     auth: t('auditGroupAuth'), tokens: t('auditGroupTokens'), plans: t('auditGroupPlans'),
-    accounts: t('auditGroupAccounts'), admin: t('auditGroupAdmin'),
+    accounts: t('auditGroupAccounts'), admin: t('auditGroupAdmin'), support: t('auditGroupSupport'),
     login: t('evLogin'), login_failed: t('evLoginFailed'), signup: t('evSignup'),
     password_change: t('evPasswordChange'), password_reset: t('evPasswordReset'),
     email_change_requested: t('evEmailChangeRequested'), email_change: t('evEmailChange'),
@@ -83,6 +84,8 @@ function auditLabels() {
     account_delete: t('evAccountDelete'), account_self_delete: t('evAccountSelfDelete'),
     plan_create: t('evPlanCreate'), plan_update: t('evPlanUpdate'),
     plan_archive: t('evPlanArchive'), plan_restore: t('evPlanRestore'),
+    impersonation_start: t('evImpersonationStart'), impersonation_end: t('evImpersonationEnd'),
+    impersonation_expired: t('evImpersonationExpired'),
     '2fa_enable': t('ev2faEnable'), '2fa_disable': t('ev2faDisable'), '2fa_failed': t('ev2faFailed'),
     '2fa_backup_used': t('ev2faBackupUsed'), '2fa_backup_regenerate': t('ev2faBackupRegenerate'),
   };
@@ -130,7 +133,7 @@ async function loadAudit(box, filters, page) {
 
 function mountAudit(box) {
   const labels = auditLabels();
-  const groups = ['auth', 'tokens', 'plans', 'accounts', 'admin'];
+  const groups = ['auth', 'tokens', 'plans', 'accounts', 'admin', 'support'];
   const events = Object.keys(labels).filter((k) => !groups.includes(k));
   box.innerHTML = `${sectionHead(t('auditTitle'), t('auditSub'))}
     <form id="auditFilters" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -199,7 +202,8 @@ async function viewAdmin() {
         { label: '', render: (u) => (u.isAdmin ? '' : `<button class="btn btn-ghost btn-sm usave" data-id="${u.id}">${t('saveUser')}</button>`) },
         // многопользовательский план P0-04: блокировка и удаление; себя -- только на странице «Тариф»
         { label: '', render: (u) => (u.id === me.user.id ? '' : `<button class="btn btn-ghost btn-sm ublock" data-id="${u.id}" data-on="${u.disabled ? 0 : 1}">${u.disabled ? t('enableUser') : t('disableUser')}</button>
-            ${u.id === 1 ? '' : `<button class="btn btn-ghost btn-sm udel" data-id="${u.id}" data-email="${esc(u.email)}">${t('deleteUser')}</button>`}`) },
+            ${u.id === 1 ? '' : `<button class="btn btn-ghost btn-sm udel" data-id="${u.id}" data-email="${esc(u.email)}">${t('deleteUser')}</button>`}
+            ${u.isAdmin || u.disabled ? '' : `<button class="btn btn-ghost btn-sm uview" data-id="${u.id}" data-email="${esc(u.email)}" title="${esc(t('viewAsTitle'))}">${t('viewAs')}</button>`}`) },
       ], users)}
       <form id="userNew" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
         <input type="email" name="email" required placeholder="${esc(t('newUserEmail'))}" style="width:240px">
@@ -248,6 +252,9 @@ async function viewAdmin() {
       toast(t('userDeleted'), 'ok'); render();
     } catch (e) { toast(e.message, 'err'); }
   }));
+  // P2-05: просмотр под пользователем -- только чтение, с причиной, в журнал
+  view.querySelectorAll('.uview').forEach((b) => b.addEventListener('click', () =>
+    startView(b.dataset.id, b.dataset.email)));
   view.querySelector('#userNew').addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = new FormData(e.target);

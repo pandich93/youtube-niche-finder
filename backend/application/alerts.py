@@ -14,8 +14,10 @@ from application import channel_tracking as T
 from application import discovery as trends
 from application import locale_prefs as LP
 from application import milestones as MSA
+from application import timezone_prefs as TZP
 from domain import alerts as A
 from domain import i18n
+from domain import timezones as TZ
 from domain.i18n import tr
 from infrastructure.notify.null import NullNotifier
 
@@ -366,12 +368,14 @@ def deliver(max_per_cycle: int = NOTIFY_MAX_PER_CYCLE, *, user_id: int) -> dict:
 
         channel = NS.target_name(user_id=user_id)
         to_send, rest = pending[:max_per_cycle], pending[max_per_cycle:]
-        # written in THIS user's language, whoever else the worker sends to
+        # written in THIS user's language, whoever else the worker sends to,
+        # and with times in THIS user's time zone (P2-03: calendar reminders)
         locale = recipient_locale(user_id)
+        zone = TZP.effective(user_id=user_id)
 
         sent = failed = 0
         for ev in to_send:
-            with i18n.use_locale(locale):
+            with i18n.use_locale(locale), TZ.use_timezone(zone):
                 text = _format_message(ev)
             if notifier.send(text):
                 db.mark_alert_delivered(conn, str(ev["id"]), channel, user_id=user_id)

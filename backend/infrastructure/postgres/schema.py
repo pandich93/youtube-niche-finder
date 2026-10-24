@@ -640,7 +640,9 @@ _USER_ID = "BIGINT NOT NULL DEFAULT 1"
 
 MIGRATIONS = {
     # multi-user plan P0-04: NULL = active; set = blocked (no sign-in, no sessions, no tokens)
-    "users": {"disabled_at": "TEXT"},
+    "users": {"disabled_at": "TEXT",
+              # P2-03: часовой пояс IANA (Europe/Moscow); NULL -- NF_DEFAULT_TIMEZONE / время сервера
+              "timezone": "TEXT"},
     # multi-user plan P1-03: older tokens keep working as before -- no expiry,
     # every scope -- until revoked
     "api_tokens": {"expires_at": "TEXT", "scopes": "TEXT NOT NULL DEFAULT 'read,write,mcp'"},
@@ -711,6 +713,16 @@ MIGRATIONS = {
         "planned_at": "TEXT",
     },
 }
+
+# multi-user plan P2-05: просмотр под пользователем для поддержки
+# (application/impersonation.py). Сессия админа на время смотрит «глазами»
+# impersonating_user_id -- только чтение и не дольше impersonation_expires_at;
+# NULL -- обычная сессия. Строка сессии по-прежнему принадлежит админу (user_id).
+MIGRATIONS["sessions"] = {**MIGRATIONS["sessions"],
+                          "impersonating_user_id": "BIGINT",
+                          "impersonation_started_at": "TEXT",
+                          "impersonation_expires_at": "TEXT",
+                          "impersonation_reason": "TEXT"}
 
 
 # ---------- multi-user plan P2-04: двухфакторный вход (application/two_factor.py) ----------

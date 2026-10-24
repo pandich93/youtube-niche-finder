@@ -79,6 +79,25 @@ function fmtDate(v, opts) { return v ? toDate(v).toLocaleDateString(intlLocale()
 function fmtDateTime(v, opts) { return v ? toDate(v).toLocaleString(intlLocale(), opts) : '—'; }
 function fmtTime(v, opts) { return v ? toDate(v).toLocaleTimeString(intlLocale(), opts) : '—'; }
 
+/* P2-03: слот «день недели + час» в UTC от сервера (лучшее время публикации:
+   'Mon', 14) -- в часовом поясе браузера. Берётся ближайший такой момент, чтобы
+   сдвиг учёл летнее время этой недели; день может смениться («Пн 23:00» UTC ->
+   «Вт 02:00»), бывают и получасовые пояса (Индия, +5:30). */
+const UTC_WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+function fmtUtcSlot(weekday, hour) {
+  const idx = UTC_WEEKDAYS.indexOf(weekday);
+  if (idx < 0) return `${weekday} ${String(hour).padStart(2, '0')}:00`;
+  const now = new Date();
+  const ahead = (idx - ((now.getUTCDay() + 6) % 7) + 7) % 7;
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + ahead, hour));
+  return `${fmtDate(d, { weekday: 'short' })} ${fmtTime(d, { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+/* Часовой пояс браузера (IANA) или '' -- если браузер его не называет. */
+function browserTimeZone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch { return ''; }
+}
+
 /* ------------------------------------------------------------- перевод */
 
 let plurals = null;
@@ -136,5 +155,6 @@ function translateStatic(t, root = document) {
 
 export {
   SUPPORTED, getLocale, hasStoredLocale, setLocale, onLocaleChange, intlLocale,
-  dict, translateStatic, fmtNum, fmtDate, fmtDateTime, fmtTime, pluralCategory,
+  dict, translateStatic, fmtNum, fmtDate, fmtDateTime, fmtTime, fmtUtcSlot, browserTimeZone,
+  pluralCategory,
 };

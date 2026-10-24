@@ -293,7 +293,9 @@ def start_session(conn, user_id: int) -> dict:
 
 
 def session_for_token(token: str, client_ip: str = None, user_agent: str = None):
-    """{id, user: {id, email, isAdmin}} for a live session, else None. At most
+    """{id, user: {id, email, isAdmin}, impersonating} for a live session,
+    else None; impersonating: the account a support view looks at (P2-05,
+    application/impersonation.py checks it), else None. At most
     once per SESSION_TOUCH_MINUTES the idle expiry moves forward and the last
     activity, address and browser are written (multi-user plan P1-04); the
     other requests only read."""
@@ -304,7 +306,7 @@ def session_for_token(token: str, client_ip: str = None, user_agent: str = None)
     try:
         row = conn.execute(
             "SELECT s.id AS sid, s.created_at, s.expires_at, s.last_seen_at, s.ip, s.user_agent, "
-            "u.id, u.email, u.is_admin FROM sessions s "
+            "s.impersonating_user_id, u.id, u.email, u.is_admin FROM sessions s "
             "JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND u.disabled_at IS NULL",
             (th,)).fetchone()
         created = _ts(row["created_at"]) if row else None
@@ -323,7 +325,9 @@ def session_for_token(token: str, client_ip: str = None, user_agent: str = None)
     finally:
         conn.close()
     return {"id": row["sid"],
-            "user": {"id": row["id"], "email": row["email"], "isAdmin": bool(row["is_admin"])}}
+            "user": {"id": row["id"], "email": row["email"], "isAdmin": bool(row["is_admin"])},
+            # P2-05: чьими глазами смотрит эта сессия (application/impersonation.py)
+            "impersonating": row["impersonating_user_id"]}
 
 
 def user_for_token(token: str, client_ip: str = None, user_agent: str = None):

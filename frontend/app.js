@@ -5,7 +5,8 @@ import { loadFootStat } from './shared.js';
 import { render, routeTitle } from './router.js';
 import { setMe, applyNav, renderPlanLine } from './plan-state.js';
 import { setOffers, showSignIn, openAccountLink } from './account.js';
-import { viewTwoFactorSetup } from './screens/profile.js';
+import { setView, renderBanner, inView } from './impersonation.js';
+import { viewTwoFactorSetup, adoptBrowserTimezone } from './screens/profile.js';
 import { dict, getLocale, hasStoredLocale, setLocale, onLocaleChange, translateStatic } from './i18n.js';
 import ru from './i18n/ru/app.js';
 import en from './i18n/en/app.js';
@@ -46,6 +47,7 @@ function translateChrome() {
   applyTheme(document.documentElement.dataset.theme || 'dark');
   $('#langToggle').textContent = LANG_NAMES[getLocale() === 'ru' ? 'en' : 'ru'];
   if (me.multiUser && me.user) $('#signOut').textContent = t('signOutAs', { email: me.user.email });
+  renderBanner();
 }
 
 function initChrome() {
@@ -77,8 +79,9 @@ function listenLocale() {
     loadNiches();
     loadFootStat();
     if (me.multiUser && me.user) renderPlanLine();
-    // язык уведомлений и дайджеста хранится на сервере; без сервера -- не беда
-    api('/api/me/locale', { method: 'PUT', body: { locale: loc } }).catch(() => {});
+    // язык уведомлений и дайджеста хранится на сервере; без сервера -- не беда.
+    // P2-05: в просмотре под пользователем его настройки не трогаем (сервер и так даст 403)
+    if (!inView()) api('/api/me/locale', { method: 'PUT', body: { locale: loc } }).catch(() => {});
     if (me.multiUser && !me.user) { showSignIn(); return; }
     await loadScores();
     render();
@@ -97,9 +100,15 @@ async function start() {
   setOffers(me.signup);
   if (me.multiUser && !me.user) { if (!openAccountLink(false)) showSignIn(); return; }
   setMe(me);
+  // P2-05: админ смотрит глазами пользователя -- баннер «только чтение · Выйти»;
+  // «Выйти (email)» внизу назвало бы чужой адрес, поэтому его прячем
+  setView(me);
+  // P2-03: только если пояс ещё не выбран; из режима просмотра не сохраняем --
+  // это был бы пояс браузера админа
+  if (!inView()) adoptBrowserTimezone(me);
   if (me.multiUser) {
     const out = $('#signOut');
-    out.hidden = false;
+    out.hidden = !!me.impersonation;
     out.textContent = t('signOutAs', { email: me.user.email });
     out.addEventListener('click', async () => {
       await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
