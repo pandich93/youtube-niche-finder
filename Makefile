@@ -15,7 +15,7 @@ PYTHON  ?= $(shell command -v python3.13 || command -v python3.12 || \
 RUFF_VERSION ?= 0.16.9
 RUFF    ?= uvx ruff@$(RUFF_VERSION)
 
-.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli rotate-secrets api-docs doc-links extension-zip prod-up prod-down prod-logs prod-cli prod-backup
+.PHONY: help doctor build up up-db web open down logs worker mcp http shell test seed stats clean local-install local-test lint frontend-test local-run dev cli rotate-secrets api-docs doc-links lock-check extension-zip prod-up prod-down prod-logs prod-cli prod-backup
 
 doctor: ## проверить ключ, сеть и базу (начните отсюда)
 	$(COMPOSE) run --rm mcp python cli.py doctor
@@ -117,6 +117,14 @@ api-docs:       ## regenerate docs/http-api.md from the HTTP routes (CI checks i
 
 doc-links:      ## check that relative links in the .md files reach tracked files and headings (CI runs it)
 	python3 scripts/check_doc_links.py
+
+UV ?= uvx uv@0.13.5
+lock-check:     ## check backend/requirements.txt is what uv compiles from requirements.in (CI runs it)
+	@cd backend && cp requirements.txt /tmp/nf-lock.txt \
+	  && $(UV) pip compile requirements.in --python-version 3.10 --universal -o /tmp/nf-lock.txt -q \
+	  && grep -v '^ *#' requirements.txt > /tmp/nf-lock.a && grep -v '^ *#' /tmp/nf-lock.txt > /tmp/nf-lock.b \
+	  && if cmp -s /tmp/nf-lock.a /tmp/nf-lock.b; then echo "requirements.txt is uv-compiled"; \
+	     else diff /tmp/nf-lock.a /tmp/nf-lock.b; echo "requirements.txt differs from uv pip compile: recompile it (backend/README.md, Running without Docker)"; exit 1; fi
 
 extension-zip:  ## pack extension/ into dist/niche-finder-extension-v<version>.zip (committed files only)
 	sh scripts/package_extension.sh

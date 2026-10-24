@@ -73,6 +73,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   quotas stay on Pacific Time (YouTube units and searches) and UTC (LLM spend), now said so
   in `backend/README.md`.
 
+### Fixed
+
+- **The backend lockfile serves Python 3.10, 3.11 and Windows again.** A
+  Dependabot update rewrote `backend/requirements.txt` with its pip updater,
+  which dropped the per-version and per-OS lines of the `uv pip compile
+  --universal` output (`exceptiongroup`, `tomli`, `colorama`, `pywin32`, the
+  numpy and onnxruntime builds for 3.10 and 3.11). Docker's Python 3.12 on
+  Linux did not notice; `make local-install` on 3.10/3.11 or Windows broke. The
+  file is recompiled with uv, now with the same updates (fastapi 0.158.1,
+  cryptography 50.0.2, fastembed 0.9.1, numpy 2.5.4, python-dotenv 1.2.4,
+  opentelemetry-api 1.45.1, filelock 4.2.4 -- 4.1.0 on Python 3.10, the last
+  that supports it), and `make lock-check` in CI fails on a lockfile that is
+  not exactly what uv compiles.
+
 ### Security
 
 - **Row-Level Security holds against arbitrary SQL** (multi-user plan P1-02,
