@@ -2,7 +2,8 @@
 Каждая личная таблица (PERSONAL_TABLES) под политикой; соединение в области
 пользователя (db.user_scope -- её ставят HTTP и MCP) работает ролью без
 BYPASSRLS и видит только свои строки даже запросом БЕЗ user_id; роль без
-app.user_id не видит ничего; роль владельца (worker, CLI, system_scope) --
+app.user_id или без верной подписи к нему (app.user_sig) не видит ничего;
+роль владельца (worker, CLI, system_scope) --
 всё, как раньше. Через HTTP: запрос пользователя, забывший фильтр, чужого не
 получает -- ни с NF_MULTI_USER=1, ни в однопользовательском режиме (user 1).
 Throwaway schema; no network.
@@ -33,8 +34,17 @@ PW = "correct horse battery"
 CH = "UC" + "rlsprobe".ljust(22, "0")
 
 
-def setup_module(_=None):
+@pytest.fixture(autouse=True, scope="module")
+def _role_mode():
+    """Этот файл -- про режим SET ROLE (без POSTGRES_APP_PASSWORD), даже если
+    он пришёл в окружение из .env; логин приложения -- test_rls_login.py."""
+    mp = pytest.MonkeyPatch()
+    mp.delenv("POSTGRES_APP_PASSWORD", raising=False)
+    mp.delenv("NF_DB_APP_ROLE", raising=False)
     db.init_db()
+    yield
+    mp.undo()
+    C.recheck_app_role()
 
 
 @pytest.fixture(autouse=True)
@@ -105,10 +115,11 @@ def test_every_personal_table_has_rls_and_the_policy():
 def test_the_app_role_cannot_bypass_rls_and_owns_nothing():
     conn = db.get_conn()
     try:
-        row = conn.execute("SELECT rolsuper, rolbypassrls, rolcanlogin FROM pg_roles "
+        row = conn.execute("SELECT rolsuper, rolbypassrls FROM pg_roles "
                            "WHERE rolname = ?", (db.app_role(),)).fetchone()
         assert row is not None, "init_db did not create the app role"
-        assert not row["rolsuper"] and not row["rolbypassrls"] and not row["rolcanlogin"]
+        assert not row["rolsuper"] and not row["rolbypassrls"]
+        assert C.rls_mode() == "role"
         owned = conn.execute(
             "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
             "WHERE n.nspname = current_schema() AND pg_get_userbyid(c.relowner) = ?",
@@ -193,8 +204,56 @@ def test_a_pooled_connection_does_not_keep_the_previous_scope():
     try:
         assert conn.execute("SELECT current_user = session_user").fetchone()[0]
         assert conn.execute("SELECT current_setting('app.user_id', true)").fetchone()[0] == ""
+        assert conn.execute("SELECT current_setting('app.user_sig', true)").fetchone()[0] == ""
     finally:
         conn.close()
+
+
+def test_an_unsigned_or_forged_app_user_id_sees_nothing():
+    """app.user_id без верной подписи (set_config в обход get_conn) -- не
+    пользователь: ни своих, ни чужих строк."""
+    raw, cur = _raw_app_role(str(A))
+    try:
+        cur.execute("SELECT count(*) FROM saved_items")
+        assert cur.fetchone()[0] == 0
+        cur.execute("SELECT set_config('app.user_sig', %s, false)",
+                    (C.rls_signature("not-the-key", A, raw.get_backend_pid()),))
+        cur.execute("SELECT count(*) FROM saved_items")
+        assert cur.fetchone()[0] == 0
+    finally:
+        raw.close()
+
+
+def test_a_signed_scope_is_what_get_conn_sets():
+    with db.user_scope(B):
+        conn = db.get_conn()
+    try:
+        assert conn.execute("SELECT nf_rls_uid()").fetchone()[0] == B
+    finally:
+        conn.close()
+
+
+def test_an_old_unsigned_policy_is_replaced_by_init_db():
+    """Установка с политиками P1-02 до подписи: init_db их переписывает."""
+    conn = db.get_conn()
+    conn.execute(f"ALTER POLICY {db.RLS_POLICY} ON saved_items USING "
+                 "(user_id = NULLIF(current_setting('app.user_id', true), '')::bigint)")
+    conn.commit()
+    conn.close()
+    db.init_db()
+    conn = db.get_conn()
+    try:
+        qual = conn.execute("SELECT qual FROM pg_policies WHERE schemaname = current_schema() "
+                            "AND tablename = 'saved_items'").fetchone()[0]
+        assert "nf_rls_uid" in qual
+    finally:
+        conn.close()
+    raw, cur = _raw_app_role(str(A))
+    try:
+        cur.execute("SELECT count(*) FROM saved_items")
+        assert cur.fetchone()[0] == 0
+    finally:
+        raw.close()
 
 
 def test_system_scope_inside_a_user_scope_is_the_owner():
@@ -215,10 +274,17 @@ def test_nf_db_rls_0_runs_user_requests_as_the_owner(monkeypatch):
 
 def test_a_missing_role_falls_back_to_the_owner_with_a_warning(monkeypatch, caplog):
     monkeypatch.setenv("NF_DB_APP_ROLE", "nf_rls_no_such_role")
-    monkeypatch.setattr(C, "_app_role_ok", None)
+    monkeypatch.setattr(C, "_rls_mode", None)
     with caplog.at_level("WARNING"):
         assert _owners("SELECT user_id FROM tracked_channels", B) == [A, B]
     assert "Row-Level Security is not in effect" in caplog.text
+
+
+def test_set_role_mode_warns_that_it_is_the_weaker_one(monkeypatch, caplog):
+    monkeypatch.setattr(C, "_rls_mode", None)
+    with caplog.at_level("WARNING"):
+        assert C.rls_mode() == "role"
+    assert "POSTGRES_APP_PASSWORD" in caplog.text
 
 
 def test_the_llm_budget_books_system_rows_from_a_user_request():

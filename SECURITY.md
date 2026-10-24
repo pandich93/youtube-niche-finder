@@ -146,22 +146,49 @@ What the server does for you:
     personal table (`PERSONAL_TABLES` in
     `backend/infrastructure/postgres/schema.py`) has the policy
     `nf_owner_rows`: a row is visible and writable only when its `user_id`
-    equals the session setting `app.user_id`. A dashboard or API request
-    (from its session or token) and an MCP tool call (from its token, user 1
-    over stdio) set it and switch their connections to the role
-    `NF_DB_APP_ROLE` (`<POSTGRES_USER>_app` by default). That role cannot
-    sign in, has no `BYPASSRLS` and owns no tables. Without `app.user_id` it
-    sees no personal rows at all. Shared alert events (`user_id` empty) stay
-    visible to everyone.
+    is the user the session names. A dashboard or API request (from its
+    session or token) and an MCP tool call (from its token, user 1 over
+    stdio) run as the role `NF_DB_APP_ROLE` (`<POSTGRES_USER>_app` by
+    default), which has no `BYPASSRLS` and owns no tables, and set
+    `app.user_id` with a signature `app.user_sig`. The function
+    `nf_rls_uid()` accepts the number only with the right signature: SHA-256
+    over a random secret in the table `nf_rls_key` (only the owner reads it),
+    the number and the Postgres process id of that connection. So a session
+    cannot name another user with `set_config`, and a signature seen in
+    `pg_stat_activity` is no good in another connection. Without a valid one
+    it sees no personal rows at all. Shared alert events (`user_id` empty)
+    stay visible to everyone.
+
+  How far this goes depends on `POSTGRES_APP_PASSWORD`
+  ([docs/hosting.md](docs/hosting.md#row-level-security)):
+  - **Set (recommended):** the dashboard and MCP open the connections for
+    people's requests with the login `NF_DB_APP_ROLE` itself. It is not the
+    owner, not a member of the owner's role and has no `BYPASSRLS`, so no SQL
+    on such a connection gets out from under the policies: `RESET ROLE`
+    leaves it the same login, `SET ROLE` to the owner is refused, the secret
+    is unreadable, and it is granted no `CREATE` on the schema (on `public`
+    that is the default since Postgres 15). Temporary
+    tables are dropped each time a connection is handed out, so one request
+    cannot plant a look-alike table for the next one. The services set the
+    login's password themselves at start.
+  - **Not set:** the role is entered with `SET ROLE` from the owner's login,
+    as before. That guards against a missing filter, not against someone who
+    can run arbitrary SQL (`RESET ROLE`). The server logs a warning.
 
   RLS does not apply to the table owner (`POSTGRES_USER`). The worker, the
-  CLI, migrations, sign-in and sign-out, and the admin routes and admin MCP
-  tools work as the owner, because they act for every user; there the
-  `user_id` filter in each query is the only guard. The role is entered with
-  `SET ROLE` from the owner's login, so RLS guards against a missing filter,
-  not against someone who can run arbitrary SQL. If the role cannot be
+  CLI, migrations, and in the dashboard and MCP sign-in, sign-up, password
+  reset, the session and token lookup, the admin routes and admin MCP tools,
+  and the shared LLM budget and transcript delivery (`system_scope`) use the
+  owner's connections, because they act for every user or before anyone is
+  known; there the `user_id` filter in each query is the only guard. These
+  are a small, fixed set of queries that take no user-controlled SQL; every
+  other request runs on the restricted login.
+
+  Not covered by RLS: account tables without a `user_id` column (`users`,
+  `login_attempts`, `audit_log`). A user request can still read them,
+  because it reads and changes its own account there. If the role cannot be
   created, requests run as the owner, as before, and the server logs a
-  warning ([docs/hosting.md](docs/hosting.md#row-level-security)).
+  warning.
 - **Limits.**
   - YouTube quota: each user has a daily share of the installation's one key
     (`NF_USER_DAILY_UNITS`, `NF_USER_DAILY_SEARCH_CALLS`). Running out stops
@@ -190,7 +217,10 @@ What you have to do before you give anyone an account:
    of lumping everyone together as the proxy. Never use `*` (it is ignored):
    anyone could then claim any address.
 2. **Set `OWN_TOKENS_KEY`** (a Fernet key) and keep it only in `.env`. Losing
-   it makes stored tokens unreadable. Leaking it exposes them.
+   it makes stored tokens unreadable. Leaking it exposes them. Set
+   `POSTGRES_APP_PASSWORD` too, so people's requests use a database login
+   that cannot read other people's rows
+   ([docs/hosting.md](docs/hosting.md#row-level-security)).
 3. **Back up Postgres.** It now holds accounts, sessions and encrypted
    secrets. Protect the backups like the server itself. The production setup
    dumps it on a schedule and checks each dump by a trial restore; copy the
