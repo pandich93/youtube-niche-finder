@@ -5,7 +5,7 @@ import { loadFootStat } from './shared.js';
 import { render, routeTitle } from './router.js';
 import { setMe, applyNav, renderPlanLine } from './plan-state.js';
 import { setOffers, showSignIn, openAccountLink } from './account.js';
-import { setView, renderBanner } from './impersonation.js';
+import { setView, renderBanner, inView } from './impersonation.js';
 import { dict, getLocale, hasStoredLocale, setLocale, onLocaleChange, translateStatic } from './i18n.js';
 import ru from './i18n/ru/app.js';
 import en from './i18n/en/app.js';
@@ -78,8 +78,9 @@ function listenLocale() {
     loadNiches();
     loadFootStat();
     if (me.multiUser && me.user) renderPlanLine();
-    // язык уведомлений и дайджеста хранится на сервере; без сервера -- не беда
-    api('/api/me/locale', { method: 'PUT', body: { locale: loc } }).catch(() => {});
+    // язык уведомлений и дайджеста хранится на сервере; без сервера -- не беда.
+    // P2-05: в просмотре под пользователем его настройки не трогаем (сервер и так даст 403)
+    if (!inView()) api('/api/me/locale', { method: 'PUT', body: { locale: loc } }).catch(() => {});
     if (me.multiUser && !me.user) { showSignIn(); return; }
     await loadScores();
     render();
