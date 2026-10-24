@@ -6,7 +6,7 @@ import { render, routeTitle } from './router.js';
 import { setMe, applyNav, renderPlanLine } from './plan-state.js';
 import { setOffers, showSignIn, openAccountLink } from './account.js';
 import { setView, renderBanner, inView } from './impersonation.js';
-import { viewTwoFactorSetup } from './screens/profile.js';
+import { viewTwoFactorSetup, adoptBrowserTimezone } from './screens/profile.js';
 import { dict, getLocale, hasStoredLocale, setLocale, onLocaleChange, translateStatic } from './i18n.js';
 import ru from './i18n/ru/app.js';
 import en from './i18n/en/app.js';
@@ -103,6 +103,9 @@ async function start() {
   // P2-05: админ смотрит глазами пользователя -- баннер «только чтение · Выйти»;
   // «Выйти (email)» внизу назвало бы чужой адрес, поэтому его прячем
   setView(me);
+  // P2-03: только если пояс ещё не выбран; из режима просмотра не сохраняем --
+  // это был бы пояс браузера админа
+  if (!inView()) adoptBrowserTimezone(me);
   if (me.multiUser) {
     const out = $('#signOut');
     out.hidden = !!me.impersonation;

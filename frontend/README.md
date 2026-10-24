@@ -420,7 +420,19 @@ the expiry.
 
 ### Profile (`#/profile`)
 
-Only in multi-user mode, for whoever is signed in. "Пароль" changes the
+"Часовой пояс" (P2-03) is there in both modes: a list of IANA zones from the
+browser, "Как в браузере" (`Intl.DateTimeFormat().resolvedOptions().timeZone`)
+and an empty choice for the server default (`PUT /api/me/timezone`). The
+digest arrives at `DIGEST_HOUR` of that zone and calendar reminders show times
+in it. With `NF_MULTI_USER=1`, a user who has none gets the browser's zone
+saved silently on sign-in (`onlyIfEmpty`, never over a chosen one): otherwise
+their digest would follow the server's clock, which for most people is not
+theirs. Without accounts nothing is saved by itself: the operator's `TZ` /
+`NF_DEFAULT_TIMEZONE` keep working as before. The best publishing hours (the
+brief and the calendar) come from the server in UTC and are shown in the
+browser's zone, like every other time on the dashboard.
+
+The rest only in multi-user mode, for whoever is signed in. "Пароль" changes the
 password with the current one (`POST /api/auth/password`): other sessions and
 API tokens end, this browser stays signed in. "Email" sends a confirmation
 link to the new address (`POST /api/auth/email`) and is disabled when the

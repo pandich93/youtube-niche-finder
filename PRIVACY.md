@@ -59,6 +59,11 @@ Everything lives in the Postgres database you point the app at (by default the
   (`mfa_challenges`). A session row also notes when it passed the second
   factor (`sessions.mfa_at`). All of it goes when 2FA is turned off and with
   the account.
+- **Time zone** (P2-03) -- the IANA name a person picked or the dashboard
+  took from their browser on first sign-in (`users.timezone`, e.g.
+  `Europe/Moscow`), used to send their digest in their morning and to write
+  times in their reminders. Nothing finer than the zone; it goes with the
+  account and can be cleared on the "Profile" page.
 - **Tariffs** (only with `NF_MULTI_USER=1`) -- the tariffs themselves (`plans`:
   name, price, limits and features) are shared settings, not data about
   anyone. Per user, `user_plans` keeps the user's tariff, its start and end

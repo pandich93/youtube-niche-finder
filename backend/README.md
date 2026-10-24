@@ -304,6 +304,21 @@ With `NF_MULTI_USER=1`, the HTTP MCP services (`mcp-http`/`mcp-https`) require
 such a token (401 without one; set `MCP_PUBLIC_URL` to the address clients use);
 MCP over stdio stays local and acts as user 1.
 
+Time zone (P2-03): each user keeps an IANA zone (`users.timezone`,
+`PUT /api/me/timezone`, shown in `/api/auth/me`; the local user has one too,
+so it works without `NF_MULTI_USER`). The digest goes out at `DIGEST_HOUR` of
+that zone, else of `NF_DEFAULT_TIMEZONE`, else of the container (`TZ`), as
+before. It goes once per local day: `meta` keeps the UTC moment of the last
+send (`digest_last_sent_date[_u<id>]`), and a send counts for the local date
+it falls on in the zone in force now, so a clock turned back repeats an hour
+but never a day, a skipped hour does not skip the digest (it is "not before
+the hour"), a restart reads the same mark, and changing the zone neither
+repeats nor skips a day. Calendar reminders (`draft_due`) write the planned
+time in the recipient's zone (UTC when there is none); they fire 24 hours
+before, whatever the zone. Daily quotas do not move with it: YouTube units
+and searches, the tariff's daily limits on them included, reset at midnight
+Pacific Time (YouTube's day), LLM spend at midnight UTC, for everyone alike.
+
 Notifications (sub-stage 5.9): each user sets their own Telegram bot and chat
 or webhook and the mode — instant, digest, both or off — on the dashboard's
 "Данные" screen (`/api/settings/notifications`). Alerts and the digest cover
@@ -753,7 +768,7 @@ required. The optional groups:
 | Worker schedule | `WORKER_RSS_INTERVAL_MIN`, `WORKER_ALERTS_INTERVAL_MIN`, `WORKER_HOT_*`, `WORKER_EMBED*`, `WORKER_DAILY_INTERVAL_MIN`, `WORKER_FULL_*`, `WORKER_REGIONS`, `WORKER_TRENDING`, `WORKER_QUERIES`, `WORKER_QUERY_*`, `WORKER_ENRICH_*`, `WORKER_CLUSTER_INTERVAL_MIN`, `WORKER_THUMBS` (1), `WORKER_THUMBS_INTERVAL_MIN` (360), `WORKER_THUMBS_LIMIT` (500), `WORKER_SPONSORS` (1), `WORKER_SPONSORS_INTERVAL_MIN` (60), `WORKER_SPONSORS_LIMIT` (5000) |
 | LLM (off by default) | `LLM_PROVIDER` (`none` / `openrouter` / `ollama`), `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_MODEL_LONG` (long-context model for comment insights), `OPENROUTER_REFERER`, `OPENROUTER_TITLE`, `OLLAMA_URL`, `OLLAMA_MODEL`, `LLM_DAILY_BUDGET_USD`, `LLM_WORKER_RESERVE_USD` (0.25), `LLM_FALLBACK_USD_PER_MTOK` (15), `LLM_RELABEL_DAYS`, `LLM_MIN_MANUAL_TAGS`, `LLM_INSIGHTS_TTL_DAYS` (7), `LLM_WHY_VIRAL_TTL_DAYS` (14), `LLM_HOOK_TTL_DAYS` (30) |
 | Niche clusters | `NICHE_CLUSTERS_MIN_CHANNELS` (10), `NICHE_CLUSTERS_COMPETITION_SUBS` (100000) |
-| Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_WINDOW_DAYS` (7: only events this recent are sent), `NOTIFY_DASHBOARD_URL`, `NOTIFY_MODE` (`instant` / `digest` / `both`), `DIGEST_HOUR` (8, container time zone), `DIGEST_SKIP_EMPTY` (1), `WORKER_DIGEST_CHECK_INTERVAL_MIN` (10) |
+| Alert delivery (off by default) | `NOTIFY_TELEGRAM_BOT_TOKEN`, `NOTIFY_TELEGRAM_CHAT_ID`, `NOTIFY_WEBHOOK_URL`, `NOTIFY_MAX_PER_CYCLE`, `NOTIFY_WINDOW_DAYS` (7: only events this recent are sent), `NOTIFY_DASHBOARD_URL`, `NOTIFY_MODE` (`instant` / `digest` / `both`), `DIGEST_HOUR` (8, the recipient's local hour), `NF_DEFAULT_TIMEZONE` (time zone of users who chose none; empty = the container's), `DIGEST_SKIP_EMPTY` (1), `WORKER_DIGEST_CHECK_INTERVAL_MIN` (10) |
 | Servers | `WEB_PORT`, `RATE_LIMIT_PER_MINUTE`, `NF_ALLOWED_HOSTS` (extra `Host` names for the HTTP API), `MCP_TRANSPORT` (`stdio`), `MCP_HOST` (`127.0.0.1`), `MCP_PORT`, `MCP_ALLOW_UNAUTHENTICATED` (`0`; HTTP without `NF_MULTI_USER=1` only on loopback otherwise) |
 | Observability | `NF_LOG_FORMAT` (`text`; `json` = one JSON object per line), `NF_METRICS_TOKEN` (opens `/metrics`), `NF_OPERATOR_ALERTS` (`1`), `NF_OPERATOR_ALERT_HOURS` (`6`), `SENTRY_DSN`, `SENTRY_ENVIRONMENT` -- see [docs/hosting.md](../docs/hosting.md#monitoring) |
 
