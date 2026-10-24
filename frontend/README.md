@@ -413,7 +413,19 @@ API tokens end, this browser stays signed in. "Email" sends a confirmation
 link to the new address (`POST /api/auth/email`) and is disabled when the
 server has no mail set up. "Где выполнен вход" lists the account's sessions
 with browser, address and last activity, the current one marked, and ends one
-or all others (`/api/auth/sessions`).
+or all others (`/api/auth/sessions`). "Двухфакторная защита" is its own card
+(`/api/auth/2fa*`): "Включить" shows the secret in groups of four and an
+`otpauth://` link (opens the authenticator on the same device) -- no QR code,
+which would need an external service or a QR encoder in the bundle -- then a
+code from the app turns it on and the 10 backup codes are shown once. With it
+on, the card makes new backup codes (with a code) and turns it off (with the
+password and a code). An admin without 2FA under `NF_ADMIN_2FA=required` gets
+only this card, with the menu hidden, until it is on (`app.js`,
+`viewTwoFactorSetup`).
+
+With 2FA on, the sign-in screen asks for the code after the password (and
+after a reset by link): an app code or a backup code
+(`POST /api/auth/login/2fa`); the one-time challenge lives only in the page.
 
 Signed out, the sign-in screen also offers "Создать аккаунт" and "Забыли
 пароль?" when the server has mail (`signup` in `/api/auth/me`); the links in

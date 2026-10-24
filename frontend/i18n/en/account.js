@@ -26,4 +26,9 @@ export default {
   emailChangedTitle: 'New email',
   emailChanged: 'Done: the account’s address is now {email}.',
   continue: 'Continue',
+  codeTitle: 'Verification code',
+  codeSub: 'enter the code from your authenticator app or one of your backup codes',
+  codePlaceholder: '123456 or a backup code',
+  confirmCode: 'Sign in',
+  resetNeedsCode: 'Password saved. This account has two-factor sign-in on: enter a code to sign in.',
 };

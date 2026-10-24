@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 import infrastructure.postgres as db
 from application import audit as AUD
 from application import auth as AUTH
+from application import two_factor as TF
 from domain.i18n import tr
 from domain.users import multi_user_enabled
 from infrastructure import mailer
@@ -245,7 +246,8 @@ def forgot_password(email: str, *, client_ip=None, link) -> None:
 
 def reset_password(token: str, password: str) -> dict:
     """Set the new password from a reset link -- every session and API token
-    of the account ends, as with any password change -- and sign in here."""
+    of the account ends, as with any password change -- and sign in here; with
+    two-factor sign-in on (P2-04), the second step's challenge instead."""
     conn = db.get_conn()
     try:
         uid = _peek(conn, token, "reset")["user_id"]
@@ -257,6 +259,13 @@ def reset_password(token: str, password: str) -> dict:
         _use(conn, token, "reset")
         conn.commit()
         AUTH.set_password(user["email"], password)
+        if TF.enabled(uid, conn=conn):
+            # P2-04: письмо -- не второй фактор; 2FA остаётся, вход -- вторым шагом
+            AUD.record(conn, "password_reset", actor_id=uid, target_id=uid,
+                       details={"secondFactor": "required"})
+            challenge = TF.start_challenge(conn, uid)
+            conn.commit()
+            return challenge
         session = AUTH.start_session(conn, uid)
         AUD.record(conn, "password_reset", actor_id=uid, target_id=uid)
         conn.commit()

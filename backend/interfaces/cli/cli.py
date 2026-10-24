@@ -343,7 +343,21 @@ def cmd_set_password(args):
     from application import audit
     audit.log("password_change", actor_id=audit.OPERATOR_ID, target_id=uid,
               details={"via": "cli"})
-    out({"updated": uid, "sessionsEnded": True})
+    from application import two_factor
+    # P2-04: новый пароль второй фактор не снимает -- оператор видит это явно
+    out({"updated": uid, "sessionsEnded": True,
+         "twoFactorStillOn": two_factor.enabled(uid)})
+
+
+def cmd_disable_2fa(args):
+    """P2-04: снять двухфакторную защиту (человек потерял телефон и коды);
+    запись в журнал действий, входы аккаунта не трогаются."""
+    from application import two_factor
+    try:
+        out(two_factor.operator_disable(args.email))
+    except two_factor.TwoFactorError as e:
+        print(f"error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 
 def cmd_create_token(args):
@@ -436,6 +450,9 @@ def main():
     p.add_argument("email")
     p.add_argument("--password-stdin", action="store_true", help=tr("читать пароль из stdin"))
     p.set_defaults(fn=cmd_set_password)
+    p = sub.add_parser("disable-2fa", help=tr("снять двухфакторную защиту аккаунта (запись в журнал)"))
+    p.add_argument("email")
+    p.set_defaults(fn=cmd_disable_2fa)
     sub.add_parser("users", help=tr("список пользователей")).set_defaults(fn=cmd_users)
     p = sub.add_parser("disable-user", help=tr("заблокировать: сессии и токены перестают работать"))
     p.add_argument("email")

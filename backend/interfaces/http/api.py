@@ -76,6 +76,7 @@ from application import thumbnail_search as TS
 from application import topic_watch as TW
 from application import trajectory as TJ
 from application import transcripts as TR
+from application import two_factor as TF
 from application import users_admin as UA
 from domain import i18n
 from domain import plans as PD
@@ -261,7 +262,13 @@ _PUBLIC_API = frozenset({"/api/auth/login", "/api/auth/logout", "/api/auth/me", 
                          # multi-user plan P1-06: sign-up and reset by emailed link
                          "/api/auth/register", "/api/auth/register/link",
                          "/api/auth/register/complete", "/api/auth/password/forgot",
-                         "/api/auth/password/reset", "/api/auth/email/confirm"})
+                         "/api/auth/password/reset", "/api/auth/email/confirm",
+                         # multi-user plan P2-04: второй шаг входа (по промежуточному токену)
+                         "/api/auth/login/2fa"})
+# P2-04, NF_ADMIN_2FA=required: администратору без 2FA открыта только её
+# настройка (и язык); остальное -- 403 TwoFactorRequired, пока не включит
+_MFA_SETUP_API = frozenset({"/api/auth/2fa", "/api/auth/2fa/setup", "/api/auth/2fa/enable",
+                            "/api/me/locale"})
 
 
 # SaaS sub-project 1: route -> the tariff feature it needs. Methods None = any.
@@ -351,6 +358,15 @@ async def session_guard(request, call_next):
             # без заголовка языка -- прежний двуязычный текст: на него смотрят скрипты
             detail = tr("Sign in first: NF_MULTI_USER is on -- войдите в дашборде.")
         return JSONResponse(status_code=401, content={"detail": detail})
+    if (user and request.state.via == "session" and user.get("isAdmin") and TF.admin_required()
+            and path.startswith("/api/") and path not in _PUBLIC_API
+            and path not in _MFA_SETUP_API
+            and await run_in_threadpool(TF.setup_required, user)):
+        with i18n.use_locale(_header_locale(request)):
+            detail = tr("Администраторам этого сервера нужна двухфакторная защита: включите "
+                        "её на экране «Профиль».")
+        return JSONResponse(status_code=403, content={"error": "TwoFactorRequired",
+                                                      "detail": detail})
     if user and path.startswith("/api/") and path not in _PUBLIC_API:
         blocked = await run_in_threadpool(_feature_block, request, user["id"])
         if blocked:
@@ -1312,7 +1328,9 @@ def auth_me(request: Request):
             "plan": PL.summary(user["id"]) if user else None,
             "locale": _saved_locale(user["id"]) if user else None,
             # P1-06: what the sign-in screen offers (both need SMTP)
-            "signup": SU.options()}
+            "signup": SU.options(),
+            # P2-04: setupRequired -- администратор без 2FA при NF_ADMIN_2FA=required
+            **({"twoFactor": {"setupRequired": TF.setup_required(user)}} if user else {})}
 
 
 @app.put("/api/me/locale")
@@ -1344,7 +1362,11 @@ def auth_login(request: Request, response: Response, payload: dict = Body(...)):
 def _signed_in(request, response, s) -> dict:
     """Put a new session into the HttpOnly cookie (never into the body). The
     cookie may outlive the idle expiry: the server decides (P1-04), so it is
-    kept up to the absolute limit and never has to be set again."""
+    kept up to the absolute limit and never has to be set again. With
+    two-factor sign-in (P2-04) there is no session yet: the answer carries the
+    one-time challenge for POST /api/auth/login/2fa, and no cookie is set."""
+    if s.get("mfaRequired"):
+        return {"mfaRequired": True, "challenge": s["challenge"], "expiresAt": s["expiresAt"]}
     response.set_cookie(AUTH_COOKIE, s["token"], max_age=AUTH.SESSION_MAX_DAYS * 86400, path="/",
                         httponly=True, samesite="strict", secure=_cookie_secure(request))
     user = AUTH.user_for_token(s["token"], client_ip=_client_ip(request),
@@ -1457,8 +1479,13 @@ def _own_session(request) -> int:
 def auth_password_change(request: Request, response: Response, payload: dict = Body(...)):
     """Change your password with the current one: other sign-ins and API
     tokens end, this browser stays signed in."""
-    s = _signup_call(SU.change_password, _own_session(request),
+    uid = _own_session(request)
+    # P2-04: новая сессия наследует пройденный второй фактор (старую смена пароля завершит)
+    verified = TF.session_verified(request.state.session_id)
+    s = _signup_call(SU.change_password, uid,
                      str(payload.get("currentPassword") or ""), str(payload.get("password") or ""))
+    if verified:
+        TF.mark_session(s["token"])
     return _signed_in(request, response, s)
 
 
@@ -1470,6 +1497,81 @@ def auth_email_change(request: Request, payload: dict = Body(...)):
                            str(payload.get("password") or ""), str(payload.get("email") or ""),
                            client_ip=_client_ip(request), link=_mail_link(request))
     return {"sentTo": sent_to}
+
+
+# ------------------------------------------- two-factor sign-in (P2-04)
+
+def _tf_call(fn, *args, **kwargs):
+    try:
+        return fn(*args, **kwargs)
+    except AUTH.LoginThrottled as e:
+        raise HTTPException(status_code=429, headers={"Retry-After": str(e.retry_after)},
+                            detail=tr("Слишком много неудачных попыток входа. Повторите через "
+                                      "{retry_after} с.", retry_after=e.retry_after))
+    except TF.TwoFactorUnavailable as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except AUTH.AuthError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except TF.TwoFactorError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/auth/login/2fa")
+def auth_login_second_step(request: Request, response: Response, payload: dict = Body(...)):
+    """The second sign-in step: the `challenge` from POST /api/auth/login (or a
+    password reset) and a `code` from the authenticator app or a backup code.
+    The session cookie is set only now; wrong codes slow down like wrong
+    passwords, and the challenge dies after a few of them or a few minutes."""
+    if not multi_user_enabled():
+        raise HTTPException(status_code=409, detail="accounts exist only with NF_MULTI_USER=1")
+    s = _tf_call(TF.complete_login, str(payload.get("challenge") or ""),
+                 str(payload.get("code") or ""), client_ip=_client_ip(request))
+    return _signed_in(request, response, s)
+
+
+@app.get("/api/auth/2fa")
+def auth_2fa_status(request: Request):
+    """Your two-factor sign-in: on or off, setup started, backup codes left,
+    whether this server can turn it on (OWN_TOKENS_KEY) and whether it is
+    required for you (NF_ADMIN_2FA=required, admins). Dashboard sign-in only."""
+    uid = _own_session(request)
+    return TF.status(uid, bool(request.state.user.get("isAdmin")))
+
+
+@app.post("/api/auth/2fa/setup")
+def auth_2fa_setup(request: Request):
+    """Start turning two-factor sign-in on: a new secret and its otpauth://
+    link for the authenticator app, shown only now. Nothing changes until
+    POST /api/auth/2fa/enable confirms a code."""
+    uid = _own_session(request)
+    return _tf_call(TF.setup, uid, request.state.user["email"])
+
+
+@app.post("/api/auth/2fa/enable")
+def auth_2fa_enable(request: Request, payload: dict = Body(...)):
+    """Confirm the setup with a `code` from the app: two-factor sign-in is on,
+    10 backup codes come back ONCE, your other sessions end."""
+    uid = _own_session(request)
+    return _tf_call(TF.enable, uid, str(payload.get("code") or ""), request.state.session_id)
+
+
+@app.post("/api/auth/2fa/disable")
+def auth_2fa_disable(request: Request, payload: dict = Body(...)):
+    """Turn two-factor sign-in off with your `password` and a `code` (app or
+    backup). Not for admins when NF_ADMIN_2FA=required."""
+    uid = _own_session(request)
+    return _tf_call(TF.disable, uid, str(payload.get("password") or ""),
+                    str(payload.get("code") or ""), bool(request.state.user.get("isAdmin")),
+                    client_ip=_client_ip(request))
+
+
+@app.post("/api/auth/2fa/backup-codes")
+def auth_2fa_backup_codes(request: Request, payload: dict = Body(...)):
+    """New backup codes for a current `code`; the old ones stop working. The
+    new ones come back ONCE."""
+    uid = _own_session(request)
+    return _tf_call(TF.regenerate_backup_codes, uid, str(payload.get("code") or ""),
+                    client_ip=_client_ip(request))
 
 
 # ------------------------------------------- your sessions (P1-04)
@@ -1561,9 +1663,15 @@ def api_tokens_list(request: Request):
 def api_tokens_create(request: Request, payload: dict = Body(default={})):
     """A personal token for the extension or MCP over HTTP, shown ONCE.
     expiresInDays: 1..365 (default 90), 0 = no expiry; scopes: any of read,
-    write, mcp (default all)."""
+    write, mcp (default all). With two-factor sign-in on, only from a session
+    that passed the second factor (P2-04)."""
+    uid = _session_user(request)
+    if TF.enabled(uid) and not TF.session_verified(request.state.session_id):
+        raise HTTPException(status_code=403, detail=tr(
+            "Создать API-токен можно только из входа, прошедшего двухфакторную проверку: "
+            "выйдите и войдите снова."))
     try:
-        return AUTH.create_api_token(_session_user(request), payload.get("name"),
+        return AUTH.create_api_token(uid, payload.get("name"),
                                      expires_in_days=payload.get("expiresInDays"),
                                      scopes=payload.get("scopes"))
     except AUTH.AuthError as e:
