@@ -16,7 +16,7 @@ pillow>=10
 cryptography>=42
 
 # HTTP API + дашборд (backend/api.py, frontend/)
-fastapi>=0.115
+fastapi>=0.162.0
 uvicorn[standard]>=0.30
 # OpenRouter LLM provider (infrastructure/llm/openrouter.py) -- already pulled in
 # transitively by fastapi/starlette, pinned here since we call it directly
