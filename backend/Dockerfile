@@ -11,7 +11,7 @@
 # embedding model cache on the /models volume, so both survive image rebuilds
 # and container restarts. Nothing is written into the image itself.
 
-FROM python:3.12-slim AS base
+FROM python:3.15-slim AS base
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
